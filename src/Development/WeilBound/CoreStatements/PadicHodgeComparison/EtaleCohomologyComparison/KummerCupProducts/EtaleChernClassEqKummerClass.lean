@@ -37,7 +37,6 @@ public import Development.AutomorphicSpectrum.Proofs.BlockDecomposition.VnRed
 public import Development.WeilBound.CoreStatements.PadicHodgeComparison.EtaleCohomologyComparison.KummerCupProducts.CupLeib
 public import Development.WeilBound.CoreStatements.PadicHodgeComparison.EtaleCohomologyComparison.KummerCupProducts.EvExt
 public import Development.WeilBound.CoreStatements.PadicHodgeComparison.EtaleCohomologyComparison.KummerCupProducts.FirstChernClassFamily
-import Mathlib
 import Mathlib.Tactic.Linter.HaveILetI
 import Mathlib.Tactic.Linter.Style
 
@@ -49,7 +48,6 @@ import Mathlib.Tactic.Linter.Style
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory Limits AlgebraicGeometry Opposite GroundTheory.PAdicHodge CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 noncomputable section
@@ -68,8 +66,7 @@ theorem cris_log (A : PAlg l) (n : ℕ) {x : Ainf l} (hx : x ∈ RingHom.ker (th
     A.cris n (ACris.log hx) = ∑ k ∈ Finset.range (l * n), A.cris n (ACris.logTerm hx k) := by
   obtain ⟨N, hN⟩ := ACris.isAdicSum_log hx n
   have h2 := cris_eq_zero A n (hN (max N (l * n)) (le_max_left _ _))
-  set_option synthInstance.maxHeartbeats 100000 in
-    rw [map_sub, sub_eq_zero, map_sum,
+  rw [map_sub, sub_eq_zero, map_sum,
     ← Finset.sum_range_add_sum_Ico _ (le_max_right N (l * n)),
     Finset.sum_eq_zero (s := Finset.Ico (l * n) (max N (l * n))) (fun k hk =>
       cris_eq_zero A n (ACris.logTerm_mem hx (Finset.mem_Ico.1 hk).1)), add_zero] at h2
@@ -79,8 +76,9 @@ theorem cris_logTerm (A : PAlg l) (n k : ℕ) {x : Ainf l} (hx : x ∈ RingHom.k
     A.cris n (ACris.logTerm hx k) =
       (-1) ^ k * (k.factorial : A.Acr n) * A.mkAcr n (A.cris0 (ACris.dpowZero hx (k + 1))) := by
   rw [ACris.logTerm, PAlg.cris_of', ACris.logTermZero]
-  set_option synthInstance.maxHeartbeats 100000 in
-    simp only [map_mul, map_pow, map_neg, map_one, map_natCast]
+  change ((A.mkAcr n).comp A.cris0) _ = _
+  rw [RingHom.map_mul, RingHom.map_mul, RingHom.map_pow, RingHom.map_neg, RingHom.map_one, map_natCast]
+  rfl
 
 theorem acrisZero_image_divided_power (A : PAlg l) (k : ℕ) {x : Ainf l} (hx : x ∈ RingHom.ker (theta0 l)) :
     (A.cris0 (ACris.dpowZero hx k)).1 = dpw k (WittVector.map A.s x) := by
@@ -110,7 +108,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
@@ -150,7 +147,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory Limits AlgebraicGeometry Opposite GroundTheory.PAdicHodge CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.EtChern
@@ -185,7 +181,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.EdgeMap
@@ -212,7 +207,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
@@ -249,7 +243,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.KumPowProof
@@ -312,7 +305,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.EdgeRoot
@@ -368,7 +360,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.LcCoverProof
@@ -418,8 +409,7 @@ theorem lcCover : CrystallineSemistableComparison.E.LcCover := by
         rw [← Scheme.Hom.comp_apply, h, Scheme.Hom.comp_apply, h2] at h1
         exact h1.symm)⟩
       have hz := (Sheaf.isTerminalOfBotCover G Z (Scheme.bot_mem_grothendieckTopology Z)).isZero
-      have := ModuleCat.subsingleton_of_isZero hz
-      exact Subsingleton.elim _ _
+      exact (ModuleCat.subsingleton_of_isZero hz).elim _ _
 
 end GlobalTheory.CompanionTheory.LcCoverProof
 end -- clump:auto
@@ -431,7 +421,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory Limits AlgebraicGeometry Opposite GroundTheory.PAdicHodge CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.EtCupF
@@ -451,7 +440,7 @@ theorem lcMor_cup (hM : MorCup) (hS : LcSpec) (hN : LcNat) (H : RIn l) (r : Root
     (lcMor hN H r T n).pull m ((mulP (lcF (probe H r T n).S (l ^ n))).cup h x y) =
       (mulP ((T ⋙ testι l) ⋙ AcrA l n)).cup h ((lcMor hN H r T n).pull p x) ((lcMor hN H r T n).pull q y) :=
   (hM ℤ (Acris l) (Int.castRingHom (Acris l)) C (lcF (probe H r T n).S (l ^ n)) ((T ⋙ testι l) ⋙ AcrA l n)
-    (lcMor hN H r T n) (fun c => lcRing hS H (T.obj c).obj (T.obj c).property n) (fun c x => rfl)).2 p q m h x y
+    (lcMor hN H r T n) (fun c => lcRing hS H (T.obj c).obj (T.obj c).property n) (fun _ _ => rfl)).2 p q m h x y
 
 variable {K : IntermediateField ℚ_[l] (PadicAlgCl l)}
 
@@ -459,12 +448,12 @@ theorem eG_cup (hE : EtCup) (hM : MorCup) (hS : LcSpec) (E : EtIn) (hN : LcNat) 
     (M : Model l K) {C : Type 1} [Category.{0} C] (G : C ⥤ El M.P) (n : ℕ) (i i' i'' : ℤ) (hi : i + i' = i'')
     (j j' j'' : ℕ) (hj : j + j' = j'') (x : Ht (l ^ n) (sch.obj (gb M)) j i) (y : Ht (l ^ n) (sch.obj (gb M)) j' i') :
     eG hN H r M G n i'' j'' ((cup (l ^ n) x y).cast (by omega) hi) =
-      (mulP ((((G ⋙ CategoryOfElements.π _) ⋙ testι l)) ⋙ AcrA l n)).cup hj (eG hN H r M G n i j x) (eG hN H r M G n i' j' y) := by
-  have h1 := hE E.gen E.tw (l ^ n) C (probe H r (G ⋙ CategoryOfElements.π _) n) (gb M)
+      (mulP ((((G ⋙ Functor.Elements.π _) ⋙ testι l)) ⋙ AcrA l n)).cup hj (eG hN H r M G n i j x) (eG hN H r M G n i' j' y) := by
+  have h1 := hE E.gen E.tw (l ^ n) C (probe H r (G ⋙ Functor.Elements.π _) n) (gb M)
     (pts H r M G n) i i' i'' hi j j' j'' hj x y
-  have h2 := lcMor_cup hM hS hN H r (G ⋙ CategoryOfElements.π _) n j j' j'' hj
+  have h2 := lcMor_cup hM hS hN H r (G ⋙ Functor.Elements.π _) n j j' j'' hj
     ((pts H r M G n).et i j x) ((pts H r M G n).et i' j' y)
-  exact (congrArg ((lcMor hN H r (G ⋙ CategoryOfElements.π _) n).pull j'') h1).trans h2
+  exact (congrArg ((lcMor hN H r (G ⋙ Functor.Elements.π _) n).pull j'') h1).trans h2
 
 theorem fCup : CrystallineSemistableComparison.E.EtCup → CrystallineSemistableComparison.E.MorCup → CrystallineSemistableComparison.E.LcSpec → CrystallineSemistableComparison.E.FCup := by
   intro hE hM hS E hN l _ H r K M n i i' i'' hi j j' j'' hj x y
@@ -480,7 +469,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 
 open CategoryTheory Limits AlgebraicGeometry Opposite GroundTheory.PAdicHodge CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
@@ -507,7 +495,7 @@ theorem liftEx : CrystallineSemistableComparison.E.LiftEx := by
   refine ⟨key, fun hE => ?_⟩
   have sec : ∀ T : C, ∃ p : Spec (CommRingCat.of (G.obj T).1.obj.U) ⟶ D.Y, p ≫ D.f = (G.obj T).2.1 := by
     intro T
-    haveI := D.surj
+    have := D.surj
     obtain ⟨s, hs⟩ := H.splitU _ (G.obj T).1.property (pullback D.f (G.obj T).2.1)
       (pullback.snd D.f (G.obj T).2.1) inferInstance inferInstance
     refine ⟨s ≫ pullback.fst D.f (G.obj T).2.1, ?_⟩
@@ -526,7 +514,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 
 open CategoryTheory Limits AlgebraicGeometry Opposite GroundTheory.PAdicHodge CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
@@ -542,9 +529,11 @@ noncomputable def pull {X' X : Scheme.{0}} (g : X' ⟶ X) (D : LineData X) : Lin
   Y := pullback D.f g
   f := pullback.snd D.f g
   sm := by
-    exact MorphismProperty.pullback_snd (P := @Smooth) D.f g D.sm
+    have := D.sm
+    infer_instance
   surj := by
-    exact MorphismProperty.pullback_snd (P := @Surjective) D.f g D.surj
+    have := D.surj
+    infer_instance
   u := fun {V} a b h => D.u (a ≫ pullback.fst D.f g) (b ≫ pullback.fst D.f g) (by
     rw [Category.assoc, Category.assoc, pullback.condition, ← Category.assoc, ← Category.assoc, h])
   nat := fun {V' V} k a b h => by
@@ -570,7 +559,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.LocSplitProof
@@ -578,17 +566,17 @@ namespace GlobalTheory.CompanionTheory.LocSplitProof
 theorem locSplit : CrystallineSemistableComparison.E.LocSplit := by
   intro U hU P hP
   obtain ⟨S, hS, hSP⟩ := hP
-  rw [Scheme.etaleTopology, Scheme.mem_grothendieckTopology_iff] at hS
-  obtain ⟨𝒰, h𝒰⟩ := hS
+  obtain ⟨𝒰, h𝒰⟩ := Scheme.mem_grothendieckTopology_iff.1 hS
   have hsurj : Surjective (Limits.Sigma.desc 𝒰.f) := by
     constructor
     intro x
-    obtain ⟨i, y, hy⟩ := 𝒰.exists_eq x
+    obtain ⟨_, _, ⟨i⟩, y, hy⟩ := (Presieve.mem_comap_jointlySurjectivePrecoverage_iff Scheme.forget).1 𝒰.mem₀.1 x
     refine ⟨(Limits.Sigma.ι 𝒰.X i) y, ?_⟩
-    rw [← Scheme.Hom.comp_apply, Limits.Sigma.ι_desc, hy]
+    rw [← Scheme.Hom.comp_apply, Limits.Sigma.ι_comp_desc]
+    exact hy
   have het : Etale (Limits.Sigma.desc 𝒰.f) := by
-    have := 𝒰.sigma.map_prop ⟨⟩
-    simpa [Scheme.Cover.sigma_f] using this
+    have := HasRingHomProperty.instIsZariskiLocalAtSource (P := @Etale) (Q := RingHom.Etale)
+    exact IsZariskiLocalAtSource.sigmaDesc fun i => 𝒰.mem₀.2 ⟨i⟩
   obtain ⟨s, hs⟩ := hU _ (Limits.Sigma.desc 𝒰.f) het hsurj
   have hlc : IsLocallyConstant (fun u : U => ((sigmaMk 𝒰.X).symm (s u)).1) := by
     intro t
@@ -633,7 +621,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 noncomputable section
@@ -685,7 +672,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 
 noncomputable section
 
@@ -733,7 +719,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.EdgeMapPull
@@ -802,7 +787,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 noncomputable section
@@ -830,21 +814,32 @@ def redResMor (hS : KapSpec) (hK : KapRed) (hR : InRed) {Q q : ℕ} [NeZero Q] [
     ResMor (P.res i) (P'.res i) m where
   τ s c :=
     { toFun := fun x => Sec.res (g c) ((redMap Q q i).app (P.U (m.G.obj c)) (s : ℤ) x)
-      map_zero' := by simp
-      map_add' := fun x y => by simp }
+      map_zero' := by
+        change Sec.res (g c) ((redMap Q q i).app (P.U (m.G.obj c)) (s : ℤ) 0) = 0
+        simp
+      map_add' := fun x y => by
+        let x' : Sec ((res (ZMod Q) (tw Q i)).X (s : ℤ)) (P.U (m.G.obj c)) := x
+        let y' : Sec ((res (ZMod Q) (tw Q i)).X (s : ℤ)) (P.U (m.G.obj c)) := y
+        change Sec.res (g c) ((redMap Q q i).app (P.U (m.G.obj c)) (s : ℤ) (x' + y')) =
+          Sec.res (g c) ((redMap Q q i).app (P.U (m.G.obj c)) (s : ℤ) x') +
+            Sec.res (g c) ((redMap Q q i).app (P.U (m.G.obj c)) (s : ℤ) y')
+        simp }
   nat s {c c'} φ x := by
-    change Sec.res (g c') ((redMap Q q i).app _ (s : ℤ) (Sec.res (P.S.map (m.G.map φ)).unop x)) =
-      Sec.res (P'.S.map φ).unop (Sec.res (g c) ((redMap Q q i).app _ (s : ℤ) x))
+    let x' : Sec ((res (ZMod Q) (tw Q i)).X (s : ℤ)) (P.U (m.G.obj c)) := x
+    change Sec.res (g c') ((redMap Q q i).app _ (s : ℤ) (Sec.res (P.S.map (m.G.map φ)).unop x')) =
+      Sec.res (P'.S.map φ).unop (Sec.res (g c) ((redMap Q q i).app _ (s : ℤ) x'))
     rw [← (redMap Q q i).nat, res_res, res_res, hg]
   ι c x := by
-    change Sec.res (g c) ((redMap Q q i).app _ 0 (Sec.map (resι _ (tw Q i)) (kap i (P.ζ (m.G.obj c)) x))) =
-      Sec.map (resι _ (tw q i)) (kap i (P'.ζ c) (m.τ c x))
-    rw [(redMap Q q i).nat, res_map, (hS Q i _ (P.ζ (m.G.obj c)) x).2.2 _ (g c),
+    let x' : LocallyConstant (P.U (m.G.obj c)) (ZMod Q) := x
+    change Sec.res (g c) ((redMap Q q i).app _ 0 (Sec.map (resι _ (tw Q i)) (kap i (P.ζ (m.G.obj c)) x'))) =
+      Sec.map (resι _ (tw q i)) (kap i (P'.ζ c) (m.τ c x'))
+    rw [(redMap Q q i).nat, res_map, (hS Q i _ (P.ζ (m.G.obj c)) x').2.2 _ (g c),
       hK hR Q q h i _ (primRes (g c) (P.ζ (m.G.obj c))) (P'.ζ c) (hζ c), hτ]
     rfl
   dv s c x := by
-    change Sec.res (g c) ((redMap Q q i).app _ ((s + 1 : ℕ) : ℤ) (Sec.map ((GlobalTheory.EtC.res _ (tw Q i)).d (s : ℤ) ((s + 1 : ℕ) : ℤ)) x)) =
-      Sec.map ((GlobalTheory.EtC.res _ (tw q i)).d (s : ℤ) ((s + 1 : ℕ) : ℤ)) (Sec.res (g c) ((redMap Q q i).app _ (s : ℤ) x))
+    let x' : Sec ((res (ZMod Q) (tw Q i)).X (s : ℤ)) (P.U (m.G.obj c)) := x
+    change Sec.res (g c) ((redMap Q q i).app _ ((s + 1 : ℕ) : ℤ) (Sec.map ((GlobalTheory.EtC.res _ (tw Q i)).d (s : ℤ) ((s + 1 : ℕ) : ℤ)) x')) =
+      Sec.map ((GlobalTheory.EtC.res _ (tw q i)).d (s : ℤ) ((s + 1 : ℕ) : ℤ)) (Sec.res (g c) ((redMap Q q i).app _ (s : ℤ) x'))
     rw [← (redMap Q q i).comm, res_map]
 
 theorem etRed : CrystallineSemistableComparison.E.EtSpec → CrystallineSemistableComparison.E.EdgeMap → CrystallineSemistableComparison.E.RepBasic → CrystallineSemistableComparison.E.RepOp → CrystallineSemistableComparison.E.KapSpec →
@@ -874,7 +869,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
@@ -898,7 +892,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 
 open CategoryTheory AlgebraicGeometry Opposite CochainComplex CochainComplex.HomComplex CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
@@ -946,7 +939,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.EdgeMap
@@ -1000,7 +992,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
@@ -1039,7 +1030,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.EtRoot
@@ -1053,11 +1043,13 @@ theorem twGen_res {q : ℕ} (i : ℤ) {V U : Scheme.{0}} (g : V ⟶ U) (ζ : Pri
     (Submodule.Quotient.mk (Finsupp.single ζ 1) : (Scheme.Γ ⋙ twF q i).obj (op U))
   have h2 : ((Scheme.Γ ⋙ twF q i).map g.op).hom (Submodule.Quotient.mk (Finsupp.single ζ 1)) =
       (Submodule.Quotient.mk (Finsupp.single (primRes g ζ) 1) : (Scheme.Γ ⋙ twF q i).obj (op V)) := by
+    let ζ' : Prim q (Scheme.Γ.obj (op U)) := ζ
     change Submodule.Quotient.mk
-      (Finsupp.mapDomain (Prim.map (Scheme.Γ.map g.op).hom) (Finsupp.single ζ 1)) = _
+      (Finsupp.mapDomain (Prim.map (Scheme.Γ.map g.op).hom) (Finsupp.single ζ' 1)) = _
     rw [Finsupp.mapDomain_single]
     unfold primRes
     rw [Scheme.Γ_map_op]
+    rfl
   exact h.symm.trans (congrArg (ModuleCat.Hom.hom ((toSheafify Scheme.etaleTopology (Scheme.Γ ⋙ twF q i)).app (op V))) h2)
 
 theorem resGen_res {q : ℕ} (i : ℤ) {V U : Scheme.{0}} (g : V ⟶ U) (ζ : Prim q Γ(U, ⊤)) :
@@ -1093,7 +1085,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.EdgeMap
@@ -1112,7 +1103,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.ResSplitProof
@@ -1156,7 +1146,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.EtRes
@@ -1176,7 +1165,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.EdgeRes
@@ -1221,7 +1209,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
@@ -1274,7 +1261,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.TwZeroGen
@@ -1310,7 +1296,7 @@ theorem twZero : RootPow → LcCover → RepRoot → TwZero := by
       have e : (primRes (j a) ξ).1 = (CommRingCat.Hom.hom (Scheme.Hom.appTop (j a))) ξ.1 := rfl
       rw [IsUnit.unit_spec, e]
       exact hpw
-    · haveI : IsEmpty (W a) := ⟨fun v => by
+    · have : IsEmpty (W a) := ⟨fun v => by
         have hv := hu (j a v)
         rw [hWf a v] at hv
         exact ha hv⟩
@@ -1328,7 +1314,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 
 noncomputable section
 
@@ -1399,7 +1384,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.StairAdd
@@ -1432,7 +1416,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
@@ -1493,7 +1476,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
@@ -1531,7 +1513,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.EdgeMap
@@ -1563,7 +1544,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.EdgeStair
@@ -1616,7 +1596,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory AlgebraicGeometry Opposite CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.StairCupFirst
@@ -1674,7 +1653,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory Limits AlgebraicGeometry Opposite GroundTheory.PAdicHodge CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 namespace GlobalTheory.CompanionTheory.TwUg
@@ -1720,13 +1698,21 @@ theorem geomPt_galMap (M : Model l K) (σ : Gal(PadicAlgCl l/K)) (A : PAlg l) (y
     geomPt M A y ≫ GlobalTheory.Et.galMap (PadicAlgCl l) M.q σ =
       Spec.map (CommRingCat.ofHom (twUg σ A)) ≫
         geomPt M (PAlg.tw σ A) ((pxTw M.p (okToOC l K) σ (galOC_okToOC σ)).app A y) := by
+  let y' : M.P.obj (PAlg.tw σ A) := (pxTw M.p (okToOC l K) σ (galOC_okToOC σ)).app A y
   refine gb_ext M ?_ ?_
-  · rw [Category.assoc, Category.assoc, GlobalTheory.Et.galMap_fst_assoc, geomPt_fst, geomPt_fst]
+  · rw [Category.assoc, Category.assoc, GlobalTheory.Et.galMap_fst_assoc]
+    have h1 := geomPt_fst M A y
+    have h2 := geomPt_fst M (PAlg.tw σ A) y'
+    refine h1.trans (Eq.trans ?_ (congrArg (Spec.map (CommRingCat.ofHom (twUg σ A)) ≫ ·) h2).symm)
     change _ = _ ≫ _ ≫ Spec.map (CommRingCat.ofHom (PAlg.twUEquiv σ A).symm.toRingHom) ≫ y.1
     rw [← Category.assoc, ← Category.assoc, ← Spec.map_comp, ← Spec.map_comp,
       ← CommRingCat.ofHom_comp, ← CommRingCat.ofHom_comp, twUg_comp_algebraMap]
-  · rw [Category.assoc, Category.assoc, GlobalTheory.Et.galMap_snd, geomPt_snd, ← Category.assoc, geomPt_snd,
-      ← Spec.map_comp, ← Spec.map_comp, ← CommRingCat.ofHom_comp, ← CommRingCat.ofHom_comp]
+  · rw [Category.assoc, Category.assoc, GlobalTheory.Et.galMap_snd, ← Category.assoc]
+    have h1 := geomPt_snd M A y
+    have h2 := geomPt_snd M (PAlg.tw σ A) y'
+    rw [h1]
+    refine Eq.trans ?_ (congrArg (Spec.map (CommRingCat.ofHom (twUg σ A)) ≫ ·) h2).symm
+    rw [← Spec.map_comp, ← Spec.map_comp, ← CommRingCat.ofHom_comp, ← CommRingCat.ofHom_comp]
     congr 2
     exact (RingHom.ext fun x => twUg_kb σ A x).symm
 
@@ -1744,7 +1730,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 open CategoryTheory Limits AlgebraicGeometry Opposite GroundTheory.PAdicHodge CrystallineSemistableComparison CrystallineSemistableComparison.CH CrystallineSemistableComparison.E GlobalTheory.EtC
 
 noncomputable section
@@ -1799,7 +1784,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
 
 namespace CrystallineSemistableComparison.E.Main
 
