@@ -12,6 +12,7 @@ public import Formalism.DistinguishedUnitIdeals.FinalArcProps
 public import Formalism.DistinguishedUnitIdeals.DistinguishedOrderProofs.ThmEPrim
 import Mathlib.Tactic.Linter.HaveILetI
 import Formalism.DistinguishedUnitIdeals.DistinguishedOrderProofs.RhoMapFunctorial
+import Formalism.DistinguishedUnitIdeals.DistinguishedOrderProofs.SplittingOfPositiveLevel
 
 -- This file was produced by scripts/clump.py from the modules listed below.
 -- Members: Formalism.DistinguishedUnitIdeals.DistinguishedOrderProofs.UnivPart, Formalism.DistinguishedUnitIdeals.DistinguishedOrderProofs.Bridge, Formalism.DistinguishedUnitIdeals.DistinguishedOrderProofs.PolynomialEvaluationValuation, Formalism.DistinguishedUnitIdeals.DistinguishedOrderProofs.Rounding, Formalism.DistinguishedUnitIdeals.DistinguishedOrderProofs.ThmEFinal
@@ -1152,7 +1153,7 @@ theorem lLift_of {h : LatHom L₁ L₂} {c' : ZMod n} {r₁ r₂ : ℕ} {e₁ : 
     rw [map_smul]
     exact h1 k
   rw [hyx] at h3
-  obtain ⟨w, hw, hw'⟩ := IdempotentNormalFormsRhoFacts.mem_sm.1 h3
+  obtain ⟨w, hw, hw'⟩ := S1.mem_sm.1 h3
   rw [← hs₂] at hw
   obtain ⟨b, rfl⟩ := (Submodule.mem_span_range_iff_exists_fun (PowerSeries O)).1 hw
   have h4 : ∑ l, (X * b l - (C ((B.ℓ : O) ^ rr * v l) - C (prL v₁ l))) • e₂ l = 0 := by

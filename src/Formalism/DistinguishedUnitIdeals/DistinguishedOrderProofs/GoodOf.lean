@@ -3,6 +3,7 @@ module
 public import Formalism.DistinguishedUnitIdeals.FrobeniusDiffBijective
 public import Formalism.DistinguishedUnitIdeals.DistinguishedOrderProofs.GroundTheory
 public import Formalism.DistinguishedUnitIdeals.DistinguishedOrderProofs.RhoMapFunctorial
+import Formalism.DistinguishedUnitIdeals.DistinguishedOrderProofs.SplittingOfPositiveLevel
 import Mathlib.Algebra.Order.Star.Int
 import Mathlib.RingTheory.PowerSeries.NoZeroDivisors
 import Mathlib.Tactic.Linter.Style
@@ -136,7 +137,7 @@ end ring
 
 end GoodPlacesAlt
 
-open GoodPlacesAlt IdempotentNormalFormsRhoFacts
+open S1 GoodPlacesAlt IdempotentNormalFormsRhoFacts
 
 theorem iterated_third_estimate_holds : E3itOf := fun _ _ B h j => e3it B h j
 
@@ -230,8 +231,8 @@ theorem phiIt_span (i : ZMod n) (k : ℕ) {t : V}
   | mem x hx =>
     obtain ⟨w, hw, rfl⟩ := hx
     rw [← phiIt_succ']
-    exact phiIt_mem_pull L _ hw
-  | zero => rw [phiIt_zero]; exact Submodule.zero_mem _
+    exact mem_pull L _ _ hw
+  | zero => rw [phiIt_map_zero]; exact Submodule.zero_mem _
   | add x y _ _ hx hy => rw [phiIt_add]; exact Submodule.add_mem _ hx hy
   | smul a x _ hx => rw [phiIt_smul]; exact Submodule.smul_mem _ _ hx
 
@@ -243,7 +244,7 @@ theorem pullback_smul_mem_next (i : ZMod n) (k h : ℕ) (h5 : L.FrobeniusCobound
     have h5' := h5 w hw
     rw [add_sub_cancel_right] at h5'
     have := phiIt_span L i k h5'
-    rwa [phiIt_smul, it_pow, it_q] at this
+    rwa [phiIt_smul, iterate_map_pow, it_q] at this
   | zero => rw [smul_zero]; exact Submodule.zero_mem _
   | add x y _ _ hx hy => rw [smul_add]; exact Submodule.add_mem _ hx hy
   | smul a x _ hx => rw [smul_comm]; exact Submodule.smul_mem _ _ hx
@@ -255,7 +256,7 @@ theorem product_smul_mem_pullback {c : ZMod n} {ell : ℕ} {hh : ℕ → ℕ}
   induction k with
   | zero =>
     have : x ∈ L.N (c - ((0 : ℕ) : ZMod n)) := by simpa using hx
-    simpa [Lat.phiIt] using phiIt_mem_pull L 0 this
+    simpa [Lat.phiIt] using mem_pull L _ 0 this
   | succ k ih =>
     have e : c - ((k + 1 : ℕ) : ZMod n) + 1 = c - (k : ZMod n) := by
       push_cast
@@ -480,7 +481,7 @@ theorem sat_pull_eq {c : ZMod n} {k r : ℕ} {e : Fin r → V}
     | mem x hx =>
       obtain ⟨a, rfl⟩ := hx
       exact Submodule.subset_span ⟨a, rfl⟩
-    | zero => rw [phiIt_zero]; exact Submodule.zero_mem _
+    | zero => rw [phiIt_map_zero]; exact Submodule.zero_mem _
     | add x y hx hy ihx ihy =>
       rw [phiIt_add]
       exact Submodule.add_mem _ (ihx (by rw [← he]; exact hx)) (ihy (by rw [← he]; exact hy))
@@ -489,14 +490,14 @@ theorem sat_pull_eq {c : ZMod n} {k r : ℕ} {e : Fin r → V}
       exact Submodule.smul_mem _ _ (ihx (by rw [← he]; exact hx))
   · refine Submodule.span_le.2 ?_
     rintro _ ⟨a, rfl⟩
-    exact phiIt_mem_pull L k (by rw [← he]; exact Submodule.subset_span ⟨a, rfl⟩)
+    exact mem_pull L _ k (by rw [← he]; exact Submodule.subset_span ⟨a, rfl⟩)
 
 def satP (i : ZMod n) (k : ℕ) {r : ℕ} (b : Fin r → PowerSeries O) (x : V) : Prop :=
   ∃ m : Fin r → V, (∀ t, m t ∈ L.N i) ∧ x = ∑ t, b t • L.phiIt i k (m t)
 
 theorem isPhiCombination_zero (i : ZMod n) (k : ℕ) {r : ℕ} (b : Fin r → PowerSeries O) :
     satP L i k b 0 :=
-  ⟨fun _ => 0, fun _ => Submodule.zero_mem _, by simp [phiIt_zero]⟩
+  ⟨fun _ => 0, fun _ => Submodule.zero_mem _, by simp [phiIt_map_zero]⟩
 
 theorem isPhiCombination_add {i : ZMod n} {k : ℕ} {r : ℕ} {b : Fin r → PowerSeries O} {x y : V}
     (hx : satP L i k b x) (hy : satP L i k b y) : satP L i k b (x + y) := by
@@ -606,7 +607,7 @@ theorem extension_generated_holds : ExtGOf := by
     rw [map_smul, hom_phiIt, hw t]
   show lam • u ∈ L₂.pull i k
   rw [heq]
-  exact Submodule.sum_mem _ fun t _ => Submodule.smul_mem _ _ (phiIt_mem_pull L₂ k (hwN t))
+  exact Submodule.sum_mem _ fun t _ => Submodule.smul_mem _ _ (mem_pull L₂ _ k (hwN t))
 
 namespace GoodPlacesAlt
 
@@ -674,7 +675,7 @@ theorem hh_phiIt_sum (i : ZMod n) (k : ℕ) {ι : Type} (s : Finset ι) (f : ι 
     L.phiIt i k (∑ r ∈ s, f r) = ∑ r ∈ s, L.phiIt i k (f r) := by
   classical
   induction s using Finset.induction_on with
-  | empty => simp [phiIt_zero]
+  | empty => simp [phiIt_map_zero]
   | insert a s ha ih => rw [Finset.sum_insert ha, Finset.sum_insert ha, phiIt_add, ih]
 
 theorem hh_main {u₁ : O} (hE : B.GammaXUnitShape u₁) (h9 : L.P9) (c : ZMod n) {z : V}
@@ -746,8 +747,8 @@ theorem hh_main {u₁ : O} (hE : B.GammaXUnitShape u₁) (h9 : L.P9) (c : ZMod n
               C εi • (X : PowerSeries O) ^ (k + 1) • ρ := by
           rw [← hP, mul_sub, mul_one, sub_smul, mul_smul]
         have hA : hhA B.ℓ (k + 1) = hhA B.ℓ k + e := rfl
-        rw [map_add (f := _), γ_lc, hγ', hA, pow_add B.lc (hhA B.ℓ k) e, hG, hγv, smul_neg, smul_comm _ (C εi) ρ, smul_add,
-          smul_add, hP']
+        rw [map_add (f := _), gam_lc_smul, hγ', hA, pow_add B.lc (hhA B.ℓ k) e, hG, hγv,
+          smul_neg, smul_comm _ (C εi) ρ, smul_add, smul_add, hP']
         generalize (X : PowerSeries O) ^ (k + 1) • ρ = P
         simp only [smul_add, smul_neg, smul_smul, mul_comm]
         abel
@@ -776,7 +777,7 @@ theorem gamma_injective_holds : GamInjOf := by
       have h1 := hh_gr L hu h9 c m hx
       have h2 : L.γ c ((X : PowerSeries O) ^ m • x) - (X : PowerSeries O) ^ m • x ∈
           sm (X ^ (m + 1)) (L.N c) := by
-        rw [hxe, γ_lc, ← smul_sub]
+        rw [hxe, gam_lc_smul, ← smul_sub]
         exact Submodule.smul_mem _ _ (hh_sm_pow_mono hm hγ)
       have h3 : C (u₁ ^ m - 1) • (X : PowerSeries O) ^ m • x ∈ sm (X ^ (m + 1)) (L.N c) := by
         have := Submodule.sub_mem _ h2 h1
@@ -817,7 +818,7 @@ theorem second_rule_first_form : ExistsTransport := by
     ∑ r ∈ Finset.Ico 1 M, (B.lc ^ b r * X ^ r) • d r, ?_, hres, ?_⟩
   · refine Submodule.sum_mem _ fun r hr => Submodule.smul_mem _ _ ?_
     obtain ⟨h1, h2⟩ := Finset.mem_Ico.1 hr
-    exact phiIt_mem_pull L j (habd r h1 h2).2.2
+    exact mem_pull L _ j (habd r h1 h2).2.2
   · refine Submodule.sum_mem _ fun r hr => ?_
     obtain ⟨h1, h2⟩ := Finset.mem_Ico.1 hr
     obtain ⟨t, rfl⟩ : ∃ t, r = t + 1 := ⟨r - 1, by omega⟩
@@ -836,12 +837,12 @@ theorem second_rule_first_form : ExistsTransport := by
     have : B.lc ^ K • x r • L.phiIt c j (d r) -
         B.lc ^ sig • L.phiIt c j ((B.lc ^ b r * X ^ r) • d r) =
         B.ff j M g • ((-(B.lc ^ b r * y r)) • L.phiIt c j (d r)) := by
-      rw [mul_smul, phiIt_lc, phiIt_smul, it_pow, ← hK, smul_smul, smul_smul, smul_smul, smul_smul,
-        ← sub_smul]
+      rw [mul_smul, phiIt_lc, phiIt_smul, iterate_map_pow, ← hK, smul_smul, smul_smul,
+        smul_smul, smul_smul, ← sub_smul]
       congr 1
       linear_combination (-(B.lc ^ b r)) * h
     rw [this]
-    exact smul_mem_sm _ (Submodule.smul_mem _ _ (phiIt_mem_pull L j hd))
+    exact smul_mem_sm _ (Submodule.smul_mem _ _ (mem_pull L _ j hd))
 
 namespace GoodPlacesAlt
 

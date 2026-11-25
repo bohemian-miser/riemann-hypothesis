@@ -4,6 +4,7 @@ public import Formalism.DistinguishedUnitIdeals.GammaCongruentArcFromStart
 public import Formalism.DistinguishedUnitIdeals.DistinguishedOrderProofs.GoodOf
 public import Formalism.DistinguishedUnitIdeals.DistinguishedOrderProofs.Graded
 import Formalism.DistinguishedUnitIdeals.DistinguishedOrderProofs.RhoMapFunctorial
+import Formalism.DistinguishedUnitIdeals.DistinguishedOrderProofs.SplittingOfPositiveLevel
 
 @[expose] public section
 
@@ -12,6 +13,7 @@ noncomputable section
 namespace Formalism.ExponentWindows.E
 
 open PowerSeries
+open S1 hiding sum_single
 
 namespace XDivisibilityOfActions
 
@@ -100,11 +102,11 @@ theorem γ_sub_pull (h3 : B.E3) (h4 : B.E4) {i : ZMod n} (h9 : L.GamN i) (k : �
   induction hv using Submodule.span_induction with
   | mem x hx =>
     obtain ⟨u, hu, rfl⟩ := hx
-    rw [γ_phiIt, ← phiIt_sub]
+    rw [gam_phiIt L i _ k rfl, ← phiIt_sub]
     obtain ⟨u', hu', he⟩ := mem_sm.1 (h9 u hu)
     obtain ⟨t, ht⟩ := X_dvd_itX B h3 k
     rw [← he, phiIt_smul, ht, mul_smul]
-    exact smul_mem_sm _ (Submodule.smul_mem _ _ (phiIt_mem_pull L k hu'))
+    exact smul_mem_sm _ (Submodule.smul_mem _ _ (mem_pull L _ k hu'))
   | zero => simp
   | add x y _ _ hx hy =>
     have : L.γ (i + (k : ZMod n)) (x + y) - (x + y) =
@@ -288,12 +290,12 @@ theorem trunc_pull (B : Base O) {ell j M g sig : ℕ} (hj : j ≤ ell) (hT : B.T
   obtain ⟨x, hx⟩ := hT t a h
   refine ⟨(⇑B.φ)^[ell - j] x, ?_⟩
   have := it_span B.φ (ell - j) hx
-  rwa [it_sub, it_mul, it_mul, it_lc, it_lc, it_pow, ← it_split B hj] at this
+  rwa [it_sub, it_mul, it_mul, it_lc, it_lc, iterate_map_pow, ← it_split B hj] at this
 
 theorem XM_pull (B : Base O) {ell j M g : ℕ} (hj : j ≤ ell) (hG : B.Good j M g) :
     ((⇑B.φ)^[ell] X) ^ M ∈ Ideal.span {B.ff' ell j M g} := by
   have := it_span B.φ (ell - j) hG.2.2
-  rwa [it_pow, ← it_split B hj] at this
+  rwa [iterate_map_pow, ← it_split B hj] at this
 
 end ring2
 
@@ -356,16 +358,16 @@ theorem frame_core {ell j M g sig : ℕ} (hj : j ≤ ell) (hT : B.Trunc j M g si
     ∑ t ∈ Finset.Ico 1 M, (B.lc ^ b t * y t) • L.phiIt i ell (d t), ?_, ?_, ?_, ?_, ?_, ?_⟩
   · exact Submodule.add_mem _ (Submodule.smul_mem _ _ he) (sm_le _ _ hvX)
   · convert hres using 1
-    rw [map_add (f := _), γ_lc, smul_neg, smul_sub]
+    rw [map_add (f := _), gam_lc_smul, smul_neg, smul_sub]
     abel
   · simpa using hvX
-  · refine Submodule.add_mem _ (Submodule.smul_mem _ _ (phiIt_mem_pull L ell he))
+  · refine Submodule.add_mem _ (Submodule.smul_mem _ _ (mem_pull L _ ell he))
       (Submodule.sum_mem _ fun t ht => Submodule.smul_mem _ _ ?_)
     obtain ⟨h1, h2⟩ := Finset.mem_Ico.1 ht
-    exact phiIt_mem_pull L ell (habd t h1 h2).2.2
+    exact mem_pull L _ ell (habd t h1 h2).2.2
   · refine Submodule.sum_mem _ fun t ht => Submodule.smul_mem _ _ ?_
     obtain ⟨h1, h2⟩ := Finset.mem_Ico.1 ht
-    exact phiIt_mem_pull L ell (habd t h1 h2).2.2
+    exact mem_pull L _ ell (habd t h1 h2).2.2
   · rw [phiIt_add, phiIt_lc, hv, hh_phiIt_sum, smul_add, smul_add, Finset.smul_sum,
       Finset.smul_sum, Finset.smul_sum, add_assoc, ← Finset.sum_add_distrib, smul_comm]
     congr 1
@@ -373,7 +375,8 @@ theorem frame_core {ell j M g sig : ℕ} (hj : j ≤ ell) (hT : B.Trunc j M g si
     obtain ⟨h1, h2⟩ := Finset.mem_Ico.1 ht
     obtain ⟨hK, -, -⟩ := habd t h1 h2
     have h := hxy t h1 h2
-    rw [phiIt_smul, it_mul, it_lc, it_pow, smul_smul, smul_smul, smul_smul, ← add_smul, ← hK]
+    rw [phiIt_smul, it_mul, it_lc, iterate_map_pow, smul_smul, smul_smul, smul_smul,
+      ← add_smul, ← hK]
     congr 1
     linear_combination (B.lc ^ b t) * h
 
@@ -400,14 +403,14 @@ theorem inv_core {ell j M g sig : ℕ} (hj : j ≤ ell) (hG : B.Good j M g) (hT 
     ∑ k, (∑ t ∈ Finset.range M, B.lc ^ b t * z t * (⇑B.φ)^[ell] (y t k)) • L.phiIt i ell (D k) +
       (B.lc ^ sig * τ) • L.phiIt i ell n', hD, ?_, ?_⟩
   · refine Submodule.add_mem _ (Submodule.sum_mem _ fun k _ => Submodule.smul_mem _ _
-      (phiIt_mem_pull L ell (hD k).1)) (Submodule.smul_mem _ _ (phiIt_mem_pull L ell hn'))
+      (mem_pull L _ ell (hD k).1)) (Submodule.smul_mem _ _ (mem_pull L _ ell hn'))
   · have h1 : B.lc ^ (K + K₀) • e m =
         ∑ k, (∑ t ∈ Finset.range M, B.lc ^ b t * X ^ t * y t k) • D k +
           (X : PowerSeries O) ^ M • n' := by
       rw [hne]; abel
-    rw [← phiIt_lc, h1, phiIt_add, hh_phiIt_sum, phiIt_smul, it_pow, ← hτ, smul_add, smul_add,
-      Finset.smul_sum, Finset.smul_sum, Finset.smul_sum, ← add_assoc, ← Finset.sum_add_distrib,
-      smul_smul, smul_smul]
+    rw [← phiIt_lc, h1, phiIt_add, hh_phiIt_sum, phiIt_smul, iterate_map_pow, ← hτ, smul_add,
+      smul_add, Finset.smul_sum, Finset.smul_sum, Finset.smul_sum, ← add_assoc,
+      ← Finset.sum_add_distrib, smul_smul, smul_smul]
     congr 1
     · refine Finset.sum_congr rfl fun k _ => ?_
       rw [phiIt_smul, smul_smul, smul_smul, smul_smul, ← add_smul]
@@ -416,7 +419,7 @@ theorem inv_core {ell j M g sig : ℕ} (hj : j ≤ ell) (hG : B.Good j M g) (hT 
       refine Finset.sum_congr rfl fun t ht => ?_
       have ht' := Finset.mem_range.1 ht
       have h := hxz t ht'
-      rw [it_mul, it_mul, it_lc, it_pow, ← (hab t ht').1]
+      rw [it_mul, it_mul, it_lc, iterate_map_pow, ← (hab t ht').1]
       linear_combination (B.lc ^ b t * (⇑B.φ)^[ell] (y t k)) * h
     · congr 1
       ring
@@ -501,24 +504,24 @@ theorem XDivisibilityOfActions.partner_gen {O : Type} [CommRing O] {B : Base O} 
 
   have hcon : ∀ (x : V) (K : ℕ) (k : Fin r) (hx : x ∈ L.N c'),
       L.γ c' x - x ∈ sm (X ^ M) (L.N c') → x - B.lc ^ K • e k ∈ sm X (L.N c') → ∀ s < ell,
-      S.loc s (θ ⟨L.phiIt c' ell x, phiIt_mem_pull L ell hx⟩) - B.lc ^ K • S.locL s (bv O k) ∈
+      S.loc s (θ ⟨L.phiIt c' ell x, mem_pull L _ ell hx⟩) - B.lc ^ K • S.locL s (bv O k) ∈
         S.Fl s := by
     intro x K k hx h1 h2 s hs
     have := hA x (fun m => if k = m then (B.ℓ : O) ^ K else 0)
-      (θ ⟨L.phiIt c' ell x, phiIt_mem_pull L ell hx⟩) hx h1 (by rw [sum_single]; exact h2)
+      (θ ⟨L.phiIt c' ell x, mem_pull L _ ell hx⟩) hx h1 (by rw [sum_single]; exact h2)
       (hθ _) s hs
     rwa [cst_single, map_smul] at this
   constructor
   ·
     have key : ∀ m : Fin r, ∃ z : Fin r → PowerSeries O, ∀ s < ell,
-        S.locL s z - B.lc ^ sig • S.loc s (θ ⟨L.phiIt c' ell (e m), phiIt_mem_pull L ell (heN m)⟩) ∈
+        S.locL s z - B.lc ^ sig • S.loc s (θ ⟨L.phiIt c' ell (e m), mem_pull L _ ell (heN m)⟩) ∈
           S.Fl s := by
       intro m
       obtain ⟨K, K₀, Z, D, R, hD, hR, hid⟩ := inv_core L hj hG hT hI m
       refine ⟨Z, fun s hs => ?_⟩
       have hid' : B.lc ^ sig • B.lc ^ (K + K₀) •
-          (⟨L.phiIt c' ell (e m), phiIt_mem_pull L ell (heN m)⟩ : ↥(L.pull c' ell)) =
-          B.lc ^ K • ∑ k, Z k • (⟨L.phiIt c' ell (D k), phiIt_mem_pull L ell (hD k).1⟩ :
+          (⟨L.phiIt c' ell (e m), mem_pull L _ ell (heN m)⟩ : ↥(L.pull c' ell)) =
+          B.lc ^ K • ∑ k, Z k • (⟨L.phiIt c' ell (D k), mem_pull L _ ell (hD k).1⟩ :
             ↥(L.pull c' ell)) + f' • (⟨R, hR⟩ : ↥(L.pull c' ell)) := by
         apply Subtype.ext
         simpa using hid
@@ -529,8 +532,8 @@ theorem XDivisibilityOfActions.partner_gen {O : Type} [CommRing O] {B : Base O} 
       have hZ : S.locL s Z = ∑ k, Z k • S.locL s (bv O k) :=
         LinearMap.pi_apply_eq_sum_univ (S.locL s) Z
       have h2 : B.lc ^ (K + K₀) • (S.locL s Z - B.lc ^ sig • S.loc s
-          (θ ⟨L.phiIt c' ell (e m), phiIt_mem_pull L ell (heN m)⟩)) =
-          -(B.lc ^ K • ∑ k, Z k • (S.loc s (θ ⟨L.phiIt c' ell (D k), phiIt_mem_pull L ell (hD k).1⟩)
+          (θ ⟨L.phiIt c' ell (e m), mem_pull L _ ell (heN m)⟩)) =
+          -(B.lc ^ K • ∑ k, Z k • (S.loc s (θ ⟨L.phiIt c' ell (D k), mem_pull L _ ell (hD k).1⟩)
             - B.lc ^ K₀ • S.locL s (bv O k))) - f' • S.loc s (θ ⟨R, hR⟩) := by
         rw [smul_sub, smul_comm (B.lc ^ (K + K₀)) (B.lc ^ sig), h1, hZ]
         simp only [smul_sub, Finset.sum_sub_distrib, Finset.smul_sum, smul_smul, pow_add]
@@ -547,7 +550,7 @@ theorem XDivisibilityOfActions.partner_gen {O : Type} [CommRing O] {B : Base O} 
     have hw2 := hw
     rw [sat_pull_eq L he] at hw2
     obtain ⟨cf, hcf⟩ := (Submodule.mem_span_range_iff_exists_fun _).1 hw2
-    have hwe : w = θ (∑ m, cf m • (⟨L.phiIt c' ell (e m), phiIt_mem_pull L ell (heN m)⟩ :
+    have hwe : w = θ (∑ m, cf m • (⟨L.phiIt c' ell (e m), mem_pull L _ ell (heN m)⟩ :
         ↥(L.pull c' ell))) := by
       rw [← hθ' w hw]
       congr 1
@@ -567,14 +570,14 @@ theorem XDivisibilityOfActions.partner_gen {O : Type} [CommRing O] {B : Base O} 
       intro k
       obtain ⟨K, x, Q, R, hx, h1, h2, hQ, hR, hid⟩ := frame_core L hj hT h9 hH (heN k)
       refine ⟨⟨Q, hQ⟩, fun s hs => ?_⟩
-      have hid' : B.lc ^ sig • (⟨L.phiIt c' ell x, phiIt_mem_pull L ell hx⟩ : ↥(L.pull c' ell)) =
+      have hid' : B.lc ^ sig • (⟨L.phiIt c' ell x, mem_pull L _ ell hx⟩ : ↥(L.pull c' ell)) =
           B.lc ^ K • (⟨Q, hQ⟩ : ↥(L.pull c' ell)) + f' • (⟨R, hR⟩ : ↥(L.pull c' ell)) :=
         Subtype.ext hid
       have h3 := congrArg (fun p => S.loc s (θ p)) hid'
       simp only [map_add (f := _), map_smul] at h3
       apply flSat_pow S hS hs K
       have h4 : B.lc ^ K • (S.loc s (θ ⟨Q, hQ⟩) - B.lc ^ sig • S.locL s (bv O k)) =
-          B.lc ^ sig • (S.loc s (θ ⟨L.phiIt c' ell x, phiIt_mem_pull L ell hx⟩) -
+          B.lc ^ sig • (S.loc s (θ ⟨L.phiIt c' ell x, mem_pull L _ ell hx⟩) -
             B.lc ^ K • S.locL s (bv O k)) - f' • S.loc s (θ ⟨R, hR⟩) := by
         rw [smul_sub, smul_sub, h3, smul_comm (B.lc ^ K) (B.lc ^ sig)]
         abel
@@ -629,7 +632,7 @@ theorem fr_exists {u₁ : O} (hE : B.GammaXUnitShape u₁) (h9 : L.P9) (c : ZMod
     simp only [fr]
     rw [hs]
     convert hres using 1
-    rw [map_add (f := _), γ_lc, smul_neg, smul_sub]
+    rw [map_add (f := _), gam_lc_smul, smul_neg, smul_sub]
     abel
 
 theorem fr_sub (k : ℕ) (e : V) {d : ℕ → V} {S : Submodule (PowerSeries O) V}
@@ -678,7 +681,7 @@ theorem uniq_tw {u₁ : O} (hE : B.GammaXUnitShape u₁) (h9 : L.P9) (c : ZMod n
           have hc : ∀ l, G₁ m l • B.lc ^ K • δ l = B.lc ^ K • G₁ m l • δ l :=
             fun l => smul_comm _ _ _
           simp only [hc]
-          rw [γ_lc, smul_sub, smul_add, smul_comm (B.lc ^ K) X, ← Finset.smul_sum]
+          rw [gam_lc_smul, smul_sub, smul_add, smul_comm (B.lc ^ K) X, ← Finset.smul_sum]
         rw [this]
         exact Submodule.smul_mem _ _ (hh_sm_pow_mono ht (h2 m))
       have a3 : (X : PowerSeries O) • ∑ l, G₁ m l • (X : PowerSeries O) ^ t • x l ∈
@@ -875,7 +878,7 @@ theorem height_inverse_holds : HinvOf := by
       abel
     have he' : L.γ i (B.lc ^ (K + K) • e m) = B.lc ^ (K + K) • e m +
         (X : PowerSeries O) • ∑ l, G₁ m l • B.lc ^ (K + K) • e l := by
-      rw [γ_lc, hG₁, smul_add, smul_comm _ X, Finset.smul_sum]
+      rw [gam_lc_smul, hG₁, smul_add, smul_comm _ X, Finset.smul_sum]
       have hc : ∀ l, G₁ m l • B.lc ^ (K + K) • e l = B.lc ^ (K + K) • G₁ m l • e l :=
         fun l => smul_comm _ _ _
       simp only [hc]
@@ -905,7 +908,7 @@ theorem height_inverse_holds : HinvOf := by
         rw [smul_sub, smul_smul, ← pow_add, add_comm K' K]
       rw [this]
       exact Submodule.smul_mem _ _ (hDX k₀)
-    · rw [γ_lc, ← smul_sub]
+    · rw [gam_lc_smul, ← smul_sub]
       exact Submodule.smul_mem _ _ (hγD k₀)
   · have hYe : ∀ k₀, ∑ t ∈ Finset.range (k + 1), B.lc ^ (K - hhA B.ℓ t) * X ^ t *
         (if t = 0 then bv O k₀ m₀ else dY k₀ t m₀) = Y k₀ m₀ := by
