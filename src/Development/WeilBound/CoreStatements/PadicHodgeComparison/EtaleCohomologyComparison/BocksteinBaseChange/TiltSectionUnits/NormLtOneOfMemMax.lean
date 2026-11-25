@@ -22,12 +22,8 @@ open Ideal
 
 namespace CrystallineSemistableComparison
 
-set_option linter.unusedSectionVars false
-
 variable {p : ℕ} [Fact p.Prime] {O : Type*} [CommRing O] [Fact ¬IsUnit (p : O)]
-  [IsAdicComplete (span {(p : O)}) O]
-  {R : Type*} [CommRing R] [IsLocalRing R] [CharP (IsLocalRing.ResidueField R) p]
-  [PerfectRing (IsLocalRing.ResidueField R) p]
+  {R : Type*} [CommRing R]
 
 def redPow (f : R →+* O) (n : ℕ) : R →+* ModP O p :=
   (iterateFrobenius (ModP O p) p n).comp ((Ideal.Quotient.mk _).comp f)
@@ -35,6 +31,9 @@ def redPow (f : R →+* O) (n : ℕ) : R →+* ModP O p :=
 theorem redPow_apply (f : R →+* O) (n : ℕ) (y : R) :
     redPow (p := p) f n y = Ideal.Quotient.mk (span {(p : O)}) (f y ^ p ^ n) := by
   rw [redPow, RingHom.comp_apply, iterateFrobenius_def, RingHom.comp_apply, map_pow]
+
+variable [IsAdicComplete (span {(p : O)}) O] [IsLocalRing R]
+  [CharP (IsLocalRing.ResidueField R) p] [PerfectRing (IsLocalRing.ResidueField R) p]
 
 theorem exists_tilt_section (f : R →+* O) (n : ℕ)
     (hn : ∀ y ∈ IsLocalRing.maximalIdeal R, f y ^ p ^ n ∈ span {(p : O)}) :
@@ -77,9 +76,6 @@ end -- clump:auto
 section -- clump:auto
 @[expose] public section
 
-set_option backward.isDefEq.respectTransparency false
-set_option linter.unusedSectionVars false
-
 noncomputable section
 
 open GroundTheory.PAdicHodge
@@ -117,21 +113,10 @@ attribute [local instance] closZ
 theorem norm_zToOK (z : ℤ_[l]) : ‖(((algebraMap ℤ_[l] (OK l K) z : OK l K) : K) : PadicAlgCl l)‖ = ‖z‖ := by
   exact norm_algebraMap_Zl z
 
-variable [FiniteDimensional ℚ_[l] K]
-
 theorem locZ : IsLocalHom (algebraMap ℤ_[l] (OK l K)) := by
   exact ⟨fun z hz => PadicInt.isUnit_iff.2 ((norm_zToOK z).symm.trans ((isUnit_OK_iff _).1 hz))⟩
 
 attribute [local instance] locZ
-
-theorem finZ : Module.Finite ℤ_[l] (OK l K) := by
-  exact IsIntegralClosure.finite ℤ_[l] ℚ_[l] K (OK l K)
-
-attribute [local instance] finZ
-
-theorem finite_res : Finite (IsLocalRing.ResidueField (OK l K)) := by
-  have : Finite (IsLocalRing.ResidueField ℤ_[l]) := Finite.of_equiv _ PadicInt.residueField.symm.toEquiv
-  exact Module.finite_of_finite (IsLocalRing.ResidueField ℤ_[l])
 
 theorem l_mem_max : ((l : ℕ) : OK l K) ∈ IsLocalRing.maximalIdeal (OK l K) := by
   rw [IsLocalRing.mem_maximalIdeal, mem_nonunits_iff, isUnit_OK_iff]
@@ -145,10 +130,6 @@ instance charP_res : CharP (IsLocalRing.ResidueField (OK l K)) l :=
   (CharP.charP_iff_prime_eq_zero (Fact.out : l.Prime)).2 (by
     rw [← map_natCast (IsLocalRing.residue (OK l K)), IsLocalRing.residue_eq_zero_iff]
     exact l_mem_max)
-
-instance perf_res : PerfectRing (IsLocalRing.ResidueField (OK l K)) l := by
-  have := finite_res (l := l) (K := K)
-  infer_instance
 
 theorem mem_span_l_of_norm_le (w : OC l) (h : ‖(w : ℂ_[l])‖ ≤ ‖((l : ℕ) : ℂ_[l])‖) : w ∈ Ideal.span {((l : ℕ) : OC l)} := by
   have hl : ((l : ℕ) : ℂ_[l]) ≠ 0 := Nat.cast_ne_zero.2 (Fact.out : l.Prime).ne_zero
@@ -174,9 +155,24 @@ theorem norm_lt_one_of_mem_max {m : OK l K} (hm : m ∈ IsLocalRing.maximalIdeal
   rw [IsLocalRing.mem_maximalIdeal, mem_nonunits_iff, isUnit_OK_iff] at hm
   exact lt_of_le_of_ne (norm_OK_le m) hm
 
+variable [FiniteDimensional ℚ_[l] K]
+
+theorem finZ : Module.Finite ℤ_[l] (OK l K) := by
+  exact IsIntegralClosure.finite ℤ_[l] ℚ_[l] K (OK l K)
+
+attribute [local instance] finZ
+
+theorem finite_res : Finite (IsLocalRing.ResidueField (OK l K)) := by
+  have : Finite (IsLocalRing.ResidueField ℤ_[l]) := Finite.of_equiv _ PadicInt.residueField.symm.toEquiv
+  exact Module.finite_of_finite (IsLocalRing.ResidueField ℤ_[l])
+
+instance perf_res : PerfectRing (IsLocalRing.ResidueField (OK l K)) l := by
+  have := finite_res (l := l) (K := K)
+  infer_instance
+
 theorem exists_pow_mem_span : ∃ n : ℕ, ∀ y ∈ IsLocalRing.maximalIdeal (OK l K),
     okToOC l K y ^ l ^ n ∈ Ideal.span {((l : ℕ) : OC l)} := by
-  haveI := OK_dvr (l := l) (K := K)
+  have := OK_dvr (l := l) (K := K)
   obtain ⟨ϖ, hϖ⟩ := IsDiscreteValuationRing.exists_irreducible (OK l K)
   have h1 := norm_lt_one_of_irreducible hϖ
   have h0 : 0 < ‖((l : ℕ) : ℂ_[l])‖ := norm_pos_iff.2 (Nat.cast_ne_zero.2 (Fact.out : l.Prime).ne_zero)
