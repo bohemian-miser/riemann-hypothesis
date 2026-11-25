@@ -3,7 +3,6 @@ module
 public import GroundTheory.TateCohomology.AugmentationSES
 public import GroundTheory.TateCohomology.CupProduct
 import GroundTheory.TateCohomology.CupConnecting
-import Mathlib.RingTheory.TotallySplit
 
 @[expose] public section
 
@@ -286,19 +285,23 @@ theorem tateCup_connecting_left (m : ℕ) : ∀ (p q : ℤ), (1 - p).toNat + (1 
   · rw [tateCup_of_nonpos q hp]
     apply moduleIso_hom_injective (tateLeftIso E.X₁ B (r + 1))
     rw [tateLeftIso_tδ hE B hEB r, tateLeftIso_cupL]
-    erw [ih _ (by omega) (p + 1) q rfl (shortExact_tensorLeft_of_flat hE (augIdeal k G)) B
-      (shortExact_tensorLeft_tensorRight hE B (augIdeal k G) hEB) (r + 1) (by omega) _ b]
-    rw [tateLeftIso_hom]
-    erw [ih _ (by omega) (p + 1) q rfl (augSES_shortExact E.X₁) B
-      (augSES_tensorRight_shortExact E.X₁ B) (r + 1) (by omega) _ b]
-    erw [augShiftδ_tδ hE p a, map_neg, LinearMap.neg_apply]
+    refine (congrArg Neg.neg (ih _ (by omega) (p + 1) q rfl
+      (shortExact_tensorLeft_of_flat hE (augIdeal k G)) B
+      (shortExact_tensorLeft_tensorRight hE B (augIdeal k G) hEB) (r + 1) (by omega)
+      ((augShiftδ E.X₃ p).hom a) b)).trans ?_
+    refine Eq.trans ?_ (ih _ (by omega) (p + 1) q rfl (augSES_shortExact E.X₁) B
+      (augSES_tensorRight_shortExact E.X₁ B) (r + 1) (by omega)
+      ((tδ hE p (p + 1) rfl).hom a) b).symm
+    refine ((congrArg (fun x => tateCup (p + 1 + 1) q (augIdeal k G ⊗ E.X₁) B (r + 1 + 1)
+      (by omega) x b) (augShiftδ_tδ hE p a)).trans ?_).symm
+    rw [map_neg, LinearMap.neg_apply]
     rfl
   by_cases hq : q ≤ 0
   · rw [tateCup_of_pos_of_nonpos (by omega) hq, tateCup_of_pos_of_nonpos (p := p + 1) (by omega) hq]
     apply moduleIso_hom_injective (tateRightIso E.X₁ B (r + 1))
     rw [tateRightIso_tδ hE B hEB r, tateRightIso_cupR, tateRightIso_cupR]
-    erw [map_smul]
-    erw [ih _ (by omega) p (q + 1) rfl hE (augIdeal k G ⊗ B)
+    rw [map_smul]
+    rw [ih _ (by omega) p (q + 1) rfl hE (augIdeal k G ⊗ B)
       (shortExact_tensorRight_tensor hE B (augIdeal k G) hEB) (r + 1) (by omega) a _]
     rw [tsgn_add_one, neg_smul]
   · obtain ⟨n, rfl⟩ : ∃ n : ℕ, p = n := ⟨p.toNat, by omega⟩
@@ -339,22 +342,25 @@ theorem tateCup_connecting_right (m : ℕ) : ∀ (p q : ℤ), (1 - p).toNat + (1
   · rw [tateCup_of_nonpos q hp, tateCup_of_nonpos (q + 1) hp]
     apply moduleIso_hom_injective (tateLeftIso A E.X₁ (r + 1))
     rw [tateLeftIso_tδ' hE A hAE r, tateLeftIso_cupL, moduleHom_smul, tateLeftIso_cupL]
-    erw [ih _ (by omega) (p + 1) q rfl hE (augIdeal k G ⊗ A)
+    rw [ih _ (by omega) (p + 1) q rfl hE (augIdeal k G ⊗ A)
       (shortExact_tensorLeft_tensor hE A (augIdeal k G) hAE) (r + 1) (by omega) _ b]
     rw [tsgn_add_one, neg_smul]
     exact neg_neg _
   by_cases hq : q ≤ 0
   · rw [tateCup_of_pos_of_nonpos (by omega) hq]
     apply moduleIso_hom_injective (tateRightIso A E.X₁ (r + 1))
-    rw [tateRightIso_tδ' hE A hAE r, tateRightIso_cupR]
-    erw [moduleHom_smul, moduleHom_smul]
-    erw [ih _ (by omega) p (q + 1) rfl (shortExact_tensorLeft_of_flat hE (augIdeal k G)) A
-      (shortExact_tensorLeft_tensorLeft hE A (augIdeal k G) hAE) (r + 1) (by omega) a _]
-    rw [tateRightIso_hom]
-    erw [ih _ (by omega) p (q + 1) rfl (augSES_shortExact E.X₁) A
-      (augSES_tensorLeft_shortExact A E.X₁) (r + 1) (by omega) a _]
-    erw [augShiftδ_tδ hE q b, map_neg]
-    exact (smul_smul_neg_self _ _).symm
+    rw [tateRightIso_tδ' hE A hAE r, tateRightIso_cupR, moduleHom_smul, moduleHom_smul]
+    refine (congrArg (fun x => -(tsgn k p • x)) (ih _ (by omega) p (q + 1) rfl
+      (shortExact_tensorLeft_of_flat hE (augIdeal k G)) A
+      (shortExact_tensorLeft_tensorLeft hE A (augIdeal k G) hAE) (r + 1) (by omega) a
+      ((augShiftδ E.X₃ q).hom b))).trans ?_
+    refine Eq.trans ?_ (congrArg (tsgn k p • ·) (ih _ (by omega) p (q + 1) rfl
+      (augSES_shortExact E.X₁) A (augSES_tensorLeft_shortExact A E.X₁) (r + 1) (by omega) a
+      ((tδ hE q (q + 1) rfl).hom b))).symm
+    refine ((congrArg (fun x => tsgn k p • tsgn k p • tateCup p (q + 1 + 1) A
+      (augIdeal k G ⊗ E.X₁) (r + 1 + 1) (by omega) a x) (augShiftδ_tδ hE q b)).trans ?_).symm
+    rw [map_neg, smul_smul_neg_self]
+    rfl
   · obtain ⟨n, rfl⟩ : ∃ n : ℕ, p = n := ⟨p.toNat, by omega⟩
     obtain ⟨m', rfl⟩ : ∃ m' : ℕ, q = m' := ⟨q.toNat, by omega⟩
     obtain ⟨l, rfl⟩ : ∃ l : ℕ, r = l := ⟨r.toNat, by omega⟩
