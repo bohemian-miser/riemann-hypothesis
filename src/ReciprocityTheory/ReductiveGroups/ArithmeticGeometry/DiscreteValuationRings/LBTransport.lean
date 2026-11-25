@@ -131,8 +131,7 @@ lemma linComb_g_res {K : Type} [Fintype K] (φ : K → (Y ⟶ X)) (ε : K → �
   have hk : V ≤ φ k ⁻¹ᵁ (L.U (j k) ⊓ L.U (j₂ k)) := fun y hy =>
     ⟨LB.wchart_le L φ j k (h hy).1, LB.wchart_le L φ j₂ k (h hy).2⟩
   rw [map_zpow, tr_def L hk]
-  erw [res_res']
-  rfl
+  exact congrArg (· ^ ε k) (res_res' _ h _)
 
 end Tr
 
@@ -177,9 +176,28 @@ lemma cand_res (t : LB.Gen (LB.LinComb L φ ε)) (j' : K' → L.ι) (ρ : (Y ⟶
     res hV (cand L φ ε φ' ε' t j' ρ) =
       (∏ k', tr L V (φ' k') (ρ (φ' k')) (j' k') ^ ε' k')⁻¹ * res (hV.trans piece_le_wchart) (t.s (ρ ∘ φ)) := by
   simp only [cand, map_mul, map_inv, map_prod, map_zpow]
-  erw [res_res']
-  congr 2
-  exact Finset.prod_congr rfl fun k' _ => by rw [tr_res L hV (piece_le_tr le_rfl k')]
+  congr 1
+  · congr 1
+    exact Finset.prod_congr rfl fun k' _ => by rw [tr_res L hV (piece_le_tr le_rfl k')]
+  · exact res_res' _ _ _
+
+private lemma gen_compat_res (t : LB.Gen (LB.LinComb L φ ε)) (ht : t.IsGen) (j j₂ : K → L.ι)
+    {V : Y.Opens}
+    (h : V ≤ LB.wchart L φ j ⊓ LB.wchart L φ j₂) :
+    res (h.trans inf_le_left) (t.s j) =
+      (∏ k, tr L V (φ k) (j k) (j₂ k) ^ ε k) * res (h.trans inf_le_right) (t.s j₂) :=
+  calc res (h.trans inf_le_left) (t.s j)
+      = res h (res (inf_le_left : LB.wchart L φ j ⊓ LB.wchart L φ j₂ ≤ _) (t.s j)) :=
+        (res_res' _ h _).symm
+    _ = res h ((LB.LinComb L φ ε).g j j₂ *
+          res (inf_le_right : (LB.LinComb L φ ε).U j ⊓ (LB.LinComb L φ ε).U j₂ ≤ _) (t.s j₂)) :=
+        congrArg (res h) (ht j j₂)
+    _ = res h ((LB.LinComb L φ ε).g j j₂) *
+          res h (res (inf_le_right : (LB.LinComb L φ ε).U j ⊓ (LB.LinComb L φ ε).U j₂ ≤ _)
+            (t.s j₂)) :=
+        map_mul (res h) _ _
+    _ = (∏ k, tr L V (φ k) (j k) (j₂ k) ^ ε k) * res (h.trans inf_le_right) (t.s j₂) :=
+        congrArg₂ (· * ·) (linComb_g_res L φ ε j j₂ h) (res_res' _ h _)
 
 lemma cand_compat (hL : L.IsLB) (hs : LB.SameSum φ ε φ' ε') (t : LB.Gen (LB.LinComb L φ ε)) (ht : t.IsGen)
     (j' : K' → L.ι) (ρ ρ₂ : (Y ⟶ X) → L.ι) :
@@ -188,14 +206,10 @@ lemma cand_compat (hL : L.IsLB) (hs : LB.SameSum φ ε φ' ε') (t : LB.Gen (LB.
       res (inf_le_right : (LB.wchart L φ' j' ⊓ piece L φ φ' ρ) ⊓ (LB.wchart L φ' j' ⊓ piece L φ φ' ρ₂) ≤ _)
         (cand L φ ε φ' ε' t j' ρ₂) := by
   set V := (LB.wchart L φ' j' ⊓ piece L φ φ' ρ) ⊓ (LB.wchart L φ' j' ⊓ piece L φ φ' ρ₂)
-  rw [cand_res, cand_res]
-
+  rw [cand_res (V := V), cand_res (V := V)]
   have hw : V ≤ LB.wchart L φ (ρ ∘ φ) ⊓ LB.wchart L φ (ρ₂ ∘ φ) := fun _ hy => ⟨hy.1.2.1, hy.2.2.1⟩
-  have hg := congrArg (res hw) (ht (ρ ∘ φ) (ρ₂ ∘ φ))
-  erw [map_mul, res_res', res_res'] at hg
-  rw [linComb_g_res L φ ε _ _ hw] at hg
-  erw [hg]
-
+  have hg := gen_compat_res t ht (ρ ∘ φ) (ρ₂ ∘ φ) hw
+  rw [hg]
   have hsum : ∏ k, tr L V (φ k) ((ρ ∘ φ) k) ((ρ₂ ∘ φ) k) ^ ε k =
       ∏ k', tr L V (φ' k') (ρ (φ' k')) (ρ₂ (φ' k')) ^ ε' k' :=
     prod_zpow_of_sameSum φ ε φ' ε' hs (fun ψ => tr L V ψ (ρ ψ) (ρ₂ ψ))
@@ -210,7 +224,6 @@ lemma cand_compat (hL : L.IsLB) (hs : LB.SameSum φ ε φ' ε') (t : LB.Gen (LB.
     rw [← Finset.prod_mul_distrib]
     exact Finset.prod_congr rfl fun k' _ => by rw [hcoc k', mul_zpow]
   rw [hA, mul_inv_rev, mul_assoc, inv_mul_cancel_left]
-  rfl
 
 lemma units_ext_cover {Y : Scheme.{0}} (W : Y.Opens) {ι : Type} (V : ι → Y.Opens) (hle : ∀ i, V i ≤ W)
     (hcov : W ≤ ⨆ i, V i) (a b : Γ(Y, W)ˣ) (h : ∀ i, res (hle i) a = res (hle i) b) : a = b := by
@@ -247,23 +260,34 @@ theorem gen_transport (hL : L.IsLB) (hs : LB.SameSum φ ε φ' ε') (t : LB.Gen 
     apply units_ext_cover _ (fun ρ => (LB.wchart L φ' i ⊓ LB.wchart L φ' j) ⊓ piece L φ φ' ρ)
       (fun _ => inf_le_left) (le_iSup_piece L φ φ' hL _)
     intro ρ
-    have hVi : (LB.wchart L φ' i ⊓ LB.wchart L φ' j) ⊓ piece L φ φ' ρ ≤ LB.wchart L φ' i ⊓ piece L φ φ' ρ :=
-      fun _ hy => ⟨hy.1.1, hy.2⟩
-    have hVj : (LB.wchart L φ' i ⊓ LB.wchart L φ' j) ⊓ piece L φ φ' ρ ≤ LB.wchart L φ' j ⊓ piece L φ φ' ρ :=
-      fun _ hy => ⟨hy.1.2, hy.2⟩
-    erw [map_mul, res_res', res_res']
-    have hV12 : (LB.wchart L φ' i ⊓ LB.wchart L φ' j) ⊓ piece L φ φ' ρ ≤ LB.wchart L φ' i ⊓ LB.wchart L φ' j :=
-      fun _ hy => hy.1
-    erw [hwV i ρ hVi, hwV j ρ hVj, linComb_g_res L φ' ε' i j hV12]
-    have hcoc : ∀ k', tr L ((LB.wchart L φ' i ⊓ LB.wchart L φ' j) ⊓ piece L φ φ' ρ) (φ' k') (ρ (φ' k')) (j k') =
-        tr L _ (φ' k') (ρ (φ' k')) (i k') * tr L _ (φ' k') (i k') (j k') := fun k' =>
+    set O := (LB.wchart L φ' i ⊓ LB.wchart L φ' j) ⊓ piece L φ φ' ρ
+    have hVi : O ≤ LB.wchart L φ' i ⊓ piece L φ φ' ρ := fun _ hy => ⟨hy.1.1, hy.2⟩
+    have hVj : O ≤ LB.wchart L φ' j ⊓ piece L φ φ' ρ := fun _ hy => ⟨hy.1.2, hy.2⟩
+    have hV12 : O ≤ LB.wchart L φ' i ⊓ LB.wchart L φ' j := fun _ hy => hy.1
+    have hcoc : ∀ k', tr L O (φ' k') (ρ (φ' k')) (j k') =
+        tr L O (φ' k') (ρ (φ' k')) (i k') * tr L O (φ' k') (i k') (j k') := fun k' =>
       (tr_cocycle L hL (fun _ hy => ⟨⟨(piece_le_tr hVi k' hy).1, (piece_le_tr hVi k' hy).2⟩,
         (piece_le_tr hVj k' hy).2⟩)).symm
-    have hA : ∏ k', tr L ((LB.wchart L φ' i ⊓ LB.wchart L φ' j) ⊓ piece L φ φ' ρ) (φ' k') (ρ (φ' k')) (j k') ^ ε' k' =
-        (∏ k', tr L _ (φ' k') (ρ (φ' k')) (i k') ^ ε' k') * ∏ k', tr L _ (φ' k') (i k') (j k') ^ ε' k' := by
+    have hA : ∏ k', tr L O (φ' k') (ρ (φ' k')) (j k') ^ ε' k' =
+        (∏ k', tr L O (φ' k') (ρ (φ' k')) (i k') ^ ε' k') *
+          ∏ k', tr L O (φ' k') (i k') (j k') ^ ε' k' := by
       rw [← Finset.prod_mul_distrib]
       exact Finset.prod_congr rfl fun k' _ => by rw [hcoc k', mul_zpow]
-    rw [hA, mul_inv_rev, ← mul_assoc, mul_inv_cancel_left]
+    calc res hV12 (res (inf_le_left : LB.wchart L φ' i ⊓ LB.wchart L φ' j ≤ _) (w i))
+        = (∏ k', tr L O (φ' k') (ρ (φ' k')) (i k') ^ ε' k')⁻¹ *
+            res (hVi.trans piece_le_wchart) (t.s (ρ ∘ φ)) := (res_res' _ _ _).trans (hwV i ρ hVi)
+      _ = (∏ k', tr L O (φ' k') (i k') (j k') ^ ε' k') *
+            ((∏ k', tr L O (φ' k') (ρ (φ' k')) (j k') ^ ε' k')⁻¹ *
+              res (hVj.trans piece_le_wchart) (t.s (ρ ∘ φ))) :=
+          (congrArg (· * _) (by rw [hA, mul_inv_rev, mul_inv_cancel_left])).trans (mul_assoc _ _ _)
+      _ = res hV12 ((LB.LinComb L φ' ε').g i j) *
+            res hV12 (res (inf_le_right : (LB.LinComb L φ' ε').U i ⊓ (LB.LinComb L φ' ε').U j ≤ _)
+              (w j)) :=
+          (congrArg₂ (· * ·) (linComb_g_res L φ' ε' i j hV12)
+            ((res_res' _ _ _).trans (hwV j ρ hVj))).symm
+      _ = res hV12 ((LB.LinComb L φ' ε').g i j *
+            res (inf_le_right : (LB.LinComb L φ' ε').U i ⊓ (LB.LinComb L φ' ε').U j ≤ _) (w j)) :=
+          (map_mul (res hV12) _ _).symm
   ·
     intro j j' hj hj' hjj'
     apply units_ext_cover _ (fun ρ => (LB.wchart L φ j ⊓ LB.wchart L φ' j') ⊓ piece L φ φ' ρ)
@@ -272,12 +296,13 @@ theorem gen_transport (hL : L.IsLB) (hs : LB.SameSum φ ε φ' ε') (t : LB.Gen 
     set O := (LB.wchart L φ j ⊓ LB.wchart L φ' j') ⊓ piece L φ φ' ρ
     have hO' : O ≤ LB.wchart L φ' j' ⊓ piece L φ φ' ρ := fun _ hy => ⟨hy.1.2, hy.2⟩
     have hOw : O ≤ LB.wchart L φ (ρ ∘ φ) ⊓ LB.wchart L φ j := fun _ hy => ⟨hy.2.1, hy.1.1⟩
-    erw [res_res', res_res', hwV j' ρ hO']
-    have hg := congrArg (res hOw) (ht (ρ ∘ φ) j)
-    erw [map_mul, res_res', res_res'] at hg
-    rw [linComb_g_res L φ ε _ _ hOw] at hg
-    erw [hg]
-
+    have hg := gen_compat_res t ht (ρ ∘ φ) j hOw
+    dsimp only
+    rw [res_res' (inf_le_left : LB.wchart L φ j ⊓ LB.wchart L φ' j' ≤ _) (inf_le_left : O ≤ _)
+        (t.s j),
+      res_res' (inf_le_right : LB.wchart L φ j ⊓ LB.wchart L φ' j' ≤ _) (inf_le_left : O ≤ _)
+        (w j'),
+      hwV j' ρ hO', hg]
     let σ : (Y ⟶ X) → L.ι := fun ψ =>
       if h : ∃ k', φ' k' = ψ then j' h.choose else if h₂ : ∃ k, φ k = ψ then j h₂.choose else ρ ψ
     have hσ : ∀ k, σ (φ k) = j k := by
@@ -297,7 +322,6 @@ theorem gen_transport (hL : L.IsLB) (hs : LB.SameSum φ ε φ' ε') (t : LB.Gen 
       simp only [hσ, hσ'] at this
       exact this
     rw [hsum, inv_mul_cancel_left]
-    rfl
 
 end Transport
 
@@ -352,15 +376,19 @@ lemma sec_compat_rs (s : LB.Sec (LB.LinComb L φ ε)) (j j₂ : K → L.ι) {V :
     (h : V ≤ LB.wchart L φ j ⊓ LB.wchart L φ j₂) :
     rs (h.trans inf_le_left) (s.f j) =
       ((∏ k, tr L V (φ k) (j k) (j₂ k) ^ ε k : Γ(Y, V)ˣ) : Γ(Y, V)) * rs (h.trans inf_le_right) (s.f j₂) := by
-  have h' : V ≤ (LB.LinComb L φ ε).U j ⊓ (LB.LinComb L φ ε).U j₂ := h
-  have e : rs h' (rs (inf_le_left : (LB.LinComb L φ ε).U j ⊓ (LB.LinComb L φ ε).U j₂ ≤ _) (s.f j)) =
-      rs h' ((((LB.LinComb L φ ε).g j j₂ : Γ(Y, (LB.LinComb L φ ε).U j ⊓ (LB.LinComb L φ ε).U j₂)ˣ) :
-        Γ(Y, (LB.LinComb L φ ε).U j ⊓ (LB.LinComb L φ ε).U j₂)) *
-        rs (inf_le_right : (LB.LinComb L φ ε).U j ⊓ (LB.LinComb L φ ε).U j₂ ≤ _) (s.f j₂)) :=
-    congrArg (rs h') (s.compat j j₂)
-  rw [rs_rs, rs_mul, rs_rs, rs_units] at e
-  erw [linComb_g_res L φ ε j j₂ h] at e
-  exact e
+  calc rs (h.trans inf_le_left) (s.f j)
+      = rs h (rs (inf_le_left : LB.wchart L φ j ⊓ LB.wchart L φ j₂ ≤ _) (s.f j)) :=
+        (rs_rs _ h _).symm
+    _ = rs h (((LB.LinComb L φ ε).g j j₂).val *
+          rs (inf_le_right : (LB.LinComb L φ ε).U j ⊓ (LB.LinComb L φ ε).U j₂ ≤ _) (s.f j₂)) :=
+        congrArg (rs h) (s.compat j j₂)
+    _ = rs h ((LB.LinComb L φ ε).g j j₂).val *
+          rs h (rs (inf_le_right : (LB.LinComb L φ ε).U j ⊓ (LB.LinComb L φ ε).U j₂ ≤ _)
+            (s.f j₂)) :=
+        rs_mul h _ _
+    _ = ((∏ k, tr L V (φ k) (j k) (j₂ k) ^ ε k : Γ(Y, V)ˣ) : Γ(Y, V)) *
+          rs (h.trans inf_le_right) (s.f j₂) :=
+        congrArg₂ (· * ·) (congrArg Units.val (linComb_g_res L φ ε j j₂ h)) (rs_rs _ h _)
 
 lemma candS_compat (hL : L.IsLB) (hs : LB.SameSum φ ε φ' ε') (s : LB.Sec (LB.LinComb L φ ε))
     (j' : K' → L.ι) (ρ ρ₂ : (Y ⟶ X) → L.ι) :
@@ -372,7 +400,7 @@ lemma candS_compat (hL : L.IsLB) (hs : LB.SameSum φ ε φ' ε') (s : LB.Sec (LB
   rw [candS_rs, candS_rs]
   have hw : V ≤ LB.wchart L φ (ρ ∘ φ) ⊓ LB.wchart L φ (ρ₂ ∘ φ) := fun _ hy => ⟨hy.1.2.1, hy.2.2.1⟩
   have hg := sec_compat_rs s (ρ ∘ φ) (ρ₂ ∘ φ) hw
-  erw [hg]
+  rw [hg]
   have hsum : ∏ k, tr L V (φ k) ((ρ ∘ φ) k) ((ρ₂ ∘ φ) k) ^ ε k =
       ∏ k', tr L V (φ' k') (ρ (φ' k')) (ρ₂ (φ' k')) ^ ε' k' :=
     prod_zpow_of_sameSum φ ε φ' ε' hs (fun ψ => tr L V ψ (ρ ψ) (ρ₂ ψ))
@@ -411,23 +439,39 @@ theorem sec_transport (hL : L.IsLB) (hs : LB.SameSum φ ε φ' ε') (s : LB.Sec 
     apply sec_ext_cover _ (fun ρ => (LB.wchart L φ' i ⊓ LB.wchart L φ' j) ⊓ piece L φ φ' ρ)
       (fun _ => inf_le_left) (le_iSup_piece L φ φ' hL _)
     intro ρ
-    have hVi : (LB.wchart L φ' i ⊓ LB.wchart L φ' j) ⊓ piece L φ φ' ρ ≤ LB.wchart L φ' i ⊓ piece L φ φ' ρ :=
-      fun _ hy => ⟨hy.1.1, hy.2⟩
-    have hVj : (LB.wchart L φ' i ⊓ LB.wchart L φ' j) ⊓ piece L φ φ' ρ ≤ LB.wchart L φ' j ⊓ piece L φ φ' ρ :=
-      fun _ hy => ⟨hy.1.2, hy.2⟩
-    have hV12 : (LB.wchart L φ' i ⊓ LB.wchart L φ' j) ⊓ piece L φ φ' ρ ≤ LB.wchart L φ' i ⊓ LB.wchart L φ' j :=
-      fun _ hy => hy.1
-    erw [rs_mul, rs_rs, rs_rs, rs_units]
-    erw [hwV i ρ hVi, hwV j ρ hVj, linComb_g_res L φ' ε' i j hV12]
-    have hcoc : ∀ k', tr L ((LB.wchart L φ' i ⊓ LB.wchart L φ' j) ⊓ piece L φ φ' ρ) (φ' k') (ρ (φ' k')) (j k') =
-        tr L _ (φ' k') (ρ (φ' k')) (i k') * tr L _ (φ' k') (i k') (j k') := fun k' =>
+    set O := (LB.wchart L φ' i ⊓ LB.wchart L φ' j) ⊓ piece L φ φ' ρ
+    have hVi : O ≤ LB.wchart L φ' i ⊓ piece L φ φ' ρ := fun _ hy => ⟨hy.1.1, hy.2⟩
+    have hVj : O ≤ LB.wchart L φ' j ⊓ piece L φ φ' ρ := fun _ hy => ⟨hy.1.2, hy.2⟩
+    have hV12 : O ≤ LB.wchart L φ' i ⊓ LB.wchart L φ' j := fun _ hy => hy.1
+    have hcoc : ∀ k', tr L O (φ' k') (ρ (φ' k')) (j k') =
+        tr L O (φ' k') (ρ (φ' k')) (i k') * tr L O (φ' k') (i k') (j k') := fun k' =>
       (tr_cocycle L hL (fun _ hy => ⟨⟨(piece_le_tr hVi k' hy).1, (piece_le_tr hVi k' hy).2⟩,
         (piece_le_tr hVj k' hy).2⟩)).symm
-    have hA : ∏ k', tr L ((LB.wchart L φ' i ⊓ LB.wchart L φ' j) ⊓ piece L φ φ' ρ) (φ' k') (ρ (φ' k')) (j k') ^ ε' k' =
-        (∏ k', tr L _ (φ' k') (ρ (φ' k')) (i k') ^ ε' k') * ∏ k', tr L _ (φ' k') (i k') (j k') ^ ε' k' := by
+    have hA : ∏ k', tr L O (φ' k') (ρ (φ' k')) (j k') ^ ε' k' =
+        (∏ k', tr L O (φ' k') (ρ (φ' k')) (i k') ^ ε' k') *
+          ∏ k', tr L O (φ' k') (i k') (j k') ^ ε' k' := by
       rw [← Finset.prod_mul_distrib]
       exact Finset.prod_congr rfl fun k' _ => by rw [hcoc k', mul_zpow]
-    rw [hA, mul_inv_rev, ← mul_assoc, ← Units.val_mul, ← mul_assoc, mul_inv_cancel, one_mul]
+    have hmul : (∏ k', tr L O (φ' k') (ρ (φ' k')) (i k') ^ ε' k')⁻¹ =
+        (∏ k', tr L O (φ' k') (i k') (j k') ^ ε' k') *
+          (∏ k', tr L O (φ' k') (ρ (φ' k')) (j k') ^ ε' k')⁻¹ := by
+      rw [hA, mul_inv_rev, mul_inv_cancel_left]
+    calc rs hV12 (rs (inf_le_left : LB.wchart L φ' i ⊓ LB.wchart L φ' j ≤ _) (w i))
+        = (((∏ k', tr L O (φ' k') (ρ (φ' k')) (i k') ^ ε' k')⁻¹ : Γ(Y, O)ˣ) : Γ(Y, O)) *
+            rs (hVi.trans piece_le_wchart) (s.f (ρ ∘ φ)) := (rs_rs _ _ _).trans (hwV i ρ hVi)
+      _ = ((∏ k', tr L O (φ' k') (i k') (j k') ^ ε' k' : Γ(Y, O)ˣ) : Γ(Y, O)) *
+            ((((∏ k', tr L O (φ' k') (ρ (φ' k')) (j k') ^ ε' k')⁻¹ : Γ(Y, O)ˣ) : Γ(Y, O)) *
+              rs (hVj.trans piece_le_wchart) (s.f (ρ ∘ φ))) :=
+          (congrArg (fun u : Γ(Y, O)ˣ => (u : Γ(Y, O)) * _) hmul).trans
+            ((congrArg (· * _) (Units.val_mul _ _)).trans (mul_assoc _ _ _))
+      _ = rs hV12 ((LB.LinComb L φ' ε').g i j).val *
+            rs hV12 (rs (inf_le_right : (LB.LinComb L φ' ε').U i ⊓ (LB.LinComb L φ' ε').U j ≤ _)
+              (w j)) :=
+          (congrArg₂ (· * ·) (congrArg Units.val (linComb_g_res L φ' ε' i j hV12))
+            ((rs_rs _ _ _).trans (hwV j ρ hVj))).symm
+      _ = rs hV12 (((LB.LinComb L φ' ε').g i j).val *
+            rs (inf_le_right : (LB.LinComb L φ' ε').U i ⊓ (LB.LinComb L φ' ε').U j ≤ _) (w j)) :=
+          (rs_mul hV12 _ _).symm
   · intro j j' hj hj' hjj'
     apply sec_ext_cover _ (fun ρ => (LB.wchart L φ j ⊓ LB.wchart L φ' j') ⊓ piece L φ φ' ρ)
       (fun _ => inf_le_left) (le_iSup_piece L φ φ' hL _)
@@ -435,9 +479,11 @@ theorem sec_transport (hL : L.IsLB) (hs : LB.SameSum φ ε φ' ε') (s : LB.Sec 
     set O := (LB.wchart L φ j ⊓ LB.wchart L φ' j') ⊓ piece L φ φ' ρ
     have hO' : O ≤ LB.wchart L φ' j' ⊓ piece L φ φ' ρ := fun _ hy => ⟨hy.1.2, hy.2⟩
     have hOw : O ≤ LB.wchart L φ (ρ ∘ φ) ⊓ LB.wchart L φ j := fun _ hy => ⟨hy.2.1, hy.1.1⟩
-    erw [rs_rs, rs_rs, hwV j' ρ hO']
     have hg := sec_compat_rs s (ρ ∘ φ) j hOw
-    erw [hg]
+    dsimp only
+    rw [rs_rs (inf_le_left : LB.wchart L φ j ⊓ LB.wchart L φ' j' ≤ _) (inf_le_left : O ≤ _) (s.f j),
+      rs_rs (inf_le_right : LB.wchart L φ j ⊓ LB.wchart L φ' j' ≤ _) (inf_le_left : O ≤ _) (w j'),
+      hwV j' ρ hO', hg]
     let σ : (Y ⟶ X) → L.ι := fun ψ =>
       if h : ∃ k', φ' k' = ψ then j' h.choose else if h₂ : ∃ k, φ k = ψ then j h₂.choose else ρ ψ
     have hσ : ∀ k, σ (φ k) = j k := by
