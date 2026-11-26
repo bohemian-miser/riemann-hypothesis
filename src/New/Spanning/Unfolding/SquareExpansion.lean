@@ -301,10 +301,10 @@ lemma isStable_compl_besselS [HasPrimitiveRoot5040 E] :
     S.IsStable ((S.ratMiddle E).besselS : Set (S.G E))ᶜ :=
   fun u hu u' hu' γ ↦ (S.isStable_besselS u hu u' hu' γ).not
 
-/-- Let `E` contain a primitive `5040`-th root of unity and let the filling `S` be admissible
-(`IsAdmissible`). An integral `ζ ∈ E` with `ζ ζ̄ = 1` that is `1` modulo every place of
-`chosenPlaces i`, the finite places of norm `p_i = levelPrime i` chosen in `S`, is `1`. -/
-lemma eq_one_of_reduceAt_scalar_eq_one [HasPrimitiveRoot5040 E] [S.IsAdmissible] {ζ : E}
+/-- Let `E` contain a primitive `5040`-th root of unity and let `S` be filling data over `E`. An
+integral `ζ ∈ E` with `ζ ζ̄ = 1` that is `1` modulo every place of `chosenPlaces i`, the finite
+places of norm `p_i = levelPrime i` chosen in `S`, is `1`. -/
+lemma eq_one_of_reduceAt_scalar_eq_one [HasPrimitiveRoot5040 E] {ζ : E}
     (hζ : ζ * star ζ = 1) (h_int : (ζ : 𝔸f E) ∈ Ô E) (i : Fin 2)
     (h_residue : ∀ w : S.chosenPlaces i, New.reduceAt (w : FinPlace E) ⟨ζ, h_int⟩ = 1) : ζ = 1 := by
   -- View `ζ` as an isometry `z` of the standard lattice of rank one and apply freeness to it.
@@ -591,12 +591,12 @@ theorem sqrt_secondMoment_compl_besselS_le [HasPrimitiveRoot5040 E] [S.IsAdmissi
     _ = √C + 2 * (S.b ^ 5)⁻¹ * ((S.b ^ 15)⁻¹ * √S.identitySecondMoment) := by ring
     _ ≤ √C + (S.b ^ 15)⁻¹ * √S.identitySecondMoment := by grw [h_small, one_mul]
 
-/-- Let `E` contain a primitive `5040`-th root of unity and let the filling `S` be admissible
-(`IsAdmissible`). Let `s` coincide, at the chosen places above `p_i = levelPrime i`, with an element
-`t` of `reducedImage besselS`, the reduction of the Bessel subgroup. Then the product of the norms
-`p_i` of these places and their conjugates is at most `meetNorm s`, the product of the norms of the
-places at which `s` meets, as `s` meets at each of them. -/
-lemma prod_levelPrime_le_meetNorm_of_eq [HasPrimitiveRoot5040 E] [S.IsAdmissible]
+/-- For filling data `S : Filling E 𝔰`, let `s` coincide, at the chosen places above
+`p_i = levelPrime i`, with an element `t` of `reducedImage besselS`, the reduction of the Bessel
+subgroup. Then the product of the norms `p_i` of these places and their conjugates is at most
+`meetNorm s`, the product of the norms of the places at which `s` meets, as `s` meets at each of
+them. -/
+lemma prod_levelPrime_le_meetNorm_of_eq
     {s t : S.ResidueGL} (ht : t ∈ S.reducedImage besselS) {i : Fin 2} (hs : s i = t i) :
     ∏ _ : S.chosenPlaces i × Bool, S.levelPrime i ≤ S.meetNorm s := by
   classical
@@ -606,10 +606,11 @@ lemma prod_levelPrime_le_meetNorm_of_eq [HasPrimitiveRoot5040 E] [S.IsAdmissible
     forall_mem_image.2 fun p _ ↦ meetsAt_of_eq_of_mem_reducedImage ht hs p.1 p.2
   exact (prod_image hφ.injOn).symm.trans_le (prod_le_meetNorm h_meet)
 
-/-- The set of the `s` that coincide with an element of `R̄₀`, the reduction of the Bessel subgroup,
-at the chosen places above `p_i` avoids the cosets `ζ R̄₀` with `ζ ≠ 1`: such an `s` fixes the first
-frame vector there, so `ζ` is `1` modulo these places. -/
-lemma avoidsScalarCosets_setOf_exists_apply_eq [HasPrimitiveRoot5040 E] [S.IsAdmissible]
+/-- Let `E` contain a primitive `5040`-th root of unity and let `S` be filling data over `E`. The
+set of the `s` that coincide with an element of `R̄₀`, the reduction of the Bessel subgroup, at the
+chosen places above `p_i` avoids the cosets `ζ R̄₀` with `ζ ≠ 1`: such an `s` fixes the first frame
+vector there, so `ζ` is `1` modulo these places. -/
+lemma avoidsScalarCosets_setOf_exists_apply_eq [HasPrimitiveRoot5040 E]
     (i : Fin 2) : S.AvoidsScalarCosets
       {s : S.ResidueGL | ∃ t ∈ S.reducedImage besselS, s i = t i} := by
   rintro ζ h_int hζ h_ne s ⟨t, ht, hs⟩ ⟨t', ht', h_coset⟩

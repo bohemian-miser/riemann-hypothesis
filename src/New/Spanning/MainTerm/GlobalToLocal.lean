@@ -729,14 +729,13 @@ lemma IsFillingData.mem_termsOver_iff [hF : S.IsFillingData T F]
 
 /-- Let `F` be a filling datum at `T` (`hF`): a large lattice datum on the completions at `T` whose
 modulus `F.levelUnit` is the component of `M = p₀p₁ = S.ideleM`. Let `M⁻¹` be integral off `T`
-(`hM_inv`). Let `S` satisfy the standing hypotheses `New.Filling.IsAdmissible`, let 𝖴 = `besselU` be
-the group of block upper unitriangular isometries, and put `K(M) = F.congruenceSubgroup` and
-`𝖴_c(M) = S.classUnipotent c`. The translate `S.translateByClassReps c c u = h_c⁻¹ u h_c`, read at
-`T`, matches the cosets `u 𝖴_c(M)` of the points `u` of 𝖴 over `E` whose translate is integral off
-`T` with the cosets of `𝖴 ∩ K(M)` in 𝖴 at `T`. This is stated by a list `r` of rational
-representatives, one for each coset at `T`. -/
+(`hM_inv`). Let `S` be filling data, let 𝖴 = `besselU` be the group of block upper unitriangular
+isometries, and put `K(M) = F.congruenceSubgroup` and `𝖴_c(M) = S.classUnipotent c`. The translate
+`S.translateByClassReps c c u = h_c⁻¹ u h_c`, read at `T`, matches the cosets `u 𝖴_c(M)` of the
+points `u` of 𝖴 over `E` whose translate is integral off `T` with the cosets of `𝖴 ∩ K(M)` in 𝖴
+at `T`. This is stated by a list `r` of rational representatives, one for each coset at `T`. -/
 lemma IsFillingData.exists_injective_mem_besselU_and_isIntegralOff [hF : S.IsFillingData T F]
-    [hM_inv : Fact (S.ideleM⁻¹.val ∈ integralOff T)] [S.IsAdmissible] (c : S.Classes) :
+    [hM_inv : Fact (S.ideleM⁻¹.val ∈ integralOff T)] (c : S.Classes) :
     ∃ r : F.UnipotentCosets → S.G E,
       Injective r ∧
       (∀ w : F.UnipotentCosets, r w ∈ besselU) ∧
