@@ -79,12 +79,9 @@ lemma exists_mem_fittingIdeal_addVal_constantCoeff_le [DecidableEq G] [Finite J]
   set T₀ : Submodule (MvPolynomial J O) (s → MvPolynomial J O) :=
     T ⊔ RingHom.ker (constantCoeff : MvPolynomial J O →+* O) • ⊤
   have hTT₀ : T ≤ T₀ := le_sup_left
-  obtain ⟨f, K, hT₀K, hf, hC, hFittK⟩ : ∃ f : O, ∃ K ≥ T₀,
-      addVal O f ≤ relLength (formsMod Φ z T₀ p) (torsionBy O (G → Unit → QuotSpan p) C) ∧
-      (∀ ⦃w : n → O⦄, (∀ Ψ : (n → O) →ₗ[O] Unit → QuotSpan p,
-        Ψ ∘ z ∈ torsionBy O (G → Unit → QuotSpan p) C → Ψ w = 0) → Φ w ∈ K) ∧
-      ∀ d ∈ fittingIdeal K, f • d ∈ fittingIdeal T₀ :=
-    fittingIdeal.exists_addVal_le_relLength z hp (fun w ↦ hTT₀ (hT_smul_p w)) _
+  obtain ⟨f, K, hT₀K, ⟨hf, hC, hFittK⟩⟩ :=
+    fittingIdeal.exists_addVal_le_relLength z hp (fun w ↦ hTT₀ (hT_smul_p w))
+      (torsionBy O (G → Unit → QuotSpan p) C)
   have h_rows (g : s) : (C • (1 : Matrix s s (MvPolynomial J O))) g ∈ K := by
     have hCg : Φ (C • z g) ∈ K := hC fun Ψ hΨ ↦ by simpa using congrFun hΨ g
     have h_row : (C • (1 : Matrix s s (MvPolynomial J O))) g =
@@ -95,11 +92,9 @@ lemma exists_mem_fittingIdeal_addVal_constantCoeff_le [DecidableEq G] [Finite J]
     exact sub_mem hCg (smul_of_tower_mem K C (hT₀K (hTT₀ (h_basis g))))
   have h_det : Matrix.det (C • (1 : Matrix s s (MvPolynomial J O))) ∈ fittingIdeal K :=
     subset_span ⟨C • 1, h_rows, rfl⟩
-  obtain ⟨d, hd, r, hr, hdr⟩ :
-      ∃ d ∈ fittingIdeal T, ∃ r : MvPolynomial J O, constantCoeff r = 0 ∧
-        d + r = f • Matrix.det (C • (1 : Matrix s s (MvPolynomial J O))) :=
-    mem_sup.1 (fittingIdeal.sup_smul_top_le (hFittK _ h_det))
-  have hd_coeff : constantCoeff d = f * C ^ #s := by simp [eq_sub_of_add_eq hdr, hr]
+  obtain ⟨d, hd, ⟨r, hr, hdr⟩⟩ := mem_sup.1 (fittingIdeal.sup_smul_top_le (hFittK _ h_det))
+  have hd_coeff : constantCoeff d = f * C ^ #s := by
+    simp [eq_sub_of_add_eq hdr, RingHom.mem_ker.1 hr]
   refine ⟨d, hd, ?_⟩
   grw [hd_coeff, addVal_mul, addVal_pow, hf, nsmul_eq_mul]
 
@@ -156,11 +151,7 @@ lemma exists_mul_prod_X_mem_fittingIdeal [DecidableEq G] [Finite J] {z : G → n
   -- (`exists_mem_fittingIdeal_addVal_constantCoeff_le`).
   obtain ⟨A, h_tri, h_len⟩ := h_cost
   -- First stage: `K` adds the relations that make the forms vanish on `A`, at the cost `e`.
-  obtain ⟨e, K, hNK, he, hA, hFittK⟩ : ∃ e : O, ∃ K ≥ N,
-      addVal O e ≤ relLength (formsMod Φ z N p) (.pi A ⊥) ∧
-      (∀ ⦃w : n → O⦄, (∀ Ψ : (n → O) →ₗ[O] Unit → QuotSpan p, Ψ ∘ z ∈ Submodule.pi A ⊥ → Ψ w = 0) →
-        Φ w ∈ K) ∧
-      ∀ d ∈ fittingIdeal K, e • d ∈ fittingIdeal N :=
+  obtain ⟨e, K, hNK, ⟨he, hA, hFittK⟩⟩ :=
     fittingIdeal.exists_addVal_le_relLength z hp hN_smul_p (.pi A ⊥)
   have sol_le {K' : Submodule (MvPolynomial J O) (s → MvPolynomial J O)} (hK' : K ≤ K') :
       formsMod Φ z K' p ≤ formsMod Φ z N p ⊓ .pi A ⊥ := by
@@ -314,9 +305,6 @@ def IsCommonRibetElement [Fintype J] {I : Type*} (β : I → Y → L) {𝓧 : Se
 
 end Definitions
 
--- The coefficientwise map makes `MvPolynomial J L` an algebra over `MvPolynomial J O`.
-attribute [local instance] algebraMvPolynomial
-
 section SmallLemmas
 
 variable {O L Y G J σ W : Type} [CommRing O] [CommRing L] [Algebra O L] [Fintype σ] [DecidableEq σ]
@@ -403,9 +391,11 @@ lemma exists_forall_eq_one_and_forall_eq_zero {Λ A B E I : Type} [CommRing Λ] 
   induction (univ : Finset I) using Finset.induction_on with
   | empty => exact ⟨1, by simp⟩
   | insert x s _ ih =>
-    obtain ⟨k, hkη, hkψ⟩ : ∃ k : A, (∀ e : E, η e k = 1) ∧ ∀ x' ∈ s, ψ x' k = 0 := ih
-    obtain ⟨k', hk'η, hk'ψ⟩ : ∃ k' : A, (∀ e : E, η e k' = 1) ∧ ψ x k' = 0 := h_each x
-    exact ⟨k * k', by simp [hkη, hk'η], by simp +contextual [hkψ, hk'ψ]⟩
+    obtain ⟨k, hkη, hkψ⟩ := ih
+    obtain ⟨k', hk'η, hk'ψ⟩ := h_each x
+    refine ⟨k * k', ?_, ?_⟩
+    · simp [hkη, hk'η]
+    · simp +contextual [hkψ, hk'ψ]
 
 /-- Let `η k` be finitely many characters of `A` and `a : A`. If `c` is a multiple of the product of
 the differences `η e a - η k a` over `k ≠ e`, then some element of `A` is `c` on the character `η e`
@@ -426,24 +416,16 @@ lemma exists_apply_eq_ite_of_prod_dvd {Λ A E : Type} [CommRing Λ] [Ring A] [Al
   · rw [prod_eq_zero (i := e') (by simpa using he) (sub_self _), mul_zero]
 
 /-- An element of the Fitting ideal of the image `f N` is a linear combination of determinants of
-matrices `B i` whose rows are the images of elements `B' i j` of `N`. -/
+matrices `B i` whose rows are the images of elements of `N`. -/
 lemma exists_sum_mul_det_of_mem_fittingIdeal_map {R ι M : Type} [CommRing R] [Fintype ι]
     [DecidableEq ι] [AddCommGroup M] [Module R M] {N : Submodule R M} {f : M →ₗ[R] ι → R} {d : R}
     (hd : d ∈ fittingIdeal (N.map f)) :
-    ∃ (l : ℕ) (w : Fin l → R) (B : Fin l → Matrix ι ι R) (B' : Fin l → ι → M),
-      (∀ (i : Fin l) (j : ι), B' i j ∈ N) ∧
-      (∀ (i : Fin l) (j : ι), f (B' i j) = B i j) ∧
+    ∃ (l : ℕ) (w : Fin l → R) (B : Fin l → Matrix ι ι R),
+      (∀ (i : Fin l) (j : ι), ∃ b ∈ N, f b = B i j) ∧
       ∑ i : Fin l, w i * (B i).det = d := by
-  rw [fittingIdeal] at hd
-  obtain ⟨l, w, D, hw⟩ :
-      ∃ (l : ℕ) (w : Fin l → R) (D : Fin l → det '' {B : Matrix ι ι R | ∀ j : ι, B j ∈ N.map f}),
-        ∑ i : Fin l, w i • (D i : R) = d :=
-    mem_span_set'.1 hd
-  have h_det (i : Fin l) :
-      ∃ B : Matrix ι ι R, (∀ j : ι, ∃ b ∈ N, f b = B j) ∧ B.det = D i := (D i).prop
-  choose B hB hB_det using h_det
-  choose B' hB' hB'_eq using hB
-  exact ⟨l, w, B, B', hB', hB'_eq, by simp [hB_det, ← hw]⟩
+  obtain ⟨l, w, D, hw⟩ := mem_span_set'.1 hd
+  choose B hB hB_det using fun i : Fin l ↦ (D i).prop
+  exact ⟨l, w, B, hB, by simp [hB_det, ← hw]⟩
 
 /-- The ideal spanned by the monomials that do not divide `∏ X j`. -/
 noncomputable abbrev nonDivisorIdeal (O J : Type) [CommRing O] [Fintype J] :
@@ -518,15 +500,15 @@ spanned by the `w` with `x ↦ tr (χ x (w g))` in `𝒥` for every `g`. If `η�
 `y i`. -/
 lemma exists_mem_span_add_mul_eq_add_mul {S : Subalgebra O (Y → MvPolynomial J L)}
     (𝒥 : Submodule S (Y → MvPolynomial J L)) {Λ ι : Type} [CommRing Λ]
-    [Algebra Λ (MvPolynomial J L)] (χ : Y → Λ[G] →ₐ[Λ] Matrix σ σ Λ) (η₀ : Λ[G] →ₐ[Λ] Λ)
+    (f : Λ →+* MvPolynomial J L) (χ : Y → Λ[G] →ₐ[Λ] Matrix σ σ Λ) (η₀ : Λ[G] →ₐ[Λ] Λ)
     (hη₀ : ∀ g : G, η₀ (.single g 1) = 1) (y : ι → Λ[G])
     (hy : ∀ g : G, ∃ m ∈ span Λ[G] (Set.range y), ∀ x : Y, χ x (.single g 1) = χ x m + 1)
     (ρ₀ : Λ[G]) {b m : Λ[G]}
     (hb : b ∈ span Λ[G] {w : Λ[G] | ∀ g : G,
-      (fun x : Y ↦ algebraMap Λ (MvPolynomial J L) (χ x w * χ x (.single g 1)).trace) ∈ 𝒥})
+      (fun x : Y ↦ f (χ x w * χ x (.single g 1)).trace) ∈ 𝒥})
     (hm : η₀ m = 0) :
     ∃ b' ∈ span Λ[G] {w : Λ[G] | ∀ g : G,
-        (fun x : Y ↦ algebraMap Λ (MvPolynomial J L) (χ x w * χ x (.single g 1)).trace) ∈ 𝒥},
+        (fun x : Y ↦ f (χ x w * χ x (.single g 1)).trace) ∈ 𝒥},
       ∃ m' ∈ span Λ[G] (Set.range y), b + m * ρ₀ = b' + m' * ρ₀ := by
   -- Under every `χ x`, an element `l` is some `l'` in the span plus the scalar `η₀ l`.
   have h_aug (l : Λ[G]) : ∃ l' ∈ span Λ[G] (Set.range y),
@@ -548,9 +530,9 @@ lemma exists_mem_span_add_mul_eq_add_mul {S : Subalgebra O (Y → MvPolynomial J
   obtain ⟨m', hm', hm'_eq⟩ : ∃ m' ∈ span Λ[G] (Set.range y), ∀ x : Y, χ x m = χ x m' := by
     simpa [hm] using h_aug m
   have h_kill : (m - m') * ρ₀ ∈ span Λ[G] {w : Λ[G] | ∀ g : G,
-      (fun x : Y ↦ algebraMap Λ (MvPolynomial J L) (χ x w * χ x (.single g 1)).trace) ∈ 𝒥} :=
+      (fun x : Y ↦ f (χ x w * χ x (.single g 1)).trace) ∈ 𝒥} :=
     subset_span fun g ↦ by simp [hm'_eq, ← Pi.zero_def]
-  refine ⟨b + (m - m') * ρ₀, add_mem hb h_kill, m', hm', ?_⟩
+  refine ⟨b + (m - m') * ρ₀, add_mem hb h_kill, ⟨m', hm', ?_⟩⟩
   rw [sub_mul, add_assoc, sub_add_cancel]
 
 /-- Rows with a determinant of bounded valuation under a representation `ρ` whose matrices span. Let

@@ -126,8 +126,7 @@ lemma Selmer.exists_adjugate_polynomial (ρ : Λ →ₐ[R] Matrix σ σ L)
   -- Cayley–Hamilton for the block matrix `φX B` gives `B'` and the determinant `P`.
   let φX : Matrix N N Λ[X] →ₐ[R[X]] Matrix (N × σ) (N × σ) L[X] :=
     (blockFlattenAlgEquiv N).toAlgHom.comp ρX.mapMatrix
-  obtain ⟨B', P, hP, hB', -⟩ : ∃ (B' : Matrix N N Λ[X]) (P : R[X]),
-      (φX B).det = algebraMap R[X] L[X] P ∧ φX B' * φX B = P • 1 ∧ φX B * φX B' = P • 1 :=
+  obtain ⟨B', P, ⟨hP, hB', -⟩⟩ :=
     exists_adjugate_of_charpoly_mem φX (amitsur_charpoly_comp_coeff_mem_range ρX h_coeffX) B
   have h_mul : φX (B' * B) = φX (P • 1) := by rw [map_mul, hB', map_smul, map_one]
   have hφX (M : Matrix N N Λ[X]) (i j : N) (a b : σ) : φX M (i, a) (j, b) = ρX (M i j) a b := rfl
@@ -209,16 +208,15 @@ lemma Selmer.mul_aeval_eq_zero_of_adjugate {Q : Type*} [Ring Q] (π : Λ →+* Q
         rw [Finset.sum_comm]
         simp only [← Finset.smul_sum, h_row, smul_zero, Finset.sum_const_zero]
 
-/-- Ribet's method. Let `ρ` represent the `R`-algebra `Λ` by matrices over `L` such that the
-characteristic polynomials of a spanning set have coefficients in the image of `R`, and let `𝔞` be
-a two-sided ideal of `Λ` that contains the kernel of `ρ`. Let `I` be the left ideal spanned by `y`,
-and `B` a square matrix over `Λ` such that the entries of `B y` lie in `𝔞 + I ρ₀`. Then some
-polynomial `P` over `R` has constant term `det B`, read through `ρ` as a block matrix, and
-`I P(ρ₀) ⊆ 𝔞`. Moreover the traces of the `ρ (ρ₁ P(ρ₀))` lie in the image of `R`, and for `δ : R`
-such that some `z ∈ I` has `ρ z = δ` (the scalar matrix), `δ` times such a trace is the trace of
-`ρ a` for some `a ∈ 𝔞`. -/
+/-- Ribet's method. Let `ρ` represent the `R`-algebra `Λ` by matrices over `L` whose characteristic
+polynomials all have coefficients in the image of `R`, and let `𝔞` be a two-sided ideal of `Λ` that
+contains the kernel of `ρ`. Let `I` be the left ideal spanned by `y`, and `B` a square matrix over
+`Λ` such that the entries of `B y` lie in `𝔞 + I ρ₀`. Then some polynomial `P` over `R` has
+constant term `det B`, read through `ρ` as a block matrix, and `I P(ρ₀) ⊆ 𝔞`. Moreover the traces
+of the `ρ (ρ₁ P(ρ₀))` lie in the image of `R`, and for `δ : R` such that some `z ∈ I` has `ρ z = δ`
+(the scalar matrix), `δ` times such a trace is the trace of `ρ a` for some `a ∈ 𝔞`. -/
 lemma Selmer.exists_ribet_polynomial [Nonempty σ] (ρ : Λ →ₐ[R] Matrix σ σ L)
-    (hρ_span : span R {w : Λ | ∀ k : ℕ, (ρ w).charpoly.coeff k ∈ (algebraMap R L).range} = ⊤)
+    (h_coeff : ∀ (w : Λ) (k : ℕ), (ρ w).charpoly.coeff k ∈ (algebraMap R L).range)
     (𝔞 : TwoSidedIdeal Λ) (hρ_ker : ∀ w : Λ, ρ w = 0 → w ∈ 𝔞) (y : N → Λ) (ρ₀ : Λ)
     (B : Matrix N N Λ)
     (hB : ∀ i : N, ∃ a ∈ 𝔞, ∃ z ∈ span Λ (Set.range y), (B *ᵥ y) i = a + z * ρ₀) :
@@ -230,20 +228,14 @@ lemma Selmer.exists_ribet_polynomial [Nonempty σ] (ρ : Λ →ₐ[R] Matrix σ 
         ∃ a ∈ 𝔞, algebraMap R L δ * (ρ (ρ₁ * aeval ρ₀ P)).trace = (ρ a).trace := by
   -- Write `B y = B₁ y ρ₀` modulo `𝔞`. Then `B_X = B - X B₁` kills `y` in `Λ / 𝔞`, where `X` acts as
   -- right multiplication with `ρ₀`. As `B' B_X = P` after applying `ρ`, `P` kills `y` too.
-  have h_coeff : ∀ (w : Λ) (k : ℕ), (ρ w).charpoly.coeff k ∈ (algebraMap R L).range :=
-    amitsur_charpoly_mem_of_span ρ hρ_span
   have h_rows : ∀ i : N, ∃ a ∈ 𝔞, ∃ c : N → Λ, (B *ᵥ y) i = a + (c ⬝ᵥ y) * ρ₀ := by
     intro i
-    obtain ⟨a, ha, z, hz, h_split⟩ := hB i
+    obtain ⟨a, ha, ⟨z, hz, h_split⟩⟩ := hB i
     obtain ⟨c, rfl⟩ : ∃ c : N → Λ, ∑ j, c j • y j = z := (mem_span_range_iff_exists_fun Λ).1 hz
     exact ⟨a, ha, c, h_split⟩
   choose a ha B₁ h_split using h_rows
   let B_X : Matrix N N Λ[X] := B.map C - (X : Λ[X]) • (of B₁).map C
-  obtain ⟨P, B', hP, hB'⟩ : ∃ (P : R[X]) (B' : Matrix N N Λ[X]),
-      algebraMap R L (P.eval 0) = (comp N N σ σ L (B_X.map fun p ↦ ρ (p.coeff 0))).det ∧
-      ∀ (i j : N) (m : ℕ), ρ (((B' * B_X) i j).coeff m) =
-        ρ (((diagonal fun _ ↦ P.map (algebraMap R Λ)) i j).coeff m) :=
-    Selmer.exists_adjugate_polynomial ρ h_coeff B_X
+  obtain ⟨P, B', hP, hB'⟩ := Selmer.exists_adjugate_polynomial ρ h_coeff B_X
   let π : Λ →+* 𝔞.ringCon.Quotient := 𝔞.ringCon.mk'
   have hπ (w w' : Λ) : π w = π w' ↔ w - w' ∈ 𝔞 := (RingCon.eq _).trans (𝔞.rel_iff w w')
   have hπρ (w w' : Λ) (h : ρ w = ρ w') : π w = π w' :=
@@ -262,7 +254,7 @@ lemma Selmer.exists_ribet_polynomial [Nonempty σ] (ρ : Λ →ₐ[R] Matrix σ 
     refine sum_mem fun i _ ↦ ?_
     rw [smul_eq_mul, mul_assoc]
     exact 𝔞.mul_mem_left _ _ (hy i)
-  refine ⟨P, ?_, h_mem, fun ρ₁ ↦ ?_, fun ρ₁ δ ⟨z₀, hz₀, hz₀_eq⟩ ↦ ?_⟩
+  refine ⟨P, ?_, h_mem, ⟨fun ρ₁ ↦ ?_, fun ρ₁ δ ⟨z₀, hz₀, hz₀_eq⟩ ↦ ?_⟩⟩
   · have h_const : (B_X.map fun p ↦ ρ (p.coeff 0)) = B.map ρ := by
       ext i j : 2
       simp [B_X]
@@ -317,7 +309,7 @@ lemma exists_family_algHom_charpoly_mem (u : Y → O[G] →ₐ[O] Matrix σ σ O
         (ρ (.single g 1)).map (Pi.evalRingHom (fun _ ↦ L) x) := by
       ext i j
       exact (hρ x g i j).symm
-    change ((u x (.single g 1)).map (algebraMap O L)).charpoly.coeff k =
+    show ((u x (.single g 1)).map (algebraMap O L)).charpoly.coeff k =
       (ρ (.single g 1)).charpoly.coeff k x
     rw [h_eval, charpoly_map, Polynomial.coeff_map, Pi.evalRingHom_apply]
 
@@ -338,28 +330,6 @@ lemma Selmer.det_comp_map_eq_mul_prod {R A ι r : Type*} [CommRing R] [Fintype �
       fromBlocks (Matrix.comp ι ι r r R (M.map ψ)) 0 0 (blockDiagonal fun e ↦ M.map (η e)) := by
     ext1 (a | a) (b | b) <;> simp [blockEquiv', hχ, blockDiagonal, diagonal]
   rw [← det_submatrix_equiv_self blockEquiv', h_blocks, det_fromBlocks_zero₂₁, det_blockDiagonal]
-
-/-- Let `u x` (`x : Y`) be representations of `O[G]`, and let `κ : O → S` send an element of `O` to
-the constant function. If the coefficients of the characteristic polynomials of the group elements,
-as functions `Y → L` of `x`, lie in the subalgebra `S`, then so does the determinant of every
-`w : O[G]`. -/
-lemma Selmer.det_mem_of_coeff_mem (u : Y → O[G] →ₐ[O] Matrix σ σ O) (κ : O →+* S)
-    (hκ : (algebraMap S (Y → L)).comp κ = algebraMap O (Y → L))
-    (h_coeff : ∀ (g : G) (k : ℕ),
-      (fun x : Y ↦ ((u x (.single g 1)).map (algebraMap O L)).charpoly.coeff k) ∈ S)
-    (w : O[G]) :
-    (fun x : Y ↦ algebraMap O L (u x w).det) ∈ S := by
-  -- The determinant of the lift `ρ` to `S[G]` lies in `S`, like its characteristic polynomials.
-  obtain ⟨ρ, hρ, h_charpoly⟩ : ∃ ρ : S[G] →ₐ[S] Matrix σ σ (Y → L),
-      (∀ (x : Y) (r : O[G]) (i j : σ), ρ (mapRingHom G κ r) i j x = algebraMap O L (u x r i j)) ∧
-      ∀ (a : S[G]) (k : ℕ), (ρ a).charpoly.coeff k ∈ (algebraMap S (Y → L)).range :=
-    exists_family_algHom_charpoly_mem u κ hκ h_coeff
-  have h_det : (fun x : Y ↦ algebraMap O L (u x w).det) = (ρ (mapRingHom G κ w)).det := by
-    ext x
-    simp [hρ, det_apply']
-  obtain ⟨-, D, hD, -, -⟩ := exists_adjugate_of_charpoly_mem ρ h_charpoly (mapRingHom G κ w)
-  rw [h_det, hD, S.algebraMap_apply]
-  exact D.property
 
 /-- The elements of `Λ` whose traces against every element of `Λ`, through `ρ`, lie in `𝒥`. They
 form a two-sided ideal, as traces are cyclic. -/
@@ -432,10 +402,7 @@ lemma Selmer.exists_mul_eq_algebraMap_det (u : Y → O[G] →ₐ[O] Matrix σ σ
     (w : O[G]) :
     ∃ D : S, ((D : Y → L) = fun x : Y ↦ algebraMap O L (u x w).det) ∧
       ∃ v : S[G], ρ (v * mapRingHom G κ w) = algebraMap S (Matrix σ σ (Y → L)) D := by
-  obtain ⟨v, D, hD, hv, -⟩ : ∃ (v : S[G]) (D : S),
-      (ρ (mapRingHom G κ w)).det = algebraMap S (Y → L) D ∧
-      ρ v * ρ (mapRingHom G κ w) = D • 1 ∧ ρ (mapRingHom G κ w) * ρ v = D • 1 :=
-    exists_adjugate_of_charpoly_mem ρ h_charpoly (mapRingHom G κ w)
+  obtain ⟨v, D, ⟨hD, hv, -⟩⟩ := exists_adjugate_of_charpoly_mem ρ h_charpoly (mapRingHom G κ w)
   refine ⟨D, funext fun x ↦ ?_, v, ?_⟩
   · simpa [hρ, det_apply'] using (congrFun hD x).symm
   · rw [map_mul, hv, Algebra.algebraMap_eq_smul_one]
@@ -506,10 +473,7 @@ lemma Selmer.exists_ribet_element_of_tied_rows {r : Type*} [Fintype r] [Decidabl
   -- `𝔞` of the elements whose traces against all of `S[G]` lie in `𝒥`; take `f = tr ρ (ρ₁ P(ρ₀))`.
   have : Nonempty σ := blockEquiv.symm.nonempty
   let ι : O[G] →+* S[G] := mapRingHom G κ
-  obtain ⟨ρ, hρι, h_charpoly⟩ : ∃ ρ : S[G] →ₐ[S] Matrix σ σ (Y → L),
-      (∀ (x : Y) (r : O[G]) (i j : σ), ρ (ι r) i j x = algebraMap O L (u x r i j)) ∧
-      ∀ (a : S[G]) (k : ℕ), (ρ a).charpoly.coeff k ∈ (algebraMap S (Y → L)).range :=
-    exists_family_algHom_charpoly_mem u κ hκ h_coeff
+  obtain ⟨ρ, hρι, h_charpoly⟩ := exists_family_algHom_charpoly_mem u κ hκ h_coeff
   let 𝔞 : TwoSidedIdeal S[G] := Selmer.traceIdeal ρ 𝒥
   have mem_𝔞 (w : S[G]) : w ∈ 𝔞 ↔ ∀ s : S[G], (ρ (w * s)).trace ∈ 𝒥 := Selmer.mem_traceIdeal
   have h_span (w : O[G]) (hw : w ∈ span O[G] (Set.range y)) :
@@ -517,34 +481,23 @@ lemma Selmer.exists_ribet_element_of_tied_rows {r : Type*} [Fintype r] [Decidabl
     Selmer.map_mem_span_range ι y hw
   have h_rows (i : N) : ∃ a ∈ 𝔞, ∃ z ∈ span S[G] (Set.range (ι ∘ y)),
       (B.map ι *ᵥ ι ∘ y) i = a + z * ι ρ₀ := by
-    obtain ⟨a, ha, z, hz, h_eq⟩ := hB_tied i
+    obtain ⟨a, ha, ⟨z, hz, h_eq⟩⟩ := hB_tied i
     have h_a : ι a ∈ 𝔞 := (mem_𝔞 _).2 fun s ↦ by
       rw [map_mul, trace_mul_comm, ← map_mul]
       exact Selmer.trace_mul_mem_of_mem_span u κ ρ hρι 𝒥 ha s
-    refine ⟨ι a, h_a, ι z, h_span z hz, ?_⟩
+    refine ⟨ι a, h_a, ⟨ι z, h_span z hz, ?_⟩⟩
     rw [← map_mul, ← map_add, ← h_eq]
     simp [mulVec, dotProduct]
-  have h_top : span S {w : S[G] | ∀ k : ℕ,
-      (ρ w).charpoly.coeff k ∈ (algebraMap S (Y → L)).range} = ⊤ :=
-    top_unique fun w _ ↦ subset_span (h_charpoly w)
   have h_ker (w : S[G]) (hw : ρ w = 0) : w ∈ 𝔞 := (mem_𝔞 w).2 fun s ↦ by simp [hw]
-  obtain ⟨P, hP, -, h_tr, h_δ⟩ : ∃ P : S[X],
-      algebraMap S (Y → L) (P.eval 0) = (comp N N σ σ (Y → L) ((B.map ι).map ρ)).det ∧
-      (∀ z ∈ span S[G] (Set.range (ι ∘ y)), z * aeval (ι ρ₀) P ∈ 𝔞) ∧
-      (∀ c : S[G], (ρ (c * aeval (ι ρ₀) P)).trace ∈ (algebraMap S (Y → L)).range) ∧
-      ∀ (c : S[G]) (δ : S),
-        (∃ z ∈ span S[G] (Set.range (ι ∘ y)), ρ z = algebraMap S (Matrix σ σ (Y → L)) δ) →
-        ∃ a ∈ 𝔞, algebraMap S (Y → L) δ * (ρ (c * aeval (ι ρ₀) P)).trace = (ρ a).trace :=
-    Selmer.exists_ribet_polynomial ρ h_top 𝔞 h_ker (ι ∘ y) (ι ρ₀) (B.map ι) h_rows
+  obtain ⟨P, hP, -, ⟨h_tr, h_δ⟩⟩ :=
+    Selmer.exists_ribet_polynomial ρ h_charpoly 𝔞 h_ker (ι ∘ y) (ι ρ₀) (B.map ι) h_rows
   obtain ⟨f, hf⟩ : ∃ f : S, (f : Y → L) = (ρ (ι ρ₁ * aeval (ι ρ₀) P)).trace := h_tr (ι ρ₁)
   refine ⟨f, fun w hw ↦ ?_, fun x ↦ ?_⟩
   · -- `det (u x w)` is an element `D` of `S`, and the scalar matrix `D` is `ρ (v * ι w)` with
     -- `v * ι w` in the left ideal spanned by `ι ∘ y`. So `D f` is the trace of an element of `𝔞`.
     obtain ⟨D, hD, v, hv⟩ := Selmer.exists_mul_eq_algebraMap_det u κ ρ hρι h_charpoly w
-    obtain ⟨b, hb, hb_eq⟩ :
-        ∃ b ∈ 𝔞, (D : Y → L) * (ρ (ι ρ₁ * aeval (ι ρ₀) P)).trace = (ρ b).trace :=
-      h_δ (ι ρ₁) D ⟨v * ι w, smul_mem _ v (h_span w hw), hv⟩
-    rw [← hD, mul_comm, hf, hb_eq, ← mul_one b]
+    obtain ⟨b, hb, hb_eq⟩ := h_δ (ι ρ₁) D ⟨v * ι w, smul_mem _ v (h_span w hw), hv⟩
+    rw [← hD, mul_comm, hf, ← S.algebraMap_apply, hb_eq, ← mul_one b]
     exact (mem_𝔞 b).1 hb 1
   · -- At `x ∈ 𝓧`, `ρ₁ ρ₀` acts as `0`, so `f` is `P(0) tr ρ₁` there.
     have h_zero : u x (ρ₁ * ρ₀) = 0 :=
@@ -553,10 +506,10 @@ lemma Selmer.exists_ribet_element_of_tied_rows {r : Type*} [Fintype r] [Decidabl
       rw [← map_mul, hρι, h_zero, Matrix.zero_apply, map_zero]
     have h_value : (f : Y → L) x = (P.coeff 0 : Y → L) x * algebraMap O L (u x ρ₁).trace := by
       rw [hf, Selmer.trace_mul_aeval_apply ρ (ι ρ₀) (ι ρ₁) P x h_zero_x]
-      simp [Matrix.trace, Finset.sum_apply, hρι]
+      simp [ι, Matrix.trace, Finset.sum_apply, hρι]
     have h_coeff0 :
         (P.coeff 0 : Y → L) x = algebraMap O L (comp N N σ σ O (B.map (u x))).det := by
-      simpa [hρι, coeff_zero_eq_eval_zero, det_apply'] using congrFun hP x
+      simpa [ι, hρι, coeff_zero_eq_eval_zero, det_apply'] using congrFun hP x
     have h_μ : (u x ρ₁).trace = μ₀ := by
       simp [hu_block, hψ₁, hη₁, Matrix.trace, ← blockEquiv.sum_comp, Fintype.sum_sum_type]
     have h_det : (comp N N σ σ O (B.map (u x))).det =
