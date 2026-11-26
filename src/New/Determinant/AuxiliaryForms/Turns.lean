@@ -4,46 +4,54 @@ import Mathlib.Data.Rat.Cast.OfScientific
 import Std.Tactic.BVDecide.Normalize.BitVec
 public import New.Determinant.AuxiliaryForms.PathData
 public import New.Determinant.Chain.Moduli
+import Lib.General.Algebra.MultivariatePolynomials
 import New.Determinant.Exchange.OneSquare
 
 /-!
 # Turning path data, and turns off the diagonal
 
-A turn of a path replaces two sides of a square by the two other sides. The `m`-fold twist is `ϑ`,
-the characters of the edges are built from `D.untwistedLiftChar j`, of weight `-D.liftWeight j`, and
-the vertical edges, whose character carries a power of `ϑ`, go from `Y^i_j` to `Y^i_(j+1)` and from
-`Ỹ^i_j` to `Ỹ^i_(j+1)`. The forms that move in the grid of the `Y` are conjugate forms.
+A turn of a path replaces two sides of a square by the two other sides, whether off the diagonal or
+on it. The `m`-fold twist is `ϑ`, the characters of the edges are built from
+`D.untwistedLiftChar j`, of weight `-D.liftWeight j`, and the vertical edges, whose character
+carries a power of `ϑ`, go from `Y^i_j` to `Y^i_(j+1)` and from `Ỹ^i_j` to `Ỹ^i_(j+1)`. The forms
+that move in the grid of the `Y` are conjugate forms.
+
+Rather than maintaining recursive pointwise path-datum tables and a separate diagonal-turn module,
+we represent a path datum as a linear functional `Λ : GridDatum ϑ` and turn corners by a single
+monadic transition `IsPathDatum.exists_square_move` built from `GridDatum.bind` and the partner
+graph kernel `graphKernel`. Climbing from stage `j` to stage `j + 1` pushes the descent in each
+grid past `j` lifts (`descent_past_gridPathMap`) and then crosses the diagonal square `(j, j)` via
+two seesaws and line reversal (`hasRoute_succ`), yielding the full route from stage `0` to stage
+`m` (`exists_hasRoute_zero_last`).
 
 ## Main definitions and results
 
-* `New.Data.Corner.IsTurn.exists_isPathDatum`: the match of a path datum, after a Fourier transform
-  in the column of the line if the turn is on the diagonal, is a path datum.
+* `New.Data.graphKernel`, `New.Data.exists_partner_kernel`: the graph kernel on matched matrix
+  blocks over a finite valuation-pair ring, its equivariance, and its root-of-unity representative.
+* `New.Data.IsPathDatum.exists_square_move`: turning a monadic path datum across any square (with
+  or without a Fourier transform in the added line) increases the order by `2` and transfers sums
+  through a `SquareLaw`.
 * `New.Data.exists_squareLaw_grid_hasAbsUpToNormPower`: the exchange
   `New.Exchange.one_square_identity_of_isEdgeFamily` on a square of a grid, with a constant
   `κ / c ϑ` whose denominator has, up to a power of the norm, the absolute value
   `New.Data.turnRatio`.
-* `New.Data.TransfersPeriods`: path data pass forwards, and proportionality of periods passes
-  backwards.
-* `New.Data.exists_transfersPeriods_off_diagonal`: a turn off the diagonal transfers periods.
+* `New.Data.HasRoute`: path data pass forwards from stage `i` to stage `j` with order increased by
+  `k`, and proportionality of periods passes backwards with denominator `c`.
+* `New.Data.descent_past_gridPathMap`: pushing a descent past `a` lifts on row `b` via interior
+  square moves.
+* `New.Data.hasRoute_succ`, `New.Data.exists_hasRoute_zero_last`: crossing stage `j → j + 1` via
+  two seesaws and line reversal, and composing all `m` stages from the first path to the last.
 
 Notions from other files:
 * `New.Data.GridNode`: a triple `(z, a, b)`, the node `Y^a_b` if `z = false` and `Ỹ^b_a` if
   `z = true`. Its index set is `D.NodeIndex`, which is `D.GridIndex z a b`.
-* `New.Data.EdgeTuple`: a matrix over the residue ring modulo `gridModulus ϑ` for each pair of
-  nodes. The modulus is that of the twist `ϑ` times a power of the product of the chosen places. A
-  `New.Data.NodeFamily` is an invertible matrix `g q` for each node `q`; it takes the matrix `S e`
-  on an edge `e = (p, q)` to `(g q)⁻¹ * S e * g p`. It is admissible (`New.Data.IsAdmissibleFamily`)
-  if at each of the two starting nodes it lies in the level of the node and at each node
-  `(true, a, a)` it is `g ⊕ 1` for its element `g` at `(false, a, a)`.
-* `New.Data.IsPathDatum N w`: a function of the matrices on the edges `w` that admissible families
-  fix up to `edgeCharProd`, that vanishes unless the vertical edges carry split injective matrices,
-  and whose values are sums of at most `N` roots of unity.
-* `New.AreMatched`: matched functions, `Φ(x_γ) = χ(det γ) Ψ(y_γ)` with both supported on such
-  matrices, `y_γ` being the first columns of `γ` and `x_γ` the last rows of `γ⁻¹`. The subring
-  argument, here `⊤`, is where the entries of `γ` and `γ⁻¹` lie. `New.Exchange.matchOf` is the match
-  of a function.
-* `New.Exchange.SquareLaw` with constant `C`, for functions `L` and `L'` on matrices over a finite
-  ring: `∑ Ψ L' = C ∑ Φ L` for all matched `Φ`, `Ψ`.
+* `New.Data.EdgeTuple`, `New.Data.GridDatum`, `New.Data.GridDatum.bind`: tuples of matrices modulo
+  `gridModulus ϑ`, linear functionals on functions of tuples, and their monadic composition.
+* `New.Data.IsPathDatum n w Λ`: a linear functional `Λ : GridDatum ϑ` scaled by `edgeCharProd g w`
+  under admissible families `g` and given by a short root-of-unity sum (`IsShortSum n w Λ`) on
+  tuples whose vertical edges in `w` carry left-invertible matrices.
+* `New.AreMatched`, `New.Exchange.SquareLaw`: matched functions over a finite ring and the square
+  law `∑ Ψ L' = C ∑ Φ L`.
 -/
 
 @[expose] public section
@@ -55,535 +63,406 @@ namespace New.Data
 /-!
 ## Turning a path datum
 
-A turn of a path replaces the edges `V' → W₁`, `Ṽ' → W₂` of a square by `W₁ → V`, `W₂ → Ṽ`, where
-`Ṽ' = V'` and `Ṽ = V` unless the turn is on the diagonal, at which a line is added to both.
+A turn of a path replaces the edges `p → v`, `Q → U` of a square by `v → r`, `U → R`, where
+`Q = p` and `R = r` unless the turn is on the diagonal, at which a line indexed by `T = Unit` is
+added to both.
 
-The form that crosses the square goes from `W₁` to `W₂`. For a turn at `V' = (i, j)` in the grid
-of the `Y`, and on the diagonal, `W₁` is the corner `(i, j + 1)` and `W₂` the corner `(i + 1, j)`;
-in the grid of the `Ỹ` it is the other way round. On the diagonal the line sits on the edges at
-`W₂`. The blocks of `y` and `x` at `W₁`, `W₂` are `y₁`, `y₂` and `x₁`, `x₂`.
+The form that crosses the square goes from `v` to `U`. For a turn at `(a, b)` in grid `z` off the
+diagonal, `v = (z, a, b + 1)` and `U = (z, a + 1, b)`; on the diagonal at `(j, j)`, `v = Y^j_(j+1)`
+and `U = Ỹ^(j+1)_j ≅ Y^(j+1)_j`, and the line sits on the edges `Q → U` and `U → R`. Using the
+partner graph kernel `graphKernel` inside `GridDatum.bind`, both interior and diagonal turns are
+handled by the single lemma `IsPathDatum.exists_square_move`.
 -/
 
-section GridMove
+section PartnerKernel
 
-open Matrix Fintype Function Finset Exchange
+open Matrix Fintype Finset Function Exchange MulChar
 
-variable {P : Parameters}
+variable {R : Type} [CommRing R] [Fintype R] [DecidableEq R]
+  {a b N n : Type} [Fintype a] [DecidableEq a] [Fintype b] [DecidableEq b]
+  [Fintype N] [DecidableEq N] [Fintype n] [DecidableEq n]
 
-/-- The nodes at a turn of a path. The old path has the edges `V' → W₁` and `Ṽ' → W₂`, the new one
-has `W₁ → V` and `W₂ → Ṽ`. A node (`GridNode`) is a place `(z, a, b)` in one of the two grids, and
-`D.NodeIndex` is the index set of its basis. The type `T` indexes what `Ṽ'` has beyond `V'` and
-`Ṽ` beyond `V`: in the use off the diagonal it is empty, and on the diagonal it indexes one line. -/
-structure Corner (D : Data P) (B T : Type) where
-  /-- The node `V'` that the turn removes. -/
-  low : GridNode
-  /-- The node `Ṽ' = V' ⊕ T`. -/
-  lowExt : GridNode
-  /-- The node `W₁`, kept by the turn and joined to `V'` and to `V`. -/
-  fst : GridNode
-  /-- The node `W₂`, kept by the turn and joined to `Ṽ'` and to `Ṽ`. -/
-  snd : GridNode
-  /-- The node `V` that the turn adds. -/
-  high : GridNode
-  /-- The node `Ṽ = V ⊕ T`. -/
-  highExt : GridNode
-  /-- The basis of `W₂` as it is numbered in the square. -/
-  sndEquiv : B ≃ D.NodeIndex snd
-  /-- The basis of `Ṽ'` is that of `V'` and `T`. -/
-  lowEquiv : D.NodeIndex low ⊕ T ≃ D.NodeIndex lowExt
-  /-- The basis of `Ṽ` is that of `V` and `T`. -/
-  highEquiv : D.NodeIndex high ⊕ T ≃ D.NodeIndex highExt
+/-- The partner graph kernel `δ(x, y)` over a finite ring `R` for `χ` and `e : b ⊕ a ≃ n`: it takes
+the value `χ (det k) / #GL_b(R)` at `(invLastRows e k, firstCols e k)` for `k ∈ GL_n(R)`, and `0`
+elsewhere. -/
+def graphKernel (χ : MulChar R ℂ) (e : b ⊕ a ≃ n) (x : Matrix a n R) (y : Matrix n b R) : ℂ :=
+  Function.extend (fun k : GL n R ↦ (invLastRows e k, firstCols e k))
+    (fun k : GL n R ↦ χ k.val.det / card (GL b R)) 0 (x, y)
 
-namespace Corner
+omit [DecidableEq a] in
+lemma graphKernel_invLastRows_firstCols (χ : MulChar R ℂ) (e : b ⊕ a ≃ n) (k : GL n R) :
+    graphKernel χ e (invLastRows e k) (firstCols e k) = χ k.val.det / card (GL b R) := by
+  refine FactorsThrough.extend_apply (fun k₁ k₂ h_eq ↦ ?_) _ k
+  obtain ⟨h_rows, h_cols⟩ := Prod.mk.inj h_eq
+  obtain ⟨h, h_mul, h_det⟩ := exists_firstCols_eq_mul_of_invLastRows_eq h_rows
+  have hh : h.val = 1 := by
+    have := congrArg (invFirstRows e k₁ * ·) (h_cols.trans h_mul)
+    simpa [← Matrix.mul_assoc, invFirstRows_mul_firstCols] using this.symm
+  rw [h_det, hh, det_one, mul_one]
 
-section Definitions
+omit [Fintype a] [DecidableEq a] in
+lemma exists_eq_of_graphKernel_ne_zero {χ : MulChar R ℂ} {e : b ⊕ a ≃ n}
+    {x : Matrix a n R} {y : Matrix n b R} (h_ne : graphKernel χ e x y ≠ 0) :
+    ∃ k : GL n R, invLastRows e k = x ∧ firstCols e k = y := by
+  by_contra h_none
+  exact h_ne (Function.extend_apply' _ _ (x, y) fun ⟨k, hk⟩ ↦ h_none ⟨k, Prod.mk.inj hk⟩)
 
-variable {D : Data P} {B T : Type} [Fintype B] [DecidableEq B] [Fintype T] [DecidableEq T]
-  (c : D.Corner B T) {ϑ : D.MFoldTwist}
+/-- Equivariance of `graphKernel`: multiplying `x` on the left by `f⁻¹` and right by `g`, and `y`
+on the left by `g⁻¹` and right by `q`, multiplies `graphKernel χ e x y` by
+`(χ (det g) / χ (det f) / χ (det q))⁻¹`. -/
+lemma graphKernel_equivariant (χ : MulChar R ℂ) (e : b ⊕ a ≃ n)
+    (g : GL n R) (f : GL a R) (q : GL b R) (x : Matrix a n R) (y : Matrix n b R) :
+    graphKernel χ e x y =
+      χ g.val.det / χ f.val.det / χ q.val.det *
+        graphKernel χ e (f⁻¹.val * x * g.val) (g⁻¹.val * y * q.val) := by
+  wlog h_ne : graphKernel χ e x y ≠ 0
+  · push Not at h_ne
+    suffices graphKernel χ e (f⁻¹.val * x * g.val) (g⁻¹.val * y * q.val) = 0 by
+      rw [h_ne, this, mul_zero]
+    by_contra h_nz
+    have h_eq := this χ e g⁻¹ f⁻¹ q⁻¹ _ _ h_nz
+    simp only [inv_inv, ← Matrix.mul_assoc, Units.mul_inv, Matrix.one_mul,
+      Matrix.mul_assoc _ g.val, Matrix.mul_one, Matrix.mul_assoc _ q.val, h_ne] at h_eq
+    exact h_nz (by simpa [((isUnits_det_units _).map χ).ne_zero] using h_eq)
+  obtain ⟨k, rfl, rfl⟩ := exists_eq_of_graphKernel_ne_zero h_ne
+  let k' : GL n R := g⁻¹ * k * reindexGL e (blockGL (q, f))
+  have hk'_rows : invLastRows e k' = f⁻¹.val * invLastRows e k * g.val := by
+    rw [Matrix.mul_assoc]; ext i j; simp [k', Matrix.mul_apply, reindex_equiv e, ← map_inv]
+  have hk'_cols : firstCols e k' = g⁻¹.val * firstCols e k * q.val := by
+    ext i j; simp [k', Matrix.mul_apply, reindex_equiv e]
+  have h_inv_g : χ g⁻¹.val.det = (χ g.val.det)⁻¹ := eq_inv_of_mul_eq_one_left <| by
+    rw [← map_mul, ← det_mul, ← Units.val_mul, inv_mul_cancel, Units.val_one, det_one, map_one]
+  rw [← hk'_rows, ← hk'_cols, graphKernel_invLastRows_firstCols,
+    graphKernel_invLastRows_firstCols]
+  simp only [k', Units.val_mul, det_mul, map_mul, h_inv_g,
+    show ((reindexGL e) (blockGL (q, f))).val.det = q.val.det * f.val.det by
+      simp [reindexGL, blockGL]]
+  field_simp [((isUnits_det_units _).map χ).ne_zero]
 
-/-- The edges of the old path, `w` being those that the turn preserves. -/
-abbrev oldEdges (w : Finset (GridNode × GridNode)) : Finset (GridNode × GridNode) :=
-  insert (c.lowExt, c.snd) (insert (c.low, c.fst) w)
+lemma graphKernel_mul_right (χ : MulChar R ℂ) (e : b ⊕ a ≃ n)
+    (x : Matrix a n R) (y : Matrix n b R) (q : GL b R) :
+    graphKernel χ e x (y * q.val) = χ q.val.det * graphKernel χ e x y := by
+  have h := graphKernel_equivariant χ e 1 1 q x y
+  simp only [inv_one, Units.val_one, det_one, map_one, Matrix.one_mul, Matrix.mul_one, div_one,
+    one_div] at h
+  rw [h, mul_inv_cancel_left₀ ((isUnits_det_units q).map χ).ne_zero]
 
-/-- The edges of the new path. -/
-abbrev newEdges (w : Finset (GridNode × GridNode)) : Finset (GridNode × GridNode) :=
-  insert (c.snd, c.highExt) (insert (c.fst, c.high) w)
+/-- Integrating `graphKernel χ e (invLastRows e k)` against any right-`χ⁻¹`-equivariant function
+`Ψ` recovers `χ (det k) * Ψ (firstCols e k)`. -/
+lemma sum_graphKernel_mul (χ : MulChar R ℂ) (e : b ⊕ a ≃ n) (Ψ : Matrix n b R → ℂ)
+    (hΨ : ∀ (y : Matrix n b R) (q : GL b R), Ψ (y * q.val) = χ⁻¹ q.val.det * Ψ y) (k : GL n R) :
+    ∑ y : Matrix n b R, graphKernel χ e (invLastRows e k) y * Ψ y =
+      χ k.val.det * Ψ (firstCols e k) := by
+  have h_inj : Injective (fun q : GL b R ↦ firstCols e k * q.val) :=
+    (mul_right_injective_of_inv _ _ (invFirstRows_mul_firstCols e k)).comp Units.val_injective
+  rw [← sum_of_injective _ h_inj _ _ (fun y hy ↦ by
+    by_contra h_ne
+    obtain ⟨l, hl_r, hl_c⟩ := exists_eq_of_graphKernel_ne_zero (left_ne_zero_of_mul h_ne)
+    obtain ⟨q, hq, -⟩ := exists_firstCols_eq_mul_of_invLastRows_eq hl_r.symm
+    exact hy ⟨q, (hl_c.symm.trans hq).symm⟩) fun _ ↦ rfl]
+  have h_term (q : GL b R) :
+      graphKernel χ e (invLastRows e k) (firstCols e k * q.val) * Ψ (firstCols e k * q.val) =
+        χ k.val.det / card (GL b R) * Ψ (firstCols e k) := by
+    rw [graphKernel_mul_right, graphKernel_invLastRows_firstCols, hΨ, inv_apply_eq_inv']
+    field_simp [((isUnits_det_units q).map χ).ne_zero]
+  simp only [h_term, sum_const, card_univ, nsmul_eq_mul]
+  field_simp [show (card (GL b R) : ℂ) ≠ 0 from Nat.cast_ne_zero.2 card_ne_zero]
 
-/-- The character `χ` for which the data on the two sides of the square are matched: the inverse of
-the product of the characters `edgeChar` of the two old edges. It lives on the residue ring modulo
-`gridModulus ϑ`, the modulus of the twist `ϑ` times a power of the chosen places. -/
-def char (ϑ : D.MFoldTwist) : MulChar (gridModulus ϑ).ResidueRing ℂ :=
-  (edgeChar ϑ (c.low, c.fst) * edgeChar ϑ (c.lowExt, c.snd))⁻¹
+/-- Over a finite valuation-pair ring `R`, `graphKernel χ e` admits a `GL_b(R)`-orbit selector `d`
+whose nonzero weighted entries `d y * graphKernel χ e x y` are roots of unity passing left
+inverses from row blocks of `y` to opposite column blocks of `x`, whose `GL_b(R)`-orbit sum
+recovers `#GL_b(R) * graphKernel χ e x y`, and which implements any `SquareLaw` pointwise on
+matrices `y` with a left-invertible row block. -/
+lemma exists_partner_kernel (χ : MulChar R ℂ) (e : b ⊕ a ≃ N ⊕ n)
+    (hR : IsValuationPair (⊤ : Subring R)) :
+    ∃ d : Matrix (N ⊕ n) b R → ℂ,
+      (∀ (x : Matrix a (N ⊕ n) R) (y : Matrix (N ⊕ n) b R),
+        (d y * graphKernel χ e x y ≠ 0 →
+          IsOfFinOrder (d y * graphKernel χ e x y) ∧
+          (HasLeftInv y.toRows₁ → HasLeftInv x.toCols₂) ∧
+          (HasLeftInv y.toRows₂ → HasLeftInv x.toCols₁)) ∧
+        ∑ q : GL b R, d (y * q.val) * graphKernel χ e x y =
+          (card (GL b R) : ℂ) * graphKernel χ e x y) ∧
+      ∀ {c : ℂ} {L : Matrix a (N ⊕ n) R → ℂ} {L' : Matrix (N ⊕ n) b R → ℂ},
+        SquareLaw χ e c L L' → ∀ y : Matrix (N ⊕ n) b R,
+          HasLeftInv y.toRows₁ ∨ HasLeftInv y.toRows₂ →
+          L' y = c * ∑ x : Matrix a (N ⊕ n) R, graphKernel χ e x y * L x := by
+  let rep (y : Matrix (N ⊕ n) b R) := (Set.range_nonempty (fun q : GL b R ↦ y * q.val)).some
+  let d (y : Matrix (N ⊕ n) b R) : ℂ := if y = rep y then (card (GL b R) : ℂ) else 0
+  have h_rep_mul (y : Matrix (N ⊕ n) b R) (q : GL b R) : rep (y * q.val) = rep y := by
+    dsimp only [rep]; congr 1
+    exact Set.ext fun _ ↦ ⟨fun ⟨l, hl⟩ ↦ ⟨q * l, by simpa [Matrix.mul_assoc] using hl⟩,
+      fun ⟨l, hl⟩ ↦ ⟨q⁻¹ * l, by simpa [← Matrix.mul_assoc] using hl⟩⟩
+  refine ⟨d, fun x y ↦ ?_, fun {c L L'} hL y hy ↦ ?_⟩
+  · by_cases h_zero : graphKernel χ e x y = 0
+    · simp [h_zero]
+    obtain ⟨k, rfl, rfl⟩ := exists_eq_of_graphKernel_ne_zero h_zero
+    refine ⟨fun h_ne ↦ ?_, ?_⟩
+    · have hd : d (firstCols e k) = card (GL b R) := by
+        dsimp only [d]; split_ifs with h <;> [rfl; exact absurd (by simp [d, h]) h_ne]
+      rw [hd, graphKernel_invLastRows_firstCols,
+        mul_div_cancel₀ _ (Nat.cast_ne_zero.2 card_ne_zero)]
+      exact ⟨χ.isOfFinOrder (isUnits_det_units k).isOfFinOrder,
+        hasLeftInv_toCols_of_hasLeftInv_toRows e k⟩
+    · obtain ⟨q₀, hq₀⟩ := (Set.range_nonempty (fun q : GL b R ↦ firstCols e k * q.val)).some_mem
+      have h_inj : Injective (fun q : GL b R ↦ firstCols e k * q.val) :=
+        (mul_right_injective_of_inv _ _ (invFirstRows_mul_firstCols e k)).comp Units.val_injective
+      have h_eq (q : GL b R) :
+          d (firstCols e k * q.val) = if q = q₀ then (card (GL b R) : ℂ) else 0 := by
+        simp only [d, h_rep_mul, rep, ← hq₀, h_inj.eq_iff]
+      simp [h_eq]
+  · obtain ⟨j, rfl⟩ := exists_eq_firstCols hR e hy
+    let Ψ (y' : Matrix (N ⊕ n) b R) : ℂ := graphKernel χ⁻¹ e (invLastRows e j) y'
+    let Φ (x : Matrix a (N ⊕ n) R) : ℂ := ∑ y', graphKernel χ e x y' * Ψ y'
+    have h_law := hL.sum_eq_of_areMatched Φ Ψ ⟨fun x hx ↦ by
+      obtain ⟨_, -, ht⟩ := exists_ne_zero_of_sum_ne_zero hx
+      obtain ⟨k, hk, -⟩ := exists_eq_of_graphKernel_ne_zero (left_ne_zero_of_mul ht)
+      exact ⟨k, by simp [mem_intGL], hk.symm⟩,
+      fun y' hy' ↦ by
+        obtain ⟨k, -, hk⟩ := exists_eq_of_graphKernel_ne_zero hy'
+        exact ⟨k, by simp [mem_intGL], hk.symm⟩,
+      fun k _ ↦ sum_graphKernel_mul χ e Ψ (graphKernel_mul_right χ⁻¹ e _) k⟩
+    let M (y' : Matrix (N ⊕ n) b R) : ℂ := ∑ x, graphKernel χ e x y' * L x
+    have h_rhs : ∑ x, Φ x * L x = χ⁻¹ j.val.det * M (firstCols e j) := by
+      rw [show ∑ x, Φ x * L x = ∑ y', Ψ y' * M y' by
+        simp only [Φ, M, sum_mul, mul_sum]; rw [Finset.sum_comm]
+        exact sum_congr rfl fun _ _ ↦ sum_congr rfl fun _ _ ↦ by ring]
+      exact sum_graphKernel_mul χ⁻¹ e M
+        (fun _ _ ↦ by simp [M, graphKernel_mul_right, mul_sum, mul_assoc]) j
+    rw [sum_graphKernel_mul χ⁻¹ e L' (fun _ _ ↦ by simp [hL.right_mul]) j, h_rhs] at h_law
+    exact mul_left_cancel₀ ((isUnits_det_units j).map χ⁻¹).ne_zero (by linear_combination h_law)
 
-/-- The conditions under which the corner is a turn of a path whose other edges are `w`, for the
-twist `ϑ`. A family `g` of invertible matrices, one for each node, is admissible
-(`IsAdmissibleFamily`) if it lies in the level at the two starting nodes and is `g ⊕ 1` on the
-diagonal of the second grid, for its element `g` at the same place of the first. -/
-structure IsTurn (ϑ : D.MFoldTwist) (w : Finset (GridNode × GridNode)) : Prop where
-  /-- The two kept nodes differ. -/
-  fst_ne_snd : c.fst ≠ c.snd
-  /-- The removed nodes are not on the new edges. -/
-  ne_low_and_ne_lowExt : ∀ q ∈ [c.fst, c.snd, c.high, c.highExt], q ≠ c.low ∧ q ≠ c.lowExt
-  /-- The other edges avoid the removed nodes and do not end at the added ones. -/
-  endpoints_notMem : ∀ e ∈ w, e.1 ∉ [c.low, c.lowExt] ∧ e.2 ∉ [c.low, c.lowExt, c.high, c.highExt]
-  /-- One old edge is vertical, and the new edge at the same kept node is not. -/
-  vertical : IsVerticalEdge c.low c.fst ∧ ¬IsVerticalEdge c.fst c.high ∨
-    IsVerticalEdge c.lowExt c.snd ∧ ¬IsVerticalEdge c.snd c.highExt
-  /-- Opposite edges have the same character. -/
-  edgeChar_fst : edgeChar ϑ (c.fst, c.high) = edgeChar ϑ (c.lowExt, c.snd)
-  /-- Opposite edges have the same character. -/
-  edgeChar_snd : edgeChar ϑ (c.snd, c.highExt) = edgeChar ϑ (c.low, c.fst)
-  /-- Only the group of `V` acts at `Ṽ`. -/
-  apply_highExt (g : NodeFamily ϑ) (hg : IsAdmissibleFamily g) :
-    g c.highExt = blockInlGL c.highEquiv (g c.high)
-  /-- The node `V'` is inner: any element `k` may act there, through `k ⊕ 1` at `Ṽ'`. -/
-  exists_eq_low (g : NodeFamily ϑ) (hg : IsAdmissibleFamily g)
-      (k : GL (D.NodeIndex c.low) (gridModulus ϑ).ResidueRing) :
-    ∃ g' : NodeFamily ϑ, IsAdmissibleFamily g' ∧ g' c.low = k ∧
-      g' c.lowExt = blockInlGL c.lowEquiv k ∧ ∀ q : GridNode, q ≠ c.low → q ≠ c.lowExt → g' q = g q
-
-variable (S : EdgeTuple ϑ)
-
-/-- The matrix `y : V' → W₁ ⊕ W₂` read on the old edges. -/
-def oldMatrix : Matrix (D.NodeIndex c.fst ⊕ B) (D.NodeIndex c.low) (gridModulus ϑ).ResidueRing :=
-  fromRows (S (c.low, c.fst)) ((S (c.lowExt, c.snd)).submatrix c.sndEquiv c.lowEquiv).toCols₁
-
-/-- The column `v : T → W₂` read on the old edge at `Ṽ'`. -/
-def oldColumn : Matrix B T (gridModulus ϑ).ResidueRing :=
-  ((S (c.lowExt, c.snd)).submatrix c.sndEquiv c.lowEquiv).toCols₂
-
-/-- The matrix `x : W₁ ⊕ W₂ → V` read on the new edges. -/
-def newMatrix : Matrix (D.NodeIndex c.high) (D.NodeIndex c.fst ⊕ B) (gridModulus ϑ).ResidueRing :=
-  fromCols (S (c.fst, c.high)) ((S (c.snd, c.highExt)).submatrix c.highEquiv c.sndEquiv).toRows₁
-
-/-- The row `v' : W₂ → T` read on the new edge at `Ṽ`. -/
-def newRow : Matrix T B (gridModulus ϑ).ResidueRing :=
-  ((S (c.snd, c.highExt)).submatrix c.highEquiv c.sndEquiv).toRows₂
-
-/-- The tuple with `y` and `v` on the old edges and the matrices of `S` elsewhere. -/
-def oldTuple (y : Matrix (D.NodeIndex c.fst ⊕ B) (D.NodeIndex c.low) (gridModulus ϑ).ResidueRing)
-    (v : Matrix B T (gridModulus ϑ).ResidueRing) : EdgeTuple ϑ :=
-  update (update S (c.low, c.fst) y.toRows₁) (c.lowExt, c.snd)
-    ((fromCols y.toRows₂ v).submatrix c.sndEquiv.symm c.lowEquiv.symm)
-
-/-- The tuple with `x` and `v'` on the new edges and the matrices of `S` elsewhere. -/
-def newTuple (x : Matrix (D.NodeIndex c.high) (D.NodeIndex c.fst ⊕ B) (gridModulus ϑ).ResidueRing)
-    (v' : Matrix T B (gridModulus ϑ).ResidueRing) : EdgeTuple ϑ :=
-  update (update S (c.fst, c.high) x.toCols₁) (c.snd, c.highExt)
-    ((fromRows x.toCols₂ v').submatrix c.highEquiv.symm c.sndEquiv.symm)
-
-/-- The column Fourier transform `Ψ̂'(y, v') = ∑ v, ψ(v' v) Ψ'(y, v)` in the column `v` of the line,
-where `ψ(v' v)` is the additive character `ψ` at the trace of `v' v` and the matrices on the other
-edges are those of `S`. -/
-def columnFourier (ψ : AddChar (gridModulus ϑ).ResidueRing ℂ) (Ψ' : EdgeTuple ϑ → ℂ)
-    (S : EdgeTuple ϑ) (v' : Matrix T B (gridModulus ϑ).ResidueRing)
-    (y : Matrix (D.NodeIndex c.fst ⊕ B) (D.NodeIndex c.low) (gridModulus ϑ).ResidueRing) : ℂ :=
-  ∑ v : Matrix B T (gridModulus ϑ).ResidueRing, ψ (v' * v).trace * Ψ' (c.oldTuple S y v)
-
-/-- The datum on the new path: the match for the character `c.char ϑ` of the column Fourier
-transform of `Ψ'`, taken at the row `v'` and the matrix `x` that are read on the new edges of `S`.
-The bijection `ε` identifies the indices of `V'` and `V` with those of `W₁ ⊕ W₂`. -/
-def turned (ε : D.NodeIndex c.low ⊕ D.NodeIndex c.high ≃ D.NodeIndex c.fst ⊕ B)
-    (ψ : AddChar (gridModulus ϑ).ResidueRing ℂ) (Ψ' : EdgeTuple ϑ → ℂ) (S : EdgeTuple ϑ) : ℂ :=
-  matchOf (c.char ϑ) ε (c.columnFourier ψ Ψ' S (c.newRow S)) (c.newMatrix S)
-
-/-- The element of a family at `W₂`, in the basis of the square. -/
-abbrev sndGL (g : NodeFamily ϑ) : GL B (gridModulus ϑ).ResidueRing :=
-  reindexGL c.sndEquiv.symm (g c.snd)
-
-/-- The element of a family on `W₁ ⊕ W₂`. -/
-abbrev sumGL (g : NodeFamily ϑ) : GL (D.NodeIndex c.fst ⊕ B) (gridModulus ϑ).ResidueRing :=
-  blockGL (g c.fst, c.sndGL g)
-
-end Definitions
-
-variable {D : Data P} {B T : Type} [Fintype T] [DecidableEq T]
-  {c : D.Corner B T} {ϑ : D.MFoldTwist} {w : Finset (GridNode × GridNode)} {N : ℕ}
-  {Ψ' : EdgeTuple ϑ → ℂ}
-
-section Tuples
-
-variable {S : EdgeTuple ϑ}
-  (y : Matrix (D.NodeIndex c.fst ⊕ B) (D.NodeIndex c.low) (gridModulus ϑ).ResidueRing)
-  (v : Matrix B T (gridModulus ϑ).ResidueRing)
-  (x : Matrix (D.NodeIndex c.high) (D.NodeIndex c.fst ⊕ B) (gridModulus ϑ).ResidueRing)
-  (v' : Matrix T B (gridModulus ϑ).ResidueRing)
-
-omit [Fintype T] [DecidableEq T] in
-lemma oldColumn_oldTuple : c.oldColumn (c.oldTuple S y v) = v := by simp [oldColumn, oldTuple]
-
-omit [Fintype T] [DecidableEq T] in
-lemma newRow_newTuple : c.newRow (c.newTuple S x v') = v' := by simp [newRow, newTuple]
-
-namespace IsTurn
-
-lemma low_notMem (hc : c.IsTurn ϑ w) : (c.low, c.fst) ∉ w := by grind [→ hc.endpoints_notMem]
-
-lemma lowExt_notMem (hc : c.IsTurn ϑ w) : (c.lowExt, c.snd) ∉ w := by grind [→ hc.endpoints_notMem]
-
-lemma high_notMem (hc : c.IsTurn ϑ w) : (c.fst, c.high) ∉ w := by grind [→ hc.endpoints_notMem]
-
-lemma highExt_notMem (hc : c.IsTurn ϑ w) : (c.snd, c.highExt) ∉ w := by
-  grind [→ hc.endpoints_notMem]
-
-lemma oldTuple_apply_of_mem (hc : c.IsTurn ϑ w) {e : GridNode × GridNode} (he : e ∈ w) :
-    c.oldTuple S y v e = S e := by
-  simp [oldTuple, ne_of_mem_of_not_mem he hc.lowExt_notMem, ne_of_mem_of_not_mem he hc.low_notMem]
-
-lemma newTuple_apply_of_mem (hc : c.IsTurn ϑ w) {e : GridNode × GridNode} (he : e ∈ w) :
-    c.newTuple S x v' e = S e := by
-  simp [newTuple, ne_of_mem_of_not_mem he hc.highExt_notMem, ne_of_mem_of_not_mem he hc.high_notMem]
-
-lemma oldTuple_low (hc : c.IsTurn ϑ w) : c.oldTuple S y v (c.low, c.fst) = y.toRows₁ := by
-  simp [oldTuple, hc.fst_ne_snd]
-
-lemma oldMatrix_oldTuple (hc : c.IsTurn ϑ w) : c.oldMatrix (c.oldTuple S y v) = y := by
-  simp [oldMatrix, oldTuple, hc.fst_ne_snd]
-
-lemma newMatrix_newTuple (hc : c.IsTurn ϑ w) : c.newMatrix (c.newTuple S x v') = x := by
-  simp [newMatrix, newTuple, hc.fst_ne_snd]
-
-end IsTurn
-
-end Tuples
-
-variable [Fintype B] [DecidableEq B]
-
-namespace IsTurn
-
-/-- Let the corner `c` be a turn, for the twist `ϑ`, of a path whose other edges are `w`. A sum over
-the tuples on the old edges is a sum over three things, put together by `oldTuple`: a tuple `S` on
-the preserved edges `w`, a matrix `y` on the old edges and a matrix `v` of type `Matrix B T`. Here
-`tuplesOn ϑ w` is the set of tuples of matrices that are zero off `w`. -/
-lemma sum_tuplesOn_oldEdges (hc : c.IsTurn ϑ w) (F : EdgeTuple ϑ → ℂ) :
-    ∑ S ∈ tuplesOn ϑ (c.oldEdges w), F S = ∑ S ∈ tuplesOn ϑ w,
-      ∑ y : Matrix (D.NodeIndex c.fst ⊕ B) (D.NodeIndex c.low) (gridModulus ϑ).ResidueRing,
-        ∑ v : Matrix B T (gridModulus ϑ).ResidueRing, F (c.oldTuple S y v) := by
-  rw [sum_tuplesOn_insert (by simp [hc.lowExt_notMem, hc.fst_ne_snd.symm]),
-    sum_tuplesOn_insert hc.low_notMem]
-  refine sum_congr rfl fun S _ ↦ ?_
-  -- `y` has the rows `y₁` and `y₂`, and the matrix at `Ṽ' → W₂` has the columns `y₂` and `v`.
-  rw [sum_eq_sum_fromRows]
-  refine sum_congr rfl fun y₁ _ ↦ ?_
-  rw [← (reindex c.sndEquiv c.lowEquiv).sum_comp, sum_eq_sum_fromCols, sum_comm]
-  simp [oldTuple]
-
-/-- Let the corner `c` be a turn, for the twist `ϑ`, of a path whose other edges are `w`. A sum over
-the tuples on the new edges is a sum over three things, put together by `newTuple`: a tuple `S` on
-the preserved edges `w`, a matrix `v'` of type `Matrix T B` and a matrix `x` on the new edges. -/
-lemma sum_tuplesOn_newEdges (hc : c.IsTurn ϑ w) (F : EdgeTuple ϑ → ℂ) :
-    ∑ S ∈ tuplesOn ϑ (c.newEdges w), F S = ∑ S ∈ tuplesOn ϑ w,
-      ∑ v' : Matrix T B (gridModulus ϑ).ResidueRing,
-        ∑ x : Matrix (D.NodeIndex c.high) (D.NodeIndex c.fst ⊕ B) (gridModulus ϑ).ResidueRing,
-          F (c.newTuple S x v') := by
-  rw [sum_tuplesOn_insert (by simp [hc.highExt_notMem, hc.fst_ne_snd.symm]),
-    sum_tuplesOn_insert hc.high_notMem]
-  refine sum_congr rfl fun S _ ↦ ?_
-  -- `x` has the columns `x₁` and `x₂`, and the matrix at `W₂ → Ṽ` has the rows `x₂` and `v'`.
-  rw [sum_comm (γ := Matrix T B (gridModulus ϑ).ResidueRing), sum_eq_sum_fromCols, eq_comm,
-    sum_comm]
-  refine sum_congr rfl fun x₁ _ ↦ ?_
-  rw [← (reindex c.highEquiv c.sndEquiv).sum_comp, sum_eq_sum_fromRows]
-  simp [newTuple]
-
-section Turned
-
-variable {ψ : AddChar (gridModulus ϑ).ResidueRing ℂ}
-
-/-- The column Fourier transform of a path datum `Ψ'` on the old path depends on `S` only through
-the matrices of the preserved edges `w`. -/
-lemma columnFourier_congr {S S' : EdgeTuple ϑ} (hc : c.IsTurn ϑ w)
-    (hΨ' : IsPathDatum N (c.oldEdges w) Ψ') (h_eq : ∀ e ∈ w, S e = S' e) :
-    c.columnFourier ψ Ψ' S = c.columnFourier ψ Ψ' S' := by
-  funext v' y
-  refine sum_congr rfl fun v _ ↦ congrArg _ (hΨ'.dependsOn fun e he ↦ ?_)
-  -- The tuples of `S, y, v` and of `S', y, v` agree on every old edge.
-  obtain rfl | rfl | he : e = (c.lowExt, c.snd) ∨ e = (c.low, c.fst) ∨ e ∈ w := by simpa using he
-  · simp [oldTuple]
-  · simp [hc.oldTuple_low]
-  · simp [hc.oldTuple_apply_of_mem _ _ he, h_eq e he]
-
-/-- Let the corner be a turn and `Ψ'` a path datum on the old path, let `g` be an admissible family
-and let `k` be an invertible matrix at the removed node `c.low`. Then moving `S` by `g`, replacing
-`v'` by `v' * c.sndGL g` and `y` by `(c.sumGL g)⁻¹ * y * k` changes the column Fourier transform
-only by the characters of the edges at the determinants. -/
-lemma columnFourier_tupleAction (hc : c.IsTurn ϑ w)
-    (y : Matrix (D.NodeIndex c.fst ⊕ B) (D.NodeIndex c.low) (gridModulus ϑ).ResidueRing)
-    (v' : Matrix T B (gridModulus ϑ).ResidueRing) (hΨ' : IsPathDatum N (c.oldEdges w) Ψ')
-    {g : NodeFamily ϑ} (hg : IsAdmissibleFamily g)
-    (k : GL (D.NodeIndex c.low) (gridModulus ϑ).ResidueRing) (S : EdgeTuple ϑ) :
-    c.char ϑ k.val.det * edgeChar ϑ (c.low, c.fst) (g c.fst).val.det *
-      edgeChar ϑ (c.lowExt, c.snd) (g c.snd).val.det * edgeCharProd g w *
-      c.columnFourier ψ Ψ' (tupleAction g S) (v' * (c.sndGL g).val)
-        ((c.sumGL g)⁻¹.val * y * k.val) =
-    c.columnFourier ψ Ψ' S v' y := by
-  -- Let `g'` be `k` at `V'`, `k ⊕ 1` at `Ṽ'` and `g` elsewhere. By invariance `Ψ'` at a tuple moved
-  -- by `g'` is its value divided by the characters; the sum over `v` is reindexed by `v ↦ g⁻¹ v`.
-  obtain ⟨g', hg', h_low, h_ext, h_other⟩ := hc.exists_eq_low g hg k
-  obtain ⟨h_fst, h_snd⟩ : g' c.fst = g c.fst ∧ g' c.snd = g c.snd := by
-    simp [h_other, hc.ne_low_and_ne_lowExt]
-  have h_w : ∀ e ∈ w, g' e.1 = g e.1 ∧ g' e.2 = g e.2 := by grind [→ hc.endpoints_notMem]
-  have h_char : edgeCharProd g' (c.oldEdges w) =
-      c.char ϑ k.val.det * edgeChar ϑ (c.low, c.fst) (g c.fst).val.det *
-        edgeChar ϑ (c.lowExt, c.snd) (g c.snd).val.det * edgeCharProd g w := by
-    simp +contextual [edgeCharProd, char, hc.low_notMem, hc.lowExt_notMem, hc.fst_ne_snd.symm,
-      h_low, h_ext, h_fst, h_snd, h_w, MulChar.inv_apply_eq_inv', field]
-  -- Moving the tuple of `S, y, v` by `g'` moves `S`, `y` and `v` separately.
-  have h_tuple (v : Matrix B T (gridModulus ϑ).ResidueRing) :
-      Ψ' (tupleAction g' (c.oldTuple S y v)) = Ψ' (c.oldTuple (tupleAction g S)
-        ((c.sumGL g)⁻¹.val * y * k.val) ((c.sndGL g)⁻¹.val * v)) := by
-    refine hΨ'.dependsOn fun e he ↦ ?_
-    obtain rfl | rfl | he : e = (c.lowExt, c.snd) ∨ e = (c.low, c.fst) ∨ e ∈ w := by simpa using he
-    · -- On `Ṽ' → W₂` the equation holds entry by entry in the two blocks of columns.
-      simp [tupleAction, oldTuple, h_ext, h_snd, ← Matrix.ext_iff, ← map_inv, Matrix.mul_apply,
-        reindex_equiv c.sndEquiv, reindex_equiv c.lowEquiv, toRows₂, Matrix.one_apply]
-    · -- On `V' → W₁` it is the block `y₁` that moves.
-      simp [tupleAction, hc.oldTuple_low, h_low, h_fst, ← Matrix.ext_iff, ← map_inv,
-        Matrix.mul_apply, toRows₁]
-    · simp [tupleAction, hc.oldTuple_apply_of_mem _ _ he, h_w e he]
-  rw [← h_char, columnFourier, columnFourier,
-    ← (mul_right_injective_of_invertible (c.sndGL g)⁻¹.val).bijective_of_finite.sum_comp, mul_sum]
-  refine sum_congr rfl fun v _ ↦ ?_
-  have h_cancel : v' * (c.sndGL g).val * ((c.sndGL g)⁻¹.val * v) = v' * v := by
-    rw [Matrix.mul_assoc, ← Matrix.mul_assoc _ _ v, Units.mul_inv, Matrix.one_mul]
-  rw [h_cancel, ← h_tuple, mul_left_comm, hΨ'.invariant g' hg']
-
-/-- If the column Fourier transform of a path datum `Ψ'` on the old path is nonzero at `(v', y)`,
-then the blocks of rows of `y` that lie on vertical edges, and the matrices of `S` on the vertical
-edges in `w`, have left inverses. -/
-lemma hasLeftInv_of_columnFourier_ne_zero {S : EdgeTuple ϑ} (hc : c.IsTurn ϑ w)
-    (y : Matrix (D.NodeIndex c.fst ⊕ B) (D.NodeIndex c.low) (gridModulus ϑ).ResidueRing)
-    (v' : Matrix T B (gridModulus ϑ).ResidueRing) (hΨ' : IsPathDatum N (c.oldEdges w) Ψ')
-    (h_ne : c.columnFourier ψ Ψ' S v' y ≠ 0) :
-    (IsVerticalEdge c.low c.fst → HasLeftInv y.toRows₁) ∧
-    (IsVerticalEdge c.lowExt c.snd → HasLeftInv y.toRows₂) ∧
-    ∀ e ∈ w, IsVerticalEdge e.1 e.2 → HasLeftInv (S e) := by
-  obtain ⟨v, -, hv⟩ := exists_ne_zero_of_sum_ne_zero h_ne
-  have h_inv : ∀ e ∈ c.oldEdges w, IsVerticalEdge e.1 e.2 → HasLeftInv (c.oldTuple S y v e) :=
-    hΨ'.hasLeftInv _ (right_ne_zero_of_mul hv)
-  refine ⟨fun h_vert ↦ ?_, fun h_vert ↦ ?_, fun e he h_vert ↦ ?_⟩
-  · simpa [hc.oldTuple_low] using h_inv (c.low, c.fst) (by simp) h_vert
-  · -- A left inverse of `(y₂ v)` has a left inverse of `y₂` as its upper block.
-    obtain ⟨L, hL⟩ : HasLeftInv (c.oldTuple S y v (c.lowExt, c.snd)) := h_inv _ (by simp) h_vert
-    refine ⟨L.submatrix (c.lowEquiv ∘ .inl) c.sndEquiv, Matrix.ext fun i j ↦ ?_⟩
-    simpa [oldTuple, Matrix.mul_apply, reindex_equiv c.sndEquiv, Matrix.one_apply] using
-      congrFun₂ hL (c.lowEquiv (.inl i)) (c.lowEquiv (.inl j))
-  · simpa [hc.oldTuple_apply_of_mem _ _ he] using h_inv e (by simp [he]) h_vert
-
-/-- An admissible family `g` moves the row `v'` read on the new edge at `Ṽ` only through its
-element at `W₂`. -/
-lemma newRow_tupleAction (hc : c.IsTurn ϑ w) {g : NodeFamily ϑ} (hg : IsAdmissibleFamily g)
-    (S : EdgeTuple ϑ) : c.newRow (tupleAction g S) = c.newRow S * (c.sndGL g).val := by
-  -- Entry by entry, as `g` fixes the line at `Ṽ`.
-  ext i j
-  simp [newRow, tupleAction, hc.apply_highExt g hg, ← map_inv, Matrix.mul_apply,
-    reindex_equiv c.sndEquiv, reindex_equiv c.highEquiv, toRows₂, Matrix.one_apply]
-
-/-- Let the corner `c` be a turn (`hc`). An admissible family `g` acts on tuples by `tupleAction`.
-This moves the matrix `c.newMatrix S` read on the new edges on the left by `(g c.high)⁻¹`, the
-inverse of its element at the node `V = c.high`. It moves it on the right by `c.sumGL g`, its
-element on `W₁ ⊕ W₂`. -/
-lemma newMatrix_tupleAction (hc : c.IsTurn ϑ w) {g : NodeFamily ϑ} (hg : IsAdmissibleFamily g)
-    (S : EdgeTuple ϑ) :
-    c.newMatrix (tupleAction g S) = (g c.high)⁻¹.val * (c.newMatrix S * (c.sumGL g).val) := by
-  -- Entry by entry, in the columns of `W₁` and in those of `W₂`.
-  rw [← Matrix.mul_assoc]
-  ext i (j | j) <;> simp [newMatrix, tupleAction, hc.apply_highExt g hg, ← map_inv, toRows₁,
-    Matrix.mul_apply, reindex_equiv c.sndEquiv, reindex_equiv c.highEquiv]
-
-/-- Let the corner `c` be a turn (`hc`), `Ψ'` a path datum on the old edges (`hΨ'`) and `v'` a
-matrix. Then the function `matchOf` of the column Fourier transform `c.columnFourier ψ Ψ' S v'` is
-matched with this transform for the character `c.char ϑ`. -/
-lemma areMatched_columnFourier (hc : c.IsTurn ϑ w) (v' : Matrix T B (gridModulus ϑ).ResidueRing)
-    (hΨ' : IsPathDatum N (c.oldEdges w) Ψ')
-    (ε : D.NodeIndex c.low ⊕ D.NodeIndex c.high ≃ D.NodeIndex c.fst ⊕ B) (S : EdgeTuple ϑ) :
-    AreMatched ⊤ ε (c.char ϑ) (matchOf (c.char ϑ) ε (c.columnFourier ψ Ψ' S v'))
-      (c.columnFourier ψ Ψ' S v') := by
-  refine areMatched_matchOf (fun y hy ↦ ?_) fun y k ↦ ?_
-  · -- The support condition: one of the blocks of `y` lies on a vertical edge.
-    obtain ⟨h_fst, h_snd, -⟩ := hc.hasLeftInv_of_columnFourier_ne_zero y v' hΨ' hy
-    exact exists_eq_firstCols (Modulus.isValuationPair_residueRing _) ε (by grind [hc.vertical])
-  · -- The character condition: invariance under the identity family, with `k` at `V'`.
-    simpa [tupleAction_one, edgeCharProd, ← Prod.one_eq_mk] using
-      hc.columnFourier_tupleAction y v' hΨ' (g := 1)
-        (by simp [IsAdmissibleFamily, ← Prod.one_eq_mk]) k S
-
-/-- Let the corner `c` be a turn and `Ψ'` a path datum on the old path. The turned datum
-`c.turned ε ψ Ψ'` is the match of the Fourier transform of `Ψ'` in the column of the line, read on
-the new edges; `ε` is the bijection between the indices of the removed and added nodes and those of
-the two kept nodes. It is fixed by the action of an admissible family `g` up to `edgeCharProd g` of
-the edges of the new path: the product over the edges `(p, q)` of their characters at
-`det (g q) / det (g p)`. -/
-lemma turned_tupleAction (hc : c.IsTurn ϑ w) (hΨ' : IsPathDatum N (c.oldEdges w) Ψ')
-    (ε : D.NodeIndex c.low ⊕ D.NodeIndex c.high ≃ D.NodeIndex c.fst ⊕ B)
-    {g : NodeFamily ϑ} (hg : IsAdmissibleFamily g) (S : EdgeTuple ϑ) :
-    edgeCharProd g (c.newEdges w) * c.turned ε ψ Ψ' (tupleAction g S) = c.turned ε ψ Ψ' S := by
-  -- The match commutes with the action at `W₁ ⊕ W₂` and transforms by `χ⁻¹` at `V`.
-  let H := c.columnFourier ψ Ψ' (tupleAction g S) (c.newRow S * (c.sndGL g).val)
-  let a : ℂ := edgeChar ϑ (c.low, c.fst) (g c.fst).val.det *
-    edgeChar ϑ (c.lowExt, c.snd) (g c.snd).val.det * edgeCharProd g w
-  have h_moved := hc.areMatched_columnFourier (ψ := ψ) (c.newRow S * (c.sndGL g).val) hΨ' ε
-    (tupleAction g S)
-  have h_fourier :
-      c.columnFourier ψ Ψ' S (c.newRow S) = fun y ↦ a * H ((c.sumGL g)⁻¹.val * y) :=
-    funext fun y ↦ by
-      simpa [a, H] using (hc.columnFourier_tupleAction y (c.newRow S) hΨ' hg 1 S).symm
-  rw [turned, turned, hc.newRow_tupleAction hg, hc.newMatrix_tupleAction hg,
-    ← h_moved.left_mul (g := g c.high) (by simp [mem_intGL]),
-    ← Matrix.mul_assoc, Units.mul_inv, Matrix.one_mul,
-    (hc.areMatched_columnFourier (c.newRow S) hΨ' ε S).unique
-      (by simpa only [h_fourier] using h_moved.translate a (c.sumGL g)),
-    ← mul_assoc]
-  -- Opposite edges have the same character.
-  congr 1
-  simp [a, edgeCharProd, char, hc.high_notMem, hc.highExt_notMem, hc.fst_ne_snd.symm,
-    hc.edgeChar_fst, hc.edgeChar_snd, hc.apply_highExt g hg, MulChar.inv_apply_eq_inv']
-  field [MulChar.apply_eq_zero_iff]
+end PartnerKernel
 
 /-! ### The turned datum and the sum over a square -/
 
-/-- Let the corner `c` be a turn (`hc`) and `Ψ'` a path datum on the old edges (`hΨ'`). If
-`c.turned ε ψ Ψ' S` is nonzero, then there is an invertible matrix `γ` with
-`c.newMatrix S = invLastRows ε γ`, the matrix on the new edges. For this `γ` the value
-`c.turned ε ψ Ψ' S` is `χ(det γ)`, for `χ = c.char ϑ`, times `c.columnFourier ψ Ψ' S` taken at the
-row `c.newRow S` and at `firstCols ε γ`. -/
-lemma exists_turned_eq {S : EdgeTuple ϑ} (hc : c.IsTurn ϑ w)
-    (hΨ' : IsPathDatum N (c.oldEdges w) Ψ')
-    (ε : D.NodeIndex c.low ⊕ D.NodeIndex c.high ≃ D.NodeIndex c.fst ⊕ B)
-    (hS : c.turned ε ψ Ψ' S ≠ 0) :
-    ∃ γ : GL (D.NodeIndex c.fst ⊕ B) (gridModulus ϑ).ResidueRing,
-      c.newMatrix S = invLastRows ε γ ∧
-      c.turned ε ψ Ψ' S =
-        c.char ϑ γ.val.det * c.columnFourier ψ Ψ' S (c.newRow S) (firstCols ε γ) := by
-  have h_match := hc.areMatched_columnFourier (ψ := ψ) (c.newRow S) hΨ' ε S
-  obtain ⟨γ, hγ, hx⟩ := h_match.supp_left _ hS
-  exact ⟨γ, hx, by rw [turned, hx, h_match.apply_eq γ hγ]⟩
+section GridMove
 
-/-- Let the corner be a turn, `Ψ'` a path datum on the old path and `ε` the bijection between the
-indices of the removed and added nodes and those of the two kept nodes, for which the turned datum
-is formed. Where this datum is nonzero at `S`, the matrices of `S` on the vertical edges of the new
-path have left inverses, as a path datum on the new path requires. -/
-lemma hasLeftInv_of_turned_ne_zero {S : EdgeTuple ϑ} (hc : c.IsTurn ϑ w)
-    (hΨ' : IsPathDatum N (c.oldEdges w) Ψ')
-    (ε : D.NodeIndex c.low ⊕ D.NodeIndex c.high ≃ D.NodeIndex c.fst ⊕ B)
-    (hS : c.turned ε ψ Ψ' S ≠ 0) :
-    ∀ e ∈ c.newEdges w, IsVerticalEdge e.1 e.2 → HasLeftInv (S e) := by
-  obtain ⟨γ, hx, h_value⟩ := hc.exists_turned_eq hΨ' ε hS
-  obtain ⟨h_fst, h_snd, h_w⟩ := hc.hasLeftInv_of_columnFourier_ne_zero (firstCols ε γ)
-    (c.newRow S) hΨ' (right_ne_zero_of_mul (h_value.symm.trans_ne hS))
-  obtain ⟨h_cols₂, h_cols₁⟩ :
-      (HasLeftInv (firstCols ε γ).toRows₁ → HasLeftInv (c.newMatrix S).toCols₂) ∧
-      (HasLeftInv (firstCols ε γ).toRows₂ → HasLeftInv (c.newMatrix S).toCols₁) := by
-    simpa only [hx] using hasLeftInv_toCols_of_hasLeftInv_toRows ε γ
-  -- A vertical new edge is opposite to a vertical old edge.
-  have h_opp₁ : IsVerticalEdge c.fst c.high → IsVerticalEdge c.lowExt c.snd := by
-    grind [hc.vertical]
-  have h_opp₂ : IsVerticalEdge c.snd c.highExt → IsVerticalEdge c.low c.fst := by
-    grind [hc.vertical]
-  simp only [mem_insert, forall_eq_or_imp]
-  refine ⟨fun h_vert ↦ ?_, fun h_vert ↦ ?_, h_w⟩
-  · -- The matrix `(x₂; v')` is split injective where `x₂` is.
-    obtain ⟨L, hL⟩ : HasLeftInv (c.newMatrix S).toCols₂ := h_cols₂ (h_fst (h_opp₂ h_vert))
-    refine ⟨(fromCols L 0).submatrix c.sndEquiv.symm c.highEquiv.symm, ?_⟩
-    simpa [newMatrix, ← Matrix.ext_iff, Matrix.mul_apply, reindex_equiv c.sndEquiv,
-      reindex_equiv c.highEquiv, toRows₁, Matrix.one_apply] using hL
-  · simpa [newMatrix] using h_cols₁ (h_snd (h_opp₁ h_vert))
+open Matrix Fintype Finset Function Exchange MulChar
 
-/-- Let the corner `c` be a turn (`hc`) and `Ψ'` a path datum (`IsPathDatum`) on the old edges,
-whose values are sums of at most `N` roots of unity. Then each value `c.turned ε ψ Ψ' S` of the
-datum on the new path is a sum of roots of unity, at most `N` times the number of matrices in
-`Matrix B T` over the residue ring. -/
-lemma isSumOfRootsOfUnity_turned (hc : c.IsTurn ϑ w) (hΨ' : IsPathDatum N (c.oldEdges w) Ψ')
-    (ε : D.NodeIndex c.low ⊕ D.NodeIndex c.high ≃ D.NodeIndex c.fst ⊕ B) (S : EdgeTuple ϑ) :
-    IsSumOfRootsOfUnity (card (Matrix B T (gridModulus ϑ).ResidueRing) * N)
-      (c.turned ε ψ Ψ' S) := by
-  by_cases hS : c.turned ε ψ Ψ' S = 0
-  · simpa only [hS] using IsSumOfRootsOfUnity.zero
-  obtain ⟨γ, -, h_value⟩ := hc.exists_turned_eq hΨ' ε hS
-  have h_char : IsOfFinOrder (c.char ϑ γ.val.det) :=
-    (c.char ϑ).isOfFinOrder (isUnits_det_units γ).isOfFinOrder
-  have h_psi (r : (gridModulus ϑ).ResidueRing) : IsOfFinOrder (ψ r) :=
-    ψ.toMonoidHom.isOfFinOrder (isMulTorsion_of_finite _)
-  rw [h_value]
-  exact .mul_left (.sum fun v ↦ (hΨ'.isSumOfRootsOfUnity _).mul_left (h_psi _)) h_char
+variable {P : Parameters} {D : Data P}
 
-end Turned
-
-/-- Turning a path datum: let the corner be a turn and let `Ψ'` be a path datum on the old path,
-with at most `N` roots of unity in a value. Hold fixed the matrices of the preserved edges and take
-the Fourier transform of `Ψ'` in the column of the line (`columnFourier`). For each row `v'` the
-match of the transform is `Ψ(·, v')` for a path datum `Ψ` on the new path, and the bound for the
-number of roots of unity in a value is multiplied by the number of column matrices `v`. -/
-theorem exists_isPathDatum (hc : c.IsTurn ϑ w) (hΨ' : IsPathDatum N (c.oldEdges w) Ψ')
-    (ε : D.NodeIndex c.low ⊕ D.NodeIndex c.high ≃ D.NodeIndex c.fst ⊕ B)
-    (ψ : AddChar (gridModulus ϑ).ResidueRing ℂ) :
-    ∃ Ψ : EdgeTuple ϑ → ℂ,
-      IsPathDatum (card (Matrix B T (gridModulus ϑ).ResidueRing) * N) (c.newEdges w) Ψ ∧
-      ∀ (S : EdgeTuple ϑ) (v' : Matrix T B (gridModulus ϑ).ResidueRing),
-        AreMatched ⊤ ε (c.char ϑ)
-          (fun x : Matrix (D.NodeIndex c.high) (D.NodeIndex c.fst ⊕ B) (gridModulus ϑ).ResidueRing ↦
-            Ψ (c.newTuple S x v'))
-          (c.columnFourier ψ Ψ' S v') := by
-  -- The datum is the turned one; it depends only on the matrices of the new edges.
-  have h_dep : DependsOn (c.turned ε ψ Ψ') (c.newEdges w : Set (GridNode × GridNode)) := by
-    intro S S' h_agree
-    have h_fourier : c.columnFourier ψ Ψ' S = c.columnFourier ψ Ψ' S' :=
-      hc.columnFourier_congr hΨ' fun e he ↦ h_agree e (by simp [he])
-    simp only [turned, newRow, newMatrix, h_agree (c.snd, c.highExt) (by simp),
-      h_agree (c.fst, c.high) (by simp), h_fourier]
-  refine ⟨c.turned ε ψ Ψ', ⟨h_dep, fun g hg ↦ hc.turned_tupleAction hΨ' ε hg,
-    fun S ↦ hc.hasLeftInv_of_turned_ne_zero hΨ' ε, hc.isSumOfRootsOfUnity_turned hΨ' ε⟩,
-    fun S v' ↦ ?_⟩
-  have h_turned : (fun x ↦ c.turned ε ψ Ψ' (c.newTuple S x v')) =
-      matchOf (c.char ϑ) ε (c.columnFourier ψ Ψ' S v') := by
-    funext x
-    rw [turned, newRow_newTuple, hc.newMatrix_newTuple,
-      hc.columnFourier_congr hΨ' fun e he ↦ hc.newTuple_apply_of_mem x v' he]
-  simpa only [h_turned] using hc.areMatched_columnFourier v' hΨ' ε S
-
-/-- The exchange on a square at which the path turns. The sum over the tuples on the old path
-(`tuplesOn`) against `Ψ'` equals `C` times the sum over the tuples on the new path against a datum
-`Ψ` that matches the column Fourier transform of `Ψ'`. The square law with constant `C` is given for
-a family of pairs `L i, L' i`. The index `f S v'` may depend on the matrices of the preserved edges
-`w` and on the row `v'`. -/
-lemma sum_eq_of_squareLaw (hc : c.IsTurn ϑ w) {Ψ : EdgeTuple ϑ → ℂ}
-    {ψ : AddChar (gridModulus ϑ).ResidueRing ℂ}
-    {ε : D.NodeIndex c.low ⊕ D.NodeIndex c.high ≃ D.NodeIndex c.fst ⊕ B}
-    (h_match : ∀ (S : EdgeTuple ϑ) (v' : Matrix T B (gridModulus ϑ).ResidueRing),
-      AreMatched ⊤ ε (c.char ϑ)
-        (fun x : Matrix (D.NodeIndex c.high) (D.NodeIndex c.fst ⊕ B) (gridModulus ϑ).ResidueRing ↦
-          Ψ (c.newTuple S x v'))
-        (c.columnFourier ψ Ψ' S v'))
-    {J : Type} {C : ℂ}
-    {L : J → Matrix (D.NodeIndex c.high) (D.NodeIndex c.fst ⊕ B) (gridModulus ϑ).ResidueRing → ℂ}
-    {L' : J → Matrix (D.NodeIndex c.fst ⊕ B) (D.NodeIndex c.low) (gridModulus ϑ).ResidueRing → ℂ}
-    (h_law : ∀ i : J, SquareLaw (c.char ϑ) ε C (L i) (L' i))
-    {f : EdgeTuple ϑ → Matrix T B (gridModulus ϑ).ResidueRing → J} (hf : DependsOn f w) :
-    ∑ S ∈ tuplesOn ϑ (c.oldEdges w), Ψ' S *
-        ∑ v' : Matrix T B (gridModulus ϑ).ResidueRing,
-          ψ (v' * c.oldColumn S).trace * L' (f S v') (c.oldMatrix S) =
-      C * ∑ S ∈ tuplesOn ϑ (c.newEdges w), Ψ S * L (f S (c.newRow S)) (c.newMatrix S) := by
-  rw [hc.sum_tuplesOn_oldEdges, hc.sum_tuplesOn_newEdges, mul_sum]
-  refine sum_congr rfl fun S _ ↦ ?_
-  -- The index does not see the matrices on the sides of the square.
-  have h_old (y : Matrix (D.NodeIndex c.fst ⊕ B) (D.NodeIndex c.low) (gridModulus ϑ).ResidueRing)
-      (v : Matrix B T (gridModulus ϑ).ResidueRing) : f (c.oldTuple S y v) = f S :=
-    hf fun _ ↦ hc.oldTuple_apply_of_mem y v
-  have h_new (x : Matrix (D.NodeIndex c.high) (D.NodeIndex c.fst ⊕ B) (gridModulus ϑ).ResidueRing)
-      (v' : Matrix T B (gridModulus ϑ).ResidueRing) : f (c.newTuple S x v') = f S :=
-    hf fun _ ↦ hc.newTuple_apply_of_mem x v'
-  calc _
-    _ = ∑ v', ∑ y, c.columnFourier ψ Ψ' S v' y * L' (f S v') y := by
-      simp only [h_old, hc.oldMatrix_oldTuple, oldColumn_oldTuple, columnFourier, mul_sum, sum_mul]
-      rw [sum_comm_cycle]
-      simp only [mul_assoc, mul_left_comm (Ψ' _)]
-    _ = ∑ v', C * ∑ x, Ψ (c.newTuple S x v') * L (f S v') x :=
-      sum_congr rfl fun v' _ ↦ (h_law (f S v')).sum_eq_of_areMatched _ _ (h_match S v')
-    _ = _ := by simp only [h_new, newRow_newTuple, hc.newMatrix_newTuple, mul_sum]
-
-end IsTurn
-
-end Corner
+/-- Turning a monadic path datum across a square. Suppose `L i, M i` satisfy `SquareLaw χ ε C`
+where `χ⁻¹` is the product of the characters of the old edges `(p, v)` and `(Q, U)` and opposite
+edges have equal characters. Under the admissibility, vertical-edge and disjointness hypotheses on
+`w` and the six nodes, every path datum `Λ : GridDatum ϑ` of order `n` on `w ∪ {(p, v), (Q, U)}`
+gives a path datum `Φ : GridDatum ϑ` of order `n + 2` on `w ∪ {(U, R), (v, r)}` such that `Λ`
+applied to the `ψ`-Fourier transform of `M` in the block `T` equals `C * Φ` applied to `L`. -/
+lemma IsPathDatum.exists_square_move {ϑ : D.MFoldTwist} {B T J : Type}
+    [Fintype B] [DecidableEq B] [Fintype T] [DecidableEq T]
+    {n : ℕ} {w : Finset (GridNode × GridNode)} {Λ : D.GridDatum ϑ}
+    {p v Q U R r : GridNode}
+    (τ : B ≃ D.NodeIndex U)
+    (σ : D.NodeIndex p ⊕ T ≃ D.NodeIndex Q)
+    (ρ : D.NodeIndex r ⊕ T ≃ D.NodeIndex R)
+    (ψ : AddChar (gridModulus ϑ).ResidueRing ℂ)
+    {χ : MulChar (gridModulus ϑ).ResidueRing ℂ}
+    {ε : D.NodeIndex p ⊕ D.NodeIndex r ≃ D.NodeIndex v ⊕ B}
+    {C : ℂ}
+    {L : J → Matrix (D.NodeIndex r) (D.NodeIndex v ⊕ B) (gridModulus ϑ).ResidueRing → ℂ}
+    {M : J → Matrix (D.NodeIndex v ⊕ B) (D.NodeIndex p) (gridModulus ϑ).ResidueRing → ℂ}
+    (h_law : ∀ i : J, SquareLaw χ ε C (L i) (M i))
+    (hQ : ∀ g : NodeFamily ϑ, IsAdmissibleFamily g →
+      g R = blockInlGL ρ (g r) ∧
+      ∀ k : GL (D.NodeIndex p) (gridModulus ϑ).ResidueRing,
+        let u : NodeFamily ϑ := update (update g p k) Q (blockInlGL σ k)
+        IsAdmissibleFamily u ∧ u p = k)
+    (h_uv : U ≠ v)
+    (h_vert : IsVerticalEdge Q U ∧ ¬IsVerticalEdge U R ∨ IsVerticalEdge p v ∧ ¬IsVerticalEdge v r)
+    (h_nodes : ∀ q ∈ [U, R, v, r], q.2 ≤ (D.m, D.m) ∧ q ∉ [p, Q])
+    (h_w : ∀ e ∈ w, e.1 ∉ [p, Q] ∧ e.2 ∉ [p, Q, R, r])
+    (hΛ : D.IsPathDatum n (insert (p, v) (insert (Q, U) w)) Λ)
+    (h_char : χ = (edgeChar ϑ (p, v) * edgeChar ϑ (Q, U))⁻¹ ∧
+      edgeChar ϑ (U, R) = edgeChar ϑ (p, v) ∧ edgeChar ϑ (v, r) = edgeChar ϑ (Q, U)) :
+    ∃ Φ : D.GridDatum ϑ,
+      D.IsPathDatum (n + 2) (insert (U, R) (insert (v, r) w)) Φ ∧
+      ∀ (f : EdgeTuple ϑ → Matrix T B (gridModulus ϑ).ResidueRing → J),
+        DependsOn f w →
+        Λ (fun S ↦
+            let x := (S (Q, U)).submatrix τ σ
+            ∑ k : Matrix T B (gridModulus ϑ).ResidueRing,
+              ψ (k * x.toCols₂).trace * M (f S k) (fromRows (S (p, v)) x.toCols₁)) =
+          C * Φ fun S ↦
+            let x := (S (U, R)).submatrix ρ τ
+            L (f S x.toRows₂) (fromCols (S (v, r)) x.toRows₁) := by
+  let R₀ := (gridModulus ϑ).ResidueRing
+  obtain ⟨d, hd_prop, hd_law⟩ := exists_partner_kernel χ ε (Modulus.isValuationPair_residueRing _)
+  obtain ⟨Y, W, c, s, -, hc, hΛ_sum⟩ := hΛ.isShortSum
+  have h_nodes' : (U.2 ≤ (D.m, D.m) ∧ U ≠ p ∧ U ≠ Q) ∧ (R.2 ≤ (D.m, D.m) ∧ R ≠ p ∧ R ≠ Q) ∧
+      (v.2 ≤ (D.m, D.m) ∧ v ≠ p ∧ v ≠ Q) ∧ (r.2 ≤ (D.m, D.m) ∧ r ≠ p ∧ r ≠ Q) := by
+    simpa [and_assoc] using h_nodes
+  have h_notMem : (p, v) ∉ w ∧ (Q, U) ∉ w ∧ (U, R) ∉ w ∧ (v, r) ∉ w :=
+    ⟨fun h ↦ (h_w _ h).1 (by simp), fun h ↦ (h_w _ h).1 (by simp),
+      fun h ↦ (h_w _ h).2 (by simp), fun h ↦ (h_w _ h).2 (by simp)⟩
+  have h_pv_ne_QU : (p, v) ≠ (Q, U) := fun h ↦ h_uv (Prod.mk.inj h).2.symm
+  have h_UR_ne_vr : (U, R) ≠ (v, r) := fun h ↦ h_uv (Prod.mk.inj h).1
+  -- Pack the old edges into `oldY` and the new edges into `newX`.
+  let oldY (S : EdgeTuple ϑ) : Matrix (D.NodeIndex v ⊕ B) (D.NodeIndex p) R₀ :=
+    fromRows (S (p, v)) ((S (Q, U)).submatrix τ σ).toCols₁
+  let newX (M : Matrix (D.NodeIndex R) (D.NodeIndex U) R₀ ×
+      Matrix (D.NodeIndex r) (D.NodeIndex v) R₀) :=
+    fromCols M.2 (M.1.submatrix ρ τ).toRows₁
+  let t (S : EdgeTuple ϑ) (M : Matrix (D.NodeIndex R) (D.NodeIndex U) R₀ ×
+      Matrix (D.NodeIndex r) (D.NodeIndex v) R₀) : EdgeTuple ϑ :=
+    fun e ↦ if e ∈ w then S e else update (update (0 : EdgeTuple ϑ) (U, R) M.1) (v, r) M.2 e
+  let G (wt : Matrix (D.NodeIndex v ⊕ B) (D.NodeIndex p) R₀ → ℂ) : D.GridDatum ϑ :=
+    Λ.bind (fun S M ↦ wt (oldY S) * graphKernel χ ε (newX M) (oldY S) *
+      ψ ((M.1 * S (Q, U)).submatrix (ρ ∘ .inr) (σ ∘ .inr)).trace) t
+  -- Equivariance of `G wt` under admissible families `g` and inner changes of basis `k` at `p`.
+  have h_equiv (g : NodeFamily ϑ) (hg : IsAdmissibleFamily g)
+      (k : GL (D.NodeIndex p) R₀) (wt : Matrix (D.NodeIndex v ⊕ B) (D.NodeIndex p) R₀ → ℂ)
+      (f : EdgeTuple ϑ → ℂ) :
+      G (fun y ↦ wt ((blockGL (g v, reindexGL τ.symm (g U)))⁻¹.val * y * k.val))
+          (fun S ↦ f (tupleAction g S)) =
+        edgeCharProd g (insert (U, R) (insert (v, r) w)) * G wt f := by
+    let u : NodeFamily ϑ := update (update g p k) Q (blockInlGL σ k)
+    obtain ⟨hgR, hu_spec⟩ := hQ g hg
+    obtain ⟨hu, hup⟩ := hu_spec k
+    change u p = k at hup
+    have huQ : u Q = blockInlGL σ k := update_self ..
+    have huU : u U = g U := by simp [u, h_nodes'.1.2.1, h_nodes'.1.2.2]
+    have huv : u v = g v := by simp [u, h_nodes'.2.2.1.2.1, h_nodes'.2.2.1.2.2]
+    have hu_w {e : GridNode × GridNode} (he : e ∈ w) : u e.1 = g e.1 ∧ u e.2 = g e.2 := by
+      have ⟨h1, h2⟩ := h_w e he
+      simp [u] at h1 h2 ⊢; exact ⟨by simp [h1.1, h1.2], by simp [h2.1, h2.2.1]⟩
+    let G_sum : GL (D.NodeIndex v ⊕ B) R₀ := blockGL (g v, reindexGL τ.symm (g U))
+    have h_char_eq :
+        edgeCharProd g (insert (U, R) (insert (v, r) w)) =
+          χ G_sum.val.det / χ (g r).val.det / χ k.val.det *
+            edgeCharProd u (insert (p, v) (insert (Q, U) w)) := by
+      have h_ne {ι : Type} [Fintype ι] [DecidableEq ι] (e' : GridNode × GridNode) (m : GL ι R₀) :
+          edgeChar ϑ e' m.val.det ≠ 0 := ((isUnits_det_units m).map _).ne_zero
+      have h_det_blk {ι₁ ι₂ ι₃ : Type} [Fintype ι₁] [DecidableEq ι₁] [Fintype ι₂] [DecidableEq ι₂]
+          [Fintype ι₃] [DecidableEq ι₃] (e₀ : ι₁ ⊕ ι₂ ≃ ι₃) (m : GL ι₁ R₀) :
+          (blockInlGL e₀ m).det = m.det := by ext; simp [blockInlGL, reindexGL, blockGL]
+      have h_toUnit (e' : GridNode × GridNode) (m₁ m₂ : R₀ˣ) :
+          ((edgeChar ϑ e').toUnitHom (m₁ / m₂) : ℂ) =
+            edgeChar ϑ e' m₁.val / edgeChar ϑ e' m₂.val := by
+        rw [map_div, Units.val_div_eq_div_val]; rfl
+      simp only [edgeCharProd, prod_insert (show (U, R) ∉ insert (v, r) w by
+          simp [h_UR_ne_vr, h_notMem]), prod_insert h_notMem.2.2.2,
+        prod_insert (show (p, v) ∉ insert (Q, U) w by simp [h_pv_ne_QU, h_notMem]),
+        prod_insert h_notMem.2.1]
+      rw [Finset.prod_congr rfl (fun e he ↦ by rw [← (hu_w he).1, ← (hu_w he).2]),
+        hup, huQ, huU, huv, hgR, h_char.1, h_char.2.1, h_char.2.2]
+      simp only [show G_sum.val.det = (g v).val.det * (g U).val.det by simp [G_sum, blockGL,
+          reindexGL], h_det_blk, h_toUnit, MulChar.inv_apply_eq_inv', MulChar.mul_apply,
+        map_mul, GeneralLinearGroup.val_det_apply]
+      field_simp [h_ne]
+    rw [h_char_eq, mul_assoc]
+    have h_act := hΛ.equivariant u hu
+      (fun S ↦ ∑ M, wt (oldY S) * graphKernel χ ε (newX M) (oldY S) *
+        ψ ((M.1 * S (Q, U)).submatrix (ρ ∘ .inr) (σ ∘ .inr)).trace * f (t S M))
+    change _ = χ G_sum.val.det / χ (g r).val.det / χ k.val.det * _
+    rw [show G wt f = _ from GridDatum.bind_apply .., ← h_act, GridDatum.bind_apply,
+      ← smul_eq_mul, ← LinearMap.map_smul]
+    congr 1; funext S
+    rw [Pi.smul_apply, smul_eq_mul, mul_sum]
+    let bijM := Prod.map
+      (fun A : Matrix (D.NodeIndex R) (D.NodeIndex U) R₀ ↦ (g R)⁻¹.val * A * (g U).val)
+      (fun B : Matrix (D.NodeIndex r) (D.NodeIndex v) R₀ ↦ (g r)⁻¹.val * B * (g v).val)
+    have h_bij : Bijective bijM :=
+      ((mul_left_injective_of_invertible (g U).val).comp
+        (mul_right_injective_of_invertible (g R)⁻¹.val)).bijective_of_finite.prodMap
+      ((mul_left_injective_of_invertible (g v).val).comp
+        (mul_right_injective_of_invertible (g r)⁻¹.val)).bijective_of_finite
+    conv_rhs => rw [← h_bij.sum_comp]
+    refine sum_congr rfl fun M _ ↦ ?_
+    have h_oldY : oldY (tupleAction u S) = G_sum⁻¹.val * oldY S * k.val := by
+      ext (i | i) j
+      · simp [oldY, tupleAction, G_sum, hup, huv, Matrix.mul_apply, ← map_inv]
+      · simp [oldY, tupleAction, G_sum, huQ, huU, Matrix.mul_apply, reindex_equiv τ,
+          reindex_equiv σ, ← map_inv, Finset.sum_mul, mul_assoc]
+    have h_newX : newX (bijM M) = (g r)⁻¹.val * newX M * G_sum.val := by
+      ext i (j | j)
+      · simp [newX, bijM, G_sum, Matrix.mul_apply]
+      · simp [newX, bijM, G_sum, hgR, Matrix.mul_apply, reindex_equiv ρ, reindex_equiv τ,
+          ← map_inv, Finset.sum_mul, mul_assoc]
+    have h_trace : ((bijM M).1 * tupleAction u S (Q, U)).submatrix (ρ ∘ .inr) (σ ∘ .inr) =
+        (M.1 * S (Q, U)).submatrix (ρ ∘ .inr) (σ ∘ .inr) := by
+      ext i j; simp [bijM, tupleAction, hgR, huQ, huU, Matrix.mul_apply, ← Matrix.mul_assoc,
+        reindex_equiv ρ, reindex_equiv σ, ← map_inv, Matrix.one_apply]
+    have h_t : t (tupleAction u S) (bijM M) = tupleAction g (t S M) := funext fun e ↦ by
+      by_cases he : e ∈ w
+      · simp [t, he, tupleAction, (hu_w he).1, (hu_w he).2]
+      · rcases eq_or_ne e (v, r) with rfl | h1
+        · simp [t, he, tupleAction, bijM]
+        · rcases eq_or_ne e (U, R) with rfl | h2
+          · simp [t, he, tupleAction, bijM, h1]
+          · simp [t, he, tupleAction, update, h1, h2]
+    rw [h_oldY, h_newX, h_trace, h_t]
+    linear_combination wt (G_sum⁻¹.val * oldY S * k.val) *
+      ψ ((M.1 * S (Q, U)).submatrix (ρ ∘ .inr) (σ ∘ .inr)).trace * f (tupleAction g (t S M)) *
+      graphKernel_equivariant χ ε G_sum (g r) k (newX M) (oldY S)
+  -- Averaging `h_equiv` at `g = 1` over `k ∈ GL_p(R₀)` identifies `G 1` with `G d`.
+  have hG_eq : G 1 = G d := LinearMap.ext fun f ↦ (mul_left_cancel₀
+      (Nat.cast_ne_zero.2 (card_ne_zero (α := GL (D.NodeIndex p) R₀))) <| by
+    have hg1 : IsAdmissibleFamily (1 : NodeFamily ϑ) := ⟨fun _ ↦ one_mem _, fun _ ↦ by
+      simp [← Prod.one_eq_mk]⟩
+    have h_const (k : GL (D.NodeIndex p) R₀) : G (fun y ↦ d (y * k.val)) f = G d f := by
+      simpa [tupleAction_one, edgeCharProd, ← Prod.one_eq_mk] using h_equiv 1 hg1 k d f
+    rw [show (card (GL (D.NodeIndex p) R₀) : ℂ) * G d f =
+        ∑ k : GL (D.NodeIndex p) R₀, G (fun y ↦ d (y * k.val)) f by simp [h_const]]
+    simp only [G, GridDatum.bind_apply, hΛ_sum, Pi.one_apply, one_mul]
+    rw [mul_sum, Finset.sum_comm]
+    refine sum_congr rfl fun y _ ↦ ?_
+    rw [← mul_sum, mul_left_comm]
+    congr 1
+    rw [Finset.sum_comm, mul_sum]
+    refine sum_congr rfl fun M _ ↦ ?_
+    simp only [← sum_mul]; rw [sum_mul, (hd_prop _ _).2]; ring).symm
+  have h_leftInv_rows₂ (S : EdgeTuple ϑ) (hS : HasLeftInv (S (Q, U))) :
+      HasLeftInv (oldY S).toRows₂ := by
+    obtain ⟨L₀, hL₀⟩ := hS
+    refine ⟨L₀.submatrix (σ ∘ .inl) τ, Matrix.ext fun i j ↦ ?_⟩
+    simpa [oldY, Matrix.mul_apply, reindex_equiv τ, Matrix.one_apply] using
+      congrFun₂ hL₀ (σ (.inl i)) (σ (.inl j))
+  refine ⟨G 1, ⟨fun g hg f ↦ by simpa [← Pi.one_def] using h_equiv g hg 1 1 f, ?_⟩, fun f hf ↦ ?_⟩
+  -- Short-sum bound and vertical left-invertibility via `IsShortSum.bind`.
+  · rw [hG_eq]
+    have h_card : card (Matrix (D.NodeIndex R) (D.NodeIndex U) R₀ ×
+        Matrix (D.NodeIndex r) (D.NodeIndex v) R₀) ≤ edgeMatrixCountBound ϑ ^ 2 := by
+      rw [card_prod, sq]
+      exact Nat.mul_le_mul (card_matrix_le_edgeMatrixCountBound h_nodes'.2.1.1 h_nodes'.1.1)
+        (card_matrix_le_edgeMatrixCountBound h_nodes'.2.2.2.1 h_nodes'.2.2.1.1)
+    refine hΛ.isShortSum.bind h_card fun S M hM_ne hS_inv ↦ ?_
+    obtain ⟨h_fin, h_inv₂, h_inv₁⟩ := (hd_prop (newX M) (oldY S)).1 (left_ne_zero_of_mul hM_ne)
+    refine ⟨h_fin.mul (ψ.toMonoidHom.isOfFinOrder (isMulTorsion_of_finite _)), fun e he h_ev ↦ ?_⟩
+    rcases mem_insert.1 he with rfl | he'
+    · obtain ⟨L₀, hL₀⟩ := h_inv₂ (by simpa [oldY] using hS_inv (p, v) (by simp) (by grind))
+      refine ⟨(fromCols L₀ 0).submatrix τ.symm ρ.symm, Matrix.ext fun i j ↦ ?_⟩
+      simpa [t, h_notMem, h_UR_ne_vr, newX, Matrix.mul_apply, reindex_equiv ρ, reindex_equiv τ,
+        toRows₁, Matrix.one_apply] using congrFun₂ hL₀ (τ.symm i) (τ.symm j)
+    · rcases mem_insert.1 he' with rfl | he_w
+      · simpa [t, h_notMem, newX] using
+          h_inv₁ (h_leftInv_rows₂ S (hS_inv (Q, U) (by simp) (by grind)))
+      · simpa [t, he_w] using hS_inv e (by simp [he_w]) h_ev
+  -- Pointwise `SquareLaw` transfer on each root-of-unity support tuple `s y`.
+  · rw [GridDatum.bind_apply, hΛ_sum, hΛ_sum, mul_sum]
+    refine sum_congr rfl fun y _ ↦ ?_
+    by_cases hcy : c y = 0
+    · simp [hcy]
+    have h_inv : HasLeftInv (oldY (s y)).toRows₁ ∨ HasLeftInv (oldY (s y)).toRows₂ :=
+      h_vert.elim (fun h ↦ .inr (h_leftInv_rows₂ (s y) ((hc y hcy).2 (Q, U) (by simp) h.1)))
+        (fun h ↦ .inl (by simpa [oldY] using (hc y hcy).2 (p, v) (by simp) h.1))
+    have h_f_eq (M) : f (t (s y) M) = f (s y) := hf fun _ he ↦ by simp [t, Finset.mem_coe.1 he]
+    have h_tr (M₁ : Matrix (D.NodeIndex R) (D.NodeIndex U) R₀) :
+        ((M₁ * s y (Q, U)).submatrix (ρ ∘ .inr) (σ ∘ .inr)).trace =
+          ((M₁.submatrix ρ τ).toRows₂ * ((s y (Q, U)).submatrix τ σ).toCols₂).trace := by
+      simp [trace, Matrix.mul_apply, ← τ.sum_comp]
+    have h_sub (A : Matrix (D.NodeIndex r ⊕ T) B R₀) :
+        ((Matrix.reindex ρ τ) A).submatrix ρ τ = A := by
+      ext (i | i) j <;> simp [Matrix.reindex_apply]
+    simp only [Pi.one_apply, one_mul, h_f_eq, t, h_notMem, ↓reduceIte, update_self,
+      update_of_ne h_UR_ne_vr, h_tr]
+    rw [mul_left_comm C (c y), Fintype.sum_prod_type, ← (Matrix.reindex ρ τ).sum_comp]
+    simp only [newX, h_sub]
+    congr 1
+    rw [sum_eq_sum_fromRows, Finset.sum_comm, mul_sum]
+    refine sum_congr rfl fun k _ ↦ ?_
+    rw [hd_law (h_law (f (s y) k)) (oldY (s y)) h_inv, sum_eq_sum_fromCols, mul_sum]
+    simp only [toRows₁_fromRows, toRows₂_fromRows, mul_sum]
+    exact sum_congr rfl fun _ _ ↦ sum_congr rfl fun _ _ ↦ by ring
 
 end GridMove
 
@@ -776,219 +655,522 @@ end GridSquare
 /-!
 ## Transfers of periods, and turns off the diagonal
 
-The property that one turn provides, `New.Data.TransfersPeriods`, passes to composites of turns.
+Pushing a descent past a row of lifts (`descent_past_gridPathMap`), crossing a diagonal square via
+two seesaws and line reversal (`hasRoute_succ`), and composing the `m` stages from the first path
+(`stageEdges 0`) to the last (`stageEdges m`) via `HasRoute`.
 -/
 
 section RowLadder
 
-open Fintype Finset Matrix Function Exchange
+open MeasureTheory Fintype Finset Matrix Function Exchange Space Submodule
 
-variable {P : Parameters} {D : Data P} {a b : ℕ}
-
-/-- The property of turns and their composites, for any two paths `Γ'`, `Γ`: path data `Ψ'` on `Γ'`
-give path data `Ψ` on `Γ` with the bound for the number of roots of unity in a value multiplied by
-`k`, and if `Ψ` is proportional to `Ξ`, then `Ψ'` is proportional to `Ξ / c`. A triple
-(`D.PeriodTriple`) is a twist and two forms, one at the start of each half of a path; `Ψ` is
-proportional to `Ξ` (`IsProportional`) if at each real point its period, a function of the
-triples, is a multiple of `Ξ` by a number independent of the triple. -/
-def TransfersPeriods (Γ' Γ : TwoGridPath D.m) (k : D.MFoldTwist → ℕ) (c : D.MFoldTwist → ℂˣ) :
-    Prop :=
-  ∀ (N : D.MFoldTwist → ℕ) (Ψ' : ∀ ϑ : D.MFoldTwist, EdgeTuple ϑ → ℂ),
-    (∀ ϑ : D.MFoldTwist, IsPathDatum (N ϑ) Γ'.edges (Ψ' ϑ)) →
-    ∃ Ψ : ∀ ϑ : D.MFoldTwist, EdgeTuple ϑ → ℂ,
-      (∀ ϑ : D.MFoldTwist, IsPathDatum (k ϑ * N ϑ) Γ.edges (Ψ ϑ)) ∧
-      ∀ Ξ : D.PeriodTriple → ℂ, IsProportional Γ Ψ Ξ →
-        IsProportional Γ' Ψ' fun x : D.PeriodTriple ↦ Ξ x / c x.1
-
-lemma TransfersPeriods.refl (Γ : TwoGridPath D.m) : TransfersPeriods Γ Γ 1 1 :=
-  fun N Ψ hΨ ↦ ⟨Ψ, by simpa using hΨ, by simp⟩
-
-/-- A pair of paths that transfers periods with bound `k` also transfers them with every larger
-bound `k'`. -/
-lemma TransfersPeriods.mono {Γ' Γ : TwoGridPath D.m} {k k' : D.MFoldTwist → ℕ}
-    {c : D.MFoldTwist → ℂˣ} (h_transfer : TransfersPeriods Γ' Γ k c) (hk : k ≤ k') :
-    TransfersPeriods Γ' Γ k' c := by
-  refine fun N Ψ' hΨ' ↦ (h_transfer N Ψ' hΨ').imp fun Ψ ⟨hΨ, h_prop⟩ ↦ ⟨fun ϑ ↦ ?_, h_prop⟩
-  exact (hΨ ϑ).mono (Nat.mul_le_mul_right (N ϑ) (hk ϑ))
-
-/-- Period transfers compose: the bounds and the constants multiply. -/
-lemma TransfersPeriods.trans {Γ₁ Γ₂ Γ₃ : TwoGridPath D.m} {k k' : D.MFoldTwist → ℕ}
-    {c c' : D.MFoldTwist → ℂˣ} (h₁₂ : TransfersPeriods Γ₁ Γ₂ k c)
-    (h₂₃ : TransfersPeriods Γ₂ Γ₃ k' c') :
-    TransfersPeriods Γ₁ Γ₃ (k * k') (c * c') := by
-  intro N Ψ₁ hΨ₁
-  obtain ⟨Ψ₂, hΨ₂, h_prop₁₂⟩ := h₁₂ N Ψ₁ hΨ₁
-  obtain ⟨Ψ₃, hΨ₃, h_prop₂₃⟩ := h₂₃ (fun ϑ : D.MFoldTwist ↦ k ϑ * N ϑ) Ψ₂ hΨ₂
-  refine ⟨Ψ₃, by simpa only [Pi.mul_apply, mul_assoc, mul_left_comm] using hΨ₃, fun Ξ hΞ ↦ ?_⟩
-  simpa only [Pi.mul_apply, Units.val_mul, div_div, mul_comm] using h_prop₁₂ _ (h_prop₂₃ Ξ hΞ)
+variable {P : Parameters} {D : Data P} {a b j : ℕ}
 
 variable (D) in
-/-- The corner at the node `(a, b)` of the grid `z`, for a turn off the diagonal. -/
-abbrev innerCorner (z : Bool) (a b : ℕ) : D.Corner (D.GridIndex z (a + 1) b) Empty where
-  low := (z, a, b)
-  lowExt := (z, a, b)
-  fst := (z, a, b + 1)
-  snd := (z, a + 1, b)
-  high := (z, a + 1, b + 1)
-  highExt := (z, a + 1, b + 1)
-  sndEquiv := .refl _
-  lowEquiv := .sumEmpty _ Empty
-  highEquiv := .sumEmpty _ Empty
+/-- A route of order cost `k` and twist factor `c` from stage `i` to stage `j`: path data `Λ` of
+order `n` on `stageEdges i` yield path data `Φ` of order `n + k` on `stageEdges j`, and if `Φ` is
+proportional to `Ξ` at stage `j`, then `Λ` is proportional to `Ξ / c` at stage `i`. -/
+def HasRoute {i j : ℕ} (hi : i ≤ D.m) (hj : j ≤ D.m) (k : ℕ) (c : D.MFoldTwist → ℂˣ) : Prop :=
+  ∀ (n : ℕ) (Λ : ∀ ϑ : D.MFoldTwist, D.GridDatum ϑ),
+    (∀ ϑ : D.MFoldTwist, D.IsPathDatum n (D.stageEdges i) (Λ ϑ)) →
+    ∃ Φ : ∀ ϑ : D.MFoldTwist, D.GridDatum ϑ,
+      (∀ ϑ : D.MFoldTwist, D.IsPathDatum (n + k) (D.stageEdges j) (Φ ϑ)) ∧
+      ∀ Ξ : D.PeriodTriple → ℂ, D.IsProportional hj Φ Ξ →
+        D.IsProportional hi Λ fun x : D.PeriodTriple ↦ Ξ x / c x.1
 
-/-- Let `a < b < m`, let `z` select one of the two grids and let `ϑ` be any `m`-fold twist. If the
-edges `w` avoid the node `(z, a, b)` and do not end at `(z, a + 1, b + 1)`, then the corner at
-`(z, a, b)` is a turn of a path whose other edges are `w`: it meets the conditions
-(`Corner.IsTurn`) for replacing the two sides of the square at `(z, a, b)` by the two sides at
-`(z, a + 1, b + 1)`. -/
-lemma isTurn_innerCorner {z : Bool} (hab : a < b) (hb : b < D.m) (ϑ : D.MFoldTwist)
-    {w : Finset (GridNode × GridNode)}
-    (hw : ∀ e ∈ w, e.1 ≠ (z, a, b) ∧ e.2 ≠ (z, a, b) ∧ e.2 ≠ (z, a + 1, b + 1)) :
-    (D.innerCorner z a b).IsTurn ϑ w where
-  fst_ne_snd := by simp
-  ne_low_and_ne_lowExt := by simp
-  endpoints_notMem e he := by simpa using hw e he
-  vertical := by cases z <;> simp [IsVerticalEdge]
-  edgeChar_fst := by simp [edgeChar, IsVerticalEdge]
-  edgeChar_snd := by simp [edgeChar, IsVerticalEdge]
-  apply_highExt g _ := (blockInlGL_sumEmpty _).symm
-  exists_eq_low g hg k := by
-    -- An admissible family is free at `(z, a, b)`, which is neither an end nor on the diagonal.
-    refine ⟨update g (z, a, b) k, ⟨fun z' ↦ ?_, fun j ↦ ?_⟩, update_self ..,
-      (update_self ..).trans (blockInlGL_sumEmpty k).symm, fun q hq _ ↦ update_of_ne hq ..⟩
-    · rw [update_of_ne (by grind)]
-      exact hg.1 z'
-    · rw [update_of_ne (by grind), update_of_ne (by grind), hg.2 j]
+/-- Pushing a descent past `a` lifts along row `b` in grid `z`. For `a ≤ b < m`, there are a
+constant `κ` and nonzero factors `c ϑ` whose modulus up to a norm power is the product of the
+`turnRatio`s of the `a` interior squares on row `b`, such that whenever `w` avoids grid `z` except
+possibly on row edges `(i, b) → (i + 1, b)` with `i ≥ a`, every path datum `Λ` of order `n` on
+`w ∪ gridPath z a b` yields a path datum `Φ` of order `n + 2 * a` on
+`insert (columnEdge z a b) (gridPath z a (b + 1)) ∪ w` exchanging the path to `(a, b)` for the path
+to `(a, b + 1)` followed by a single descent. -/
+lemma descent_past_gridPathMap (hb : b < D.m) (z : Bool) (hab : a ≤ b) :
+    ∃ (κ : ℂ) (c : D.MFoldTwist → ℂˣ),
+      D.HasAbsUpToNormPower (fun ϑ : D.MFoldTwist ↦ c ϑ)
+        (∏ i ∈ range a, if z then D.turnRatio b i else D.turnRatio i b) ∧
+      ∀ (ϑ : D.MFoldTwist) (n : ℕ) (w : Finset (GridNode × GridNode)) (Λ : D.GridDatum ϑ),
+        (∀ e ∈ w, z ∉ [e.1.1, e.2.1] ∨ ∃ i ≥ a, e = rowEdge z i b) →
+        D.IsPathDatum n (w ∪ D.gridPath z a b) Λ →
+        ∃ Φ : D.GridDatum ϑ,
+          D.IsPathDatum (n + 2 * a) (insert (columnEdge z a b) (D.gridPath z a (b + 1)) ∪ w) Φ ∧
+          ∀ (F : D.GridForm z 0 D.m) (l : EdgeTuple ϑ → D.GridForm z a b →ₗ[ℂ] ℂ),
+            DependsOn l w →
+            Λ (fun S ↦ l S (gridPathMap S z a b F)) =
+              κ / c ϑ * Φ fun S ↦
+                l S (transposedMove (S (columnEdge z a b)) (gridPathMap S z a (b + 1) F)) := by
+  induction a with
+  | zero =>
+    refine ⟨1, 1, by simpa [Pi.one_def] using HasAbsUpToNormPower.one, fun ϑ n w Λ _ hΛ ↦ ?_⟩
+    have h_edges :
+        insert (columnEdge z 0 b) (D.gridPath z 0 (b + 1)) ∪ w = w ∪ D.gridPath z 0 b := by
+      rw [union_comm]; congr 1
+      simp [gridPath, legEdges, ← insert_Ico_add_one_left_eq_Ico hb]
+    exact ⟨Λ, by simpa [h_edges] using hΛ,
+      fun F l _ ↦ by simp [gridPathMap, legDescents_of_lt _ z hb]⟩
+  | succ a ih =>
+    obtain ⟨κ', c', hc', h_prev⟩ := ih (Nat.le_of_succ_le hab)
+    obtain ⟨κ, σ, c, hc, h_law⟩ :=
+      exists_squareLaw_grid_hasAbsUpToNormPower z ((Nat.lt_of_succ_le hab).trans hb) hb
+    refine ⟨κ' * κ, c' * c, ?_, fun ϑ n w Λ hw hΛ ↦ ?_⟩
+    · rw [show (fun ϑ : D.MFoldTwist ↦ ((c' * c) ϑ : ℂ)) =
+          (fun ϑ ↦ (c' ϑ : ℂ)) * fun ϑ ↦ (c ϑ : ℂ) from funext fun _ ↦ Units.val_mul ..,
+        prod_range_succ]
+      exact hc'.mul hc
+    have h_edges_prev :
+        insert (rowEdge z a b) w ∪ D.gridPath z a b = w ∪ D.gridPath z (a + 1) b := by
+      ext e; simp [gridPath, range_add_one]
+    obtain ⟨Φ, hΦ, h_step₁⟩ := h_prev ϑ n (insert (rowEdge z a b) w) Λ
+      (fun e he ↦ (mem_insert.1 he).elim (fun h ↦ .inr ⟨a, le_rfl, h⟩) fun h ↦
+        (hw e h).imp_right fun ⟨i, hi, heq⟩ ↦ ⟨i, Nat.le_of_succ_le hi, heq⟩)
+      (h_edges_prev.symm ▸ hΛ)
+    let w' : Finset (GridNode × GridNode) := D.gridPath z a (b + 1) ∪ w
+    have h_old : insert (columnEdge z a b) (insert (rowEdge z a b) w') =
+        insert (columnEdge z a b) (D.gridPath z a (b + 1)) ∪ insert (rowEdge z a b) w := by
+      ext e; simp [w']; tauto
+    have h_new : insert (columnEdge z (a + 1) b) (insert (rowEdge z a (b + 1)) w') =
+        insert (columnEdge z (a + 1) b) (D.gridPath z (a + 1) (b + 1)) ∪ w := by
+      ext e; simp [w', gridPath, range_add_one]
+    obtain ⟨Φ', hΦ', h_step₂⟩ :=
+      (h_old.symm ▸ hΦ).exists_square_move
+        (J := D.GridForm z a (b + 1) × (D.GridForm z (a + 1) b →ₗ[ℂ] ℂ))
+        (R := (z, a + 1, b + 1)) (r := (z, a + 1, b + 1))
+        (Equiv.refl _) (.sumEmpty _ Empty) (.sumEmpty _ Empty) 1
+        (fun i ↦ h_law ϑ i.1 i.2)
+        (fun g hg ↦ ⟨(blockInlGL_sumEmpty _).symm, fun k ↦ by
+          rw [blockInlGL_sumEmpty, update_idem]
+          exact ⟨⟨fun z' ↦ by rw [update_of_ne (by grind)]; exact hg.1 z',
+            fun k' ↦ by rw [update_of_ne (by grind), update_of_ne (by grind)]; exact hg.2 k'⟩,
+            update_self ..⟩⟩)
+        (by simp) (by cases z <;> simp [IsVerticalEdge])
+        (by intro q hq; rcases (by simpa using hq) with rfl | rfl | rfl | rfl <;>
+              simp [Prod.le_def] <;> omega)
+        (by intro e he
+            rcases mem_union.1 he with he_p | he_w
+            · simp only [gridPath, legEdges, mem_union, mem_image, mem_range, mem_Ico] at he_p
+              rcases he_p with ⟨i, hi, rfl⟩ | ⟨i, hi, rfl⟩ <;> simp <;> grind
+            · rcases hw e he_w with h1 | ⟨i, hi, rfl⟩ <;> [simp at h1 ⊢; simp] <;> grind)
+        (by simp [edgeChar, IsVerticalEdge])
+    refine ⟨Φ', by simpa [h_new, Nat.mul_add, ← add_assoc] using hΦ', fun F l hl ↦ ?_⟩
+    have h_first := h_step₁ F (fun S ↦ l S ∘ₗ liftMove (S (rowEdge z a b))) fun S S' h_eq ↦ by
+      dsimp only; rw [hl fun e he ↦ h_eq e (by simp [he]), h_eq (rowEdge z a b) (by simp)]
+    have h_second := h_step₂ (fun S _ ↦ (gridPathMap S z a (b + 1) F, l S)) fun S S' h_eq ↦
+      funext fun _ ↦ Prod.ext
+        (congrArg (· F) (gridPathMap_congr (a := a) (b := b + 1)
+          fun e he ↦ h_eq e (by simp [w', he])))
+        (hl fun e he ↦ h_eq e (by simp [w', he]))
+    have h_sum_empty (f : Matrix Empty (D.NodeIndex (z, a + 1, b))
+        (gridModulus ϑ).ResidueRing → ℂ) : ∑ k, f k = f 0 :=
+      Finset.sum_eq_single 0 (fun k _ hk ↦ absurd (Matrix.ext fun i _ ↦ i.elim) hk) (by simp)
+    have h_sub₁ (A : Matrix (D.NodeIndex (z, a + 1, b)) (D.NodeIndex (z, a, b))
+        (gridModulus ϑ).ResidueRing) :
+        (A.submatrix (Equiv.refl _) (Equiv.sumEmpty _ Empty)).toCols₁ = A := rfl
+    have h_sub₂ (A : Matrix (D.NodeIndex (z, a + 1, b + 1)) (D.NodeIndex (z, a + 1, b))
+        (gridModulus ϑ).ResidueRing) :
+        (A.submatrix (Equiv.sumEmpty _ Empty) (Equiv.refl _)).toRows₁ = A := rfl
+    simp only [h_sum_empty, one_apply, one_mul, toRows₁_fromRows, toRows₂_fromRows,
+      toCols₁_fromCols, toCols₂_fromCols, h_sub₁, h_sub₂] at h_second
+    exact h_first.trans <| by
+      dsimp only [LinearMap.comp_apply, gridPathMap, rowEdge, columnEdge]
+      rw [h_second]; simp [Pi.mul_apply, Units.val_mul]; ring
 
-private lemma edges_eq_union_halves (Γ : TwoGridPath D.m) (z : Bool) :
-    Γ.edges = (Γ.half z).edges z ∪ (Γ.half !z).edges !z := by
-  cases z <;> simp [TwoGridPath.edges, union_comm]
+private def subdiagEquiv (D : Data P) (j : ℕ) :
+    D.GridIndex true j (j + 1) ≃ D.GridIndex false (j + 1) j :=
+  (gridSpace_subdiag (D := D) j).choose
 
-/-- If the half in the grid `z` of `Γ'` is `q`, the two sides through `(a, b)`, then `r`, the edges
-of `Γ'` are these two sides and the edges of `q`, `r` and the other half. -/
-lemma edges_eq_oldEdges_innerCorner {z : Bool} (Γ' : TwoGridPath D.m)
-    (q : GridPath 0 D.m a (b + 1)) (r : GridPath (a + 1) b Γ'.diagonalIndex Γ'.diagonalIndex)
-    (hΓ' : Γ'.half z = q.down.right.append r) :
-    Γ'.edges = (D.innerCorner z a b).oldEdges (q.edges z ∪ r.edges z ∪ (Γ'.half !z).edges !z) := by
-  rw [edges_eq_union_halves Γ' z, hΓ']
-  simp [GridPath.edges_append, GridPath.edges]
+private lemma gridSigns_subdiagEquiv (D : Data P) (j : ℕ) :
+    D.gridSigns false 0 (j + 1) j ∘ (D.subdiagEquiv j).symm.symm =
+      D.gridSigns true 0 j (j + 1) :=
+  (gridSpace_subdiag (D := D) j).choose_spec.choose
 
-/-- If the half in the grid `z` is replaced by `q`, the two sides through `(a + 1, b + 1)`, then
-`r`, the edges are these two sides and the edges of `q`, `r` and the other half. -/
-lemma edges_update_eq_newEdges_innerCorner (z : Bool) (Γ' : TwoGridPath D.m)
-    (q : GridPath 0 D.m a (b + 1)) (r : GridPath (a + 1) b Γ'.diagonalIndex Γ'.diagonalIndex) :
-    (⟨Γ'.diagonalIndex, update Γ'.half z (q.right.down.append r)⟩ : TwoGridPath D.m).edges =
-      (D.innerCorner z a b).newEdges (q.edges z ∪ r.edges z ∪ (Γ'.half !z).edges !z) := by
-  rw [edges_eq_union_halves _ z]
-  simp [GridPath.edges_append, GridPath.edges]
+private lemma gridSpace_subdiagEquiv (D : Data P) (j : ℕ) :
+    D.gridSpace 0 true j (j + 1) =
+      (D.gridSpace 0 false (j + 1) j).reindex (D.subdiagEquiv j).symm
+        (D.gridSigns_subdiagEquiv j) :=
+  (gridSpace_subdiag (D := D) j).choose_spec.choose_spec
 
-/-- The exchange at the corner `(a, b)` of the grid `z`, for one twist `ϑ`. Let `q` be a grid path
-from `(0, D.m)` to `(a, b + 1)` and `r` one from `(a + 1, b)` to a diagonal node `(k, k)`. Let the
-corner be a turn of a path whose other edges `w` contain those of `q` and `r`, let `Ψ` match the
-column Fourier transform of `Ψ'`, and let the square law hold with constant `C`. Carry a form `F`
-at `(0, D.m)` along `q`, two sides of the square and `r`, and read it at `(k, k)` by functionals
-`l S` that depend on the tuple `S` only through its matrices on `w`. Then the sum against `Ψ'`
-through `(a, b)` is `C` times the sum against `Ψ` through `(a + 1, b + 1)`. -/
-lemma sum_formMap_eq_of_squareLaw {z : Bool} {ϑ : D.MFoldTwist} {w : Finset (GridNode × GridNode)}
-    (h_turn : (D.innerCorner z a b).IsTurn ϑ w) {k : ℕ} {q : GridPath 0 D.m a (b + 1)}
-    {r : GridPath (a + 1) b k k} (hq : q.edges z ⊆ w) (hr : r.edges z ⊆ w)
-    {σ : D.GridIndex z a b ⊕ D.GridIndex z (a + 1) (b + 1) ≃
-      D.GridIndex z a (b + 1) ⊕ D.GridIndex z (a + 1) b} {Ψ Ψ' : EdgeTuple ϑ → ℂ} {C : ℂ}
-    (h_match : ∀ (S : EdgeTuple ϑ)
-      (v' : Matrix Empty (D.GridIndex z (a + 1) b) (gridModulus ϑ).ResidueRing),
-      AreMatched ⊤ σ ((D.innerCorner z a b).char ϑ)
-        (fun x : Matrix (D.GridIndex z (a + 1) (b + 1))
-            (D.GridIndex z a (b + 1) ⊕ D.GridIndex z (a + 1) b) (gridModulus ϑ).ResidueRing ↦
-          Ψ ((D.innerCorner z a b).newTuple S x v'))
-        ((D.innerCorner z a b).columnFourier 1 Ψ' S v'))
-    (h_law : ∀ (f : D.GridForm z a (b + 1)) (l : D.GridForm z (a + 1) b →ₗ[ℂ] ℂ),
-      SquareLaw ((D.innerCorner z a b).char ϑ) σ C
-        (fun x : Matrix (D.GridIndex z (a + 1) (b + 1))
-            (D.GridIndex z a (b + 1) ⊕ D.GridIndex z (a + 1) b) (gridModulus ϑ).ResidueRing ↦
-          l (transposedMove x.toCols₂ (liftMove x.toCols₁ f)))
-        (fun y : Matrix (D.GridIndex z a (b + 1) ⊕ D.GridIndex z (a + 1) b)
-            (D.GridIndex z a b) (gridModulus ϑ).ResidueRing ↦
-          l (liftMove y.toRows₂ (transposedMove y.toRows₁ f))))
-    (F : D.GridForm z 0 D.m) {l : EdgeTuple ϑ → D.GridForm z k k →ₗ[ℂ] ℂ} (hl : DependsOn l w) :
-    ∑ S ∈ tuplesOn ϑ ((D.innerCorner z a b).oldEdges w),
-        Ψ' S * l S ((q.down.right.append r).formMap S z F) =
-      C * ∑ S ∈ tuplesOn ϑ ((D.innerCorner z a b).newEdges w),
-        Ψ S * l S ((q.right.down.append r).formMap S z F) := by
-  let K : D.Corner (D.GridIndex z (a + 1) b) Empty := D.innerCorner z a b
-  -- The form at `(a, b + 1)` and the functional at `(a + 1, b)` depend on the preserved edges.
-  have h_dep : DependsOn
-      (fun (S : EdgeTuple ϑ) (_ : Matrix Empty (D.GridIndex z (a + 1) b)
-        (gridModulus ϑ).ResidueRing) ↦
-        (q.formMap S z F, l S ∘ₗ r.formMap S z)) (w : Set (GridNode × GridNode)) := fun S S' h ↦ by
-    simp only [q.formMap_congr (z := z) fun e he ↦ h e (hq he),
-      r.formMap_congr (z := z) fun e he ↦ h e (hr he), hl h]
-  -- The line is empty, so the sum over the rows has one term.
-  have h_square : ∑ S ∈ tuplesOn ϑ (K.oldEdges w), Ψ' S * l S (r.formMap S z (liftMove
-        (K.oldMatrix S).toRows₂ (transposedMove (K.oldMatrix S).toRows₁ (q.formMap S z F)))) =
-      C * ∑ S ∈ tuplesOn ϑ (K.newEdges w), Ψ S * l S (r.formMap S z (transposedMove
-        (K.newMatrix S).toCols₂ (liftMove (K.newMatrix S).toCols₁ (q.formMap S z F)))) := by
-    simpa [card_congr of.symm] using h_turn.sum_eq_of_squareLaw h_match
-      (fun i : D.GridForm z a (b + 1) × (D.GridForm z (a + 1) b →ₗ[ℂ] ℂ) ↦ h_law i.1 i.2) h_dep
-  -- The blocks of the matrices of the square are, by definition, the matrices on its sides.
-  simp only [GridPath.formMap_append, GridPath.formMap, LinearMap.comp_apply]
-  exact h_square
+private def subdiagMap (D : Data P) (j : ℕ) :
+    C(New.G D.E (D.gridSigns true 0 j (j + 1)), New.G D.E (D.gridSigns false 0 (j + 1) j)) where
+  toFun := (G.reindex (D.subdiagEquiv j).symm (D.gridSigns_subdiagEquiv j)).symm
+  continuous_toFun := G.continuous_reindex _ (by simp [← D.gridSigns_subdiagEquiv j, comp_def])
 
-/-- Fix an off-diagonal corner `a < b < D.m` in half `z`. Every turn there transfers periods
-with bound `1` and the same nonzero factor `c ϑ` for each twist `ϑ`. Up to a constant and a power
-of the norm of its modulus, the absolute value of this factor is the Hecke ratio `turnRatio` at
-`(a, b)` for the ordinary half and at `(b, a)` for the reflected half. -/
-lemma exists_transfersPeriods_off_diagonal (z : Bool) (hab : a < b) (hb : b < D.m) :
+private lemma reindex_subdiagMap (D : Data P) (j : ℕ)
+    (x : New.G D.E (D.gridSigns true 0 j (j + 1))) :
+    G.reindex (D.subdiagEquiv j).symm (D.gridSigns_subdiagEquiv j) (D.subdiagMap j x) = x :=
+  (G.reindex (D.subdiagEquiv j).symm (D.gridSigns_subdiagEquiv j)).apply_symm_apply x
+
+private lemma height_subdiagMap (D : Data P) (j : ℕ)
+    (x : New.G D.E (D.gridSigns true 0 j (j + 1))) :
+    (D.gridSpace 0 false (j + 1) j).height (D.subdiagMap j x) =
+      (D.gridSpace 0 true j (j + 1)).height x := by
+  rw [D.gridSpace_subdiagEquiv j, ← Space.height_reindex _ (D.gridSigns_subdiagEquiv j),
+    D.reindex_subdiagMap j]
+
+private lemma gridChar_subdiag (D : Data P) (j : ℕ) (ϑ : D.MFoldTwist) (b' : Bool) (l : ℕ) :
+    gridChar ϑ b' l (D.GridIndex true j (j + 1)) =
+      gridChar ϑ b' l (D.GridIndex false (j + 1) j) := by
+  simp only [gridChar, card_congr (D.subdiagEquiv j)]
+
+private def diagWeight (D : Data P) (ϑ : D.MFoldTwist) {j : ℕ} (h : j ≤ D.m) :
+    ModerateWeight (D.gridSpace 0 false j j) (D.gridSpace 0 true j j) where
+  weightFn := 1
+  comparisonMap := ⟨fun z ↦ .reindex (D.gridDiagEquiv j)
+    (D.sumElim_gridSigns_comp_gridDiagEquiv_symm h)
+    (.sum (z, 1, (gridModulus ϑ).flipScalar ^ j)), by fun_prop⟩
+  isModerate := ⟨1, 0, by simp⟩
+  height_le := ⟨_, fun _ ↦ gridSpace_diag h ▸ (height_reindex ..).trans_le (height_sum_le ..)⟩
+
+private def diagLineWeight (D : Data P) (j : ℕ) (ϑ : D.MFoldTwist) (scale : ℂ)
+    (Ψ : Matrix Unit (D.GridIndex false (j + 1) j) (gridModulus ϑ).ResidueRing → ℂ)
+    (q : MvPolynomial (D.Φ × Unit × D.GridIndex false (j + 1) j) ℂ) :
+    ModerateWeight (D.gridSpace 0 true j (j + 1)) (D.gridSpace 0 false (j + 1) j) where
+  weightFn := ⟨fun x ↦ scale * modKernel (D.gridSpace 0 false (j + 1) j)
+      (signedSpace D.E fun _ : Unit ↦ (-1) ^ (j + 1))
+      (gridChar ϑ true j (D.GridIndex false (j + 1) j)) WeilData.upsilonU1
+      (gridModulus ϑ) Ψ q (D.subdiagMap j x) (1, (gridModulus ϑ).flipScalar ^ (j + 1)),
+    by fun_prop [modKernel]⟩
+  comparisonMap := D.subdiagMap j
+  isModerate := by
+    obtain ⟨C, M, hCM⟩ : (D.gridSpace 0 false (j + 1) j).IsModerate
+        (fun x ↦ modKernel (D.gridSpace 0 false (j + 1) j)
+          (signedSpace D.E fun _ : Unit ↦ (-1) ^ (j + 1))
+          (gridChar ϑ true j (D.GridIndex false (j + 1) j)) WeilData.upsilonU1
+          (gridModulus ϑ) Ψ q x (1, (gridModulus ϑ).flipScalar ^ (j + 1))) :=
+      (pairThetaKer ..).isModerate ..
+    exact ⟨‖scale‖ * C, M, fun x ↦ by
+      simpa [height_subdiagMap, mul_assoc] using
+        mul_le_mul_of_nonneg_left (hCM (D.subdiagMap j x)) (norm_nonneg scale)⟩
+  height_le := ⟨1, by simp [height_subdiagMap]⟩
+
+private lemma seesaw_row_line_diagonal (D : Data P) {j : ℕ} (hj : j < D.m)
+    {Φ₀ : ∀ ϑ : D.MFoldTwist, D.GridDatum ϑ} {X₀ : D.MFoldTwist → Type}
+    {W₀ : ∀ ϑ, Finset (X₀ ϑ)} {u₀ : ∀ ϑ, X₀ ϑ → ℂ} {s₀ : ∀ ϑ, X₀ ϑ → EdgeTuple ϑ}
+    (hΦ₀_sum : ∀ ϑ f, Φ₀ ϑ f = ∑ i ∈ W₀ ϑ, u₀ ϑ i * f (s₀ ϑ i))
+    {Ξ : D.PeriodTriple → ℂ} (hΞ : D.IsProportional hj Φ₀ Ξ)
+    (q : MvPolynomial (D.Φ × Unit × D.GridIndex false (j + 1) j) ℂ)
+    (r : GInf D.E (D.gridSigns false 0 (j + 1) j)) :
+    ∃ β₀ : ℂ, ∀ x : D.PeriodTriple,
+      Φ₀ x.1 (fun S ↦ periodPairing (isConjKernelPair_gridKernel ⟨hj.le, hj⟩)
+        (D.diagLineWeight j x.1 1 (Pi.single ((S (rowEdge true j (j + 1))).submatrix
+          (D.gridDiagEquiv (j + 1)) (D.subdiagEquiv j).symm).toRows₂ 1) q) r
+        (gridPathMap S true j (j + 1) x.2.2)
+        (transposedMove ((S (rowEdge true j (j + 1))).submatrix
+          (D.gridDiagEquiv (j + 1)) (D.subdiagEquiv j).symm).toRows₁
+          (liftMove (S (rowEdge false j (j + 1))) (gridPathMap S false j (j + 1) x.2.1)))) =
+        β₀ * Ξ x := by
+  obtain ⟨t, ht⟩ := D.t_odd
+  have hΞ' (g' : GInf D.E (D.gridSigns true 0 (j + 1) (j + 1))) :
+      ∃ β₀ : ℂ, ∀ x : D.PeriodTriple,
+        ∑ i ∈ W₀ x.1, u₀ x.1 i *
+          periodPairing (isConjKernelPair_gridKernel ⟨hj, hj⟩) (D.diagWeight x.1 hj) g'
+            (liftMove (s₀ x.1 i (rowEdge false j (j + 1)))
+              (gridPathMap (s₀ x.1 i) false j (j + 1) x.2.1))
+            (liftMove (s₀ x.1 i (rowEdge true j (j + 1)))
+              (gridPathMap (s₀ x.1 i) true j (j + 1) x.2.2)) =
+          β₀ * Ξ x :=
+    (hΞ g').imp fun β₀ hβ₀ x ↦ by
+      simpa only [gridPeriod, diagonalPeriodForm, diagWeight, gridPathMap, LinearMap.comp_apply,
+        hΦ₀_sum x.1] using hβ₀ x
+  dsimp only [liftMove] at hΞ'
+  -- Second seesaw on the row-line period at `(j, j + 1) → (j + 1, j + 1)`.
+  have h_seesaw := seesaw_periods D.PeriodTriple
+    (S := D.gridSpace 0 true j (j + 1)) (T := D.gridSpace 0 true (j + 1) (j + 1))
+    (T' := D.gridSpace 0 false (j + 1) j) (S' := D.gridSpace 0 false (j + 1) (j + 1))
+    (𝔪 := fun x ↦ gridModulus x.1) (W := fun x ↦ W₀ x.1) (u := fun x ↦ u₀ x.1) (c := Ξ) (r := r)
+    (y := fun x i ↦ gridPathMap (s₀ x.1 i) true j (j + 1) x.2.2)
+    (f := fun x i ↦ liftMove (s₀ x.1 i (rowEdge false j (j + 1)))
+      (gridPathMap (s₀ x.1 i) false j (j + 1) x.2.1))
+    (N := fun x i ↦ D.diagLineWeight j x.1 1
+      (Pi.single ((s₀ x.1 i (rowEdge true j (j + 1))).submatrix
+        (D.gridDiagEquiv (j + 1)) (D.subdiagEquiv j).symm).toRows₂ 1) q)
+    (Ψ' := fun x i ↦ Pi.single ((s₀ x.1 i (rowEdge true j (j + 1))).submatrix
+      (D.gridDiagEquiv (j + 1)) (D.subdiagEquiv j).symm).toRows₁ 1)
+    (isEdgeFamily_grid_succ_left (z := true) (i := j) (j := j + 1) Prod.fst hj hj)
+    (isEdgeFamily_grid_succ_right (z := false) (i := j + 1) (j := j) Prod.fst hj hj)
+    (by
+      intro A' _
+      refine subset_span ⟨renameRowsCols (D.gridDiagEquiv (j + 1)) (D.subdiagEquiv j).symm
+          (renameRowsCols .inl id A' * renameRowsCols .inr id q),
+        fun x i ↦ Pi.single (s₀ x.1 i (rowEdge true j (j + 1))) 1, fun x _ ↦ D.diagWeight x.1 hj,
+        hΞ', fun x i g₁ g₂ ↦ ?_⟩
+      have h_char_succ : gridChar x.1 true j (D.GridIndex true (j + 1) (j + 1)) =
+          gridChar x.1 true j (D.GridIndex false (j + 1) (j + 1)) * WeilData.upsilonU1 := by
+        have h_rk : card (D.GridIndex true (j + 1) (j + 1)) / 2 =
+            card (D.GridIndex false (j + 1) (j + 1)) / 2 + 1 := by
+          simp only [card_gridIndex, ht, Bool.toNat_true, Bool.toNat_false]; grind
+        simp [gridChar, h_rk, mul_assoc, pow_succ]
+      have h_dat := single_one_eq_mul_of_coordinates (s₀ x.1 i (rowEdge true j (j + 1)))
+        (fun Y ↦ (Y.submatrix (D.gridDiagEquiv (j + 1)) (D.subdiagEquiv j).symm).toRows₁)
+        (fun Y ↦ (Y.submatrix (D.gridDiagEquiv (j + 1)) (D.subdiagEquiv j).symm).toRows₂)
+        fun _ ↦ by
+          simp only [← fromRows_ext_iff, fromRows_toRows]
+          exact (Matrix.reindex (D.gridDiagEquiv (j + 1)).symm (D.subdiagEquiv j)).injective.eq_iff
+      change (D.diagLineWeight j x.1 1 _ q).weightFn g₁ * _ = (1 : ℂ) * _
+      simp only [diagLineWeight, diagWeight, one_mul, ContinuousMap.coe_mk, Bool.not_false]
+      rw [mul_comm, ← modKernel_sum_right, ← modKernel_reindex (D.subdiagEquiv j).symm
+        (D.gridSigns_subdiagEquiv j) (D.gridDiagEquiv (j + 1))
+        (D.sumElim_gridSigns_comp_gridDiagEquiv_symm hj),
+        D.reindex_subdiagMap j, h_char_succ, D.gridChar_subdiag j, h_dat, gridSpace_diag hj,
+        D.gridSpace_subdiagEquiv j])
+  exact h_seesaw.imp fun β₀ hβ₀ x ↦ by
+    rw [hΦ₀_sum x.1]; dsimp only [transposedMove] at hβ₀ ⊢; exact hβ₀ x
+
+/-- Climbing one stage along the diagonal (`j → j + 1`) for `j < m`: push the descent past `j`
+lifts in each grid, then cross the diagonal square `(j, j)` via two seesaws and line reversal. The
+order increases by `4 * j + 2`, and the twist factor has modulus up to a norm power equal to the
+product of `turnRatio` over the L-shaped shell of squares at index `j`. -/
+lemma hasRoute_succ (D : Data P) {j : ℕ} (hj : j < D.m) :
     ∃ c : D.MFoldTwist → ℂˣ,
       D.HasAbsUpToNormPower (fun ϑ : D.MFoldTwist ↦ c ϑ)
-        (if z then D.turnRatio b a else D.turnRatio a b) ∧
-      ∀ Γ' Γ : TwoGridPath D.m, Γ'.Turn (bif z then (b, a) else (a, b)) Γ →
-        TransfersPeriods Γ' Γ 1 c := by
-  -- The exchange on the square, applied to the form that arrives at it along `q`, shows that the
-  -- period of `Ψ'` is `κ / c` times that of the turned datum `Ψ`, with a constant `κ`.
-  obtain ⟨κ, σ, c, hc, h_law⟩ := exists_squareLaw_grid_hasAbsUpToNormPower z (hab.trans hb) hb
-  refine ⟨c, hc, fun Γ' Γ h_step ↦ ?_⟩
-  obtain ⟨q, r, hΓ', rfl⟩ := h_step.exists_corner (z := z) hab
-  intro N Ψ' hΨ'
-  let Γ : TwoGridPath D.m := ⟨Γ'.diagonalIndex, update Γ'.half z (q.right.down.append r)⟩
-  let w : Finset (GridNode × GridNode) := q.edges z ∪ r.edges z ∪ (Γ'.half !z).edges !z
-  let K : D.Corner (D.GridIndex z (a + 1) b) Empty := D.innerCorner z a b
-  have h_old : Γ'.edges = K.oldEdges w := edges_eq_oldEdges_innerCorner Γ' q r hΓ'
-  have h_new : Γ.edges = K.newEdges w := edges_update_eq_newEdges_innerCorner z Γ' q r
-  have h_apart : ∀ e ∈ w, e.1 ≠ (z, a, b) ∧ e.2 ≠ (z, a, b) ∧ e.2 ≠ (z, a + 1, b + 1) := by
-    rintro ⟨u, v⟩ he
-    grind [→ GridPath.eq_and_le_of_mem_edges, Prod.le_def]
-  have h_turn (ϑ : D.MFoldTwist) : K.IsTurn ϑ w := isTurn_innerCorner hab hb ϑ h_apart
-  have h_datum (ϑ : D.MFoldTwist) : ∃ Ψ : EdgeTuple ϑ → ℂ, IsPathDatum (1 * N ϑ) Γ.edges Ψ ∧
-      ∀ (S : EdgeTuple ϑ) (v' : Matrix Empty (D.GridIndex z (a + 1) b) (gridModulus ϑ).ResidueRing),
-        AreMatched ⊤ σ (K.char ϑ) (fun x ↦ Ψ (K.newTuple S x v'))
-          (K.columnFourier 1 (Ψ' ϑ) S v') := by
-    rw [h_old] at hΨ'
-    -- The line is empty, so there is only one column matrix and the bound is unchanged.
-    simpa [h_new, card_congr of.symm] using (h_turn ϑ).exists_isPathDatum (hΨ' ϑ) σ 1
-  choose Ψ hΨ h_match using h_datum
-  refine ⟨Ψ, hΨ, fun Ξ hΞ g ↦ ?_⟩
-  -- The exchange for a form `F` that starts in the grid `z`, read by functionals `l S` that depend
-  -- on the other half of the path only.
-  have h_cross (ϑ : D.MFoldTwist) (F : D.GridForm z 0 D.m)
-      (l : EdgeTuple ϑ → D.GridForm z Γ'.diagonalIndex Γ'.diagonalIndex →ₗ[ℂ] ℂ)
-      (hl : DependsOn l ((Γ'.half !z).edges !z)) :
-      ∑ S ∈ tuplesOn ϑ Γ'.edges, Ψ' ϑ S * l S ((q.down.right.append r).formMap S z F) =
-      κ / c ϑ * ∑ S ∈ tuplesOn ϑ Γ.edges, Ψ ϑ S * l S ((q.right.down.append r).formMap S z F) := by
-    rw [h_old, h_new]
-    exact sum_formMap_eq_of_squareLaw (h_turn ϑ) (by grind) (by grind) (h_match ϑ) (h_law ϑ) F
-      (hl.mono (by grind))
-  have h_period : ∀ x : D.PeriodTriple, gridPeriod Γ' Ψ' g x = κ / c x.1 * gridPeriod Γ Ψ g x := by
-    rintro ⟨ϑ, F₀, F₁⟩
-    -- The form that starts in the grid `z` crosses the square, the other half gives the functional.
-    cases z
-    · simpa [gridPeriod, hΓ', Γ] using h_cross ϑ F₀
-        (fun S ↦ (diagonalPeriodForm ϑ Γ'.diagonalIndex_le g).flip
-          ((Γ'.half true).formMap S true F₁))
-        fun S S' h ↦ by simp only [(Γ'.half true).formMap_congr (z := true) h]
-    · simpa [gridPeriod, hΓ', Γ] using h_cross ϑ F₁
-        (fun S ↦ diagonalPeriodForm ϑ Γ'.diagonalIndex_le g ((Γ'.half false).formMap S false F₀))
-        fun S S' h ↦ by simp only [(Γ'.half false).formMap_congr (z := false) h]
-  obtain ⟨β, hβ⟩ : ∃ β : ℂ, ∀ x : D.PeriodTriple, gridPeriod Γ Ψ g x = β * Ξ x := hΞ g
-  exact ⟨κ * β, fun x ↦ by simp [h_period, hβ, field]⟩
+        ((∏ i ∈ range j, D.turnRatio i j) * (∏ i ∈ range j, D.turnRatio j i) *
+          D.turnRatio j j) ∧
+      D.HasRoute hj.le hj (4 * j + 2) c := by
+  obtain ⟨t, ht⟩ := D.t_odd
+  obtain ⟨κ₀, σ, c₃, hc₃, h_law⟩ := exists_squareLaw_grid_hasAbsUpToNormPower (D := D) false hj hj
+  obtain ⟨κ₁, c₁, hc₁, h_desc₁⟩ := descent_past_gridPathMap (D := D) hj false le_rfl
+  obtain ⟨κ₂, c₂, hc₂, h_desc₂⟩ := descent_past_gridPathMap (D := D) hj true le_rfl
+  let N := D.GridIndex false (j + 1) j
+  let τ := flipPoly (E := D.E) (fun _ : Unit ↦ (-1) ^ (j + 1)) (D.gridSigns false 0 (j + 1) j)
+  have h_flip_all (ϑ : D.MFoldTwist) := by
+    have h := exists_modKernel_flip_line (D.gridSpace 0 false (j + 1) j) ((-1) ^ (j + 1))
+      (gridModulus ϑ) (gridChar ϑ false j N) (gridChar ϑ true j N) ((gridModulus ϑ).flipScalar ^ j)
+    rwa [← show (-1 : ℤˣ) ^ j = -(-1) ^ (j + 1) by simp [pow_succ],
+      ← pow_succ ((gridModulus ϑ).flipScalar Unit)] at h
+  choose ψ c_line hc_line_norm h_flip using h_flip_all
+  let c_tot : D.MFoldTwist → ℂˣ := c₁ * c₂ * c₃ * c_line⁻¹
+  have hc_tot : D.HasAbsUpToNormPower (fun ϑ : D.MFoldTwist ↦ (c_tot ϑ : ℂ))
+      ((∏ i ∈ range j, D.turnRatio i j) * (∏ i ∈ range j, D.turnRatio j i) * D.turnRatio j j) := by
+    rw [show (fun ϑ : D.MFoldTwist ↦ (c_tot ϑ : ℂ)) =
+          ((((fun ϑ ↦ (c₁ ϑ : ℂ)) * fun ϑ ↦ (c₂ ϑ : ℂ)) * fun ϑ ↦ (c₃ ϑ : ℂ)) *
+            fun ϑ ↦ (c_line ϑ : ℂ)⁻¹) from
+        funext fun _ ↦ by simp [c_tot, Units.val_mul, Units.val_inv_eq_inv_val],
+      ← mul_one (_ * _ * D.turnRatio j j)]
+    exact (((show D.HasAbsUpToNormPower (fun ϑ ↦ (c₁ ϑ : ℂ)) _ by simpa using hc₁).mul
+      (by simpa using hc₂)).mul (by simpa using hc₃)).mul
+      (.of_norm_sq_eq_mul_card_zpow _ 1 (card N) (by simpa [field, eq_comm] using hc_line_norm))
+  refine ⟨c_tot, hc_tot, fun n Λ hΛ ↦ ?_⟩
+  -- Push the descents past `j` lifts in both grids, then cross the diagonal square `(j, j)`.
+  choose Φ₁ hΦ₁ h_eq₁ using fun ϑ ↦ h_desc₁ ϑ n (D.gridPath true j j) (Λ ϑ)
+    (fun e he ↦ .inl <| by
+      simp only [gridPath, legEdges, mem_union, mem_image] at he
+      rcases he with ⟨_, _, rfl⟩ | ⟨_, _, rfl⟩ <;> simp)
+    (by simpa [stageEdges, union_comm] using hΛ ϑ)
+  let w₁ : Finset (GridNode × GridNode) :=
+    insert (columnEdge false j j) (D.gridPath false j (j + 1))
+  choose Φ₂ hΦ₂ h_eq₂ using fun ϑ ↦ h_desc₂ ϑ (n + 2 * j) w₁ (Φ₁ ϑ)
+    (fun e he ↦ .inl <| by
+      simp only [w₁, gridPath, legEdges, mem_insert, mem_union, mem_image] at he
+      rcases he with rfl | ⟨_, _, rfl⟩ | ⟨_, _, rfl⟩ <;> simp)
+    (hΦ₁ ϑ)
+  let w₀ : Finset (GridNode × GridNode) := D.gridPath false j (j + 1) ∪ D.gridPath true j (j + 1)
+  have h_old_diag : insert (columnEdge false j j) (insert (columnEdge true j j) w₀) =
+      insert (columnEdge true j j) (D.gridPath true j (j + 1)) ∪ w₁ := by
+    ext e; simp [w₀, w₁]; tauto
+  have h_new_diag : insert (rowEdge true j (j + 1)) (insert (rowEdge false j (j + 1)) w₀) =
+      D.stageEdges (j + 1) := by ext e; simp [w₀, stageEdges, gridPath, range_add_one]
+  choose Φ₀ hΦ₀ h_eq₀ using fun ϑ : D.MFoldTwist ↦
+    (show D.IsPathDatum _ (insert (columnEdge false j j) (insert (columnEdge true j j) w₀))
+        (Φ₂ ϑ) by rw [h_old_diag]; exact hΦ₂ ϑ).exists_square_move
+      (J := D.GridForm false j (j + 1) × (D.GridForm false (j + 1) j →ₗ[ℂ] ℂ))
+      (R := (true, j + 1, j + 1)) (r := (false, j + 1, j + 1))
+      (D.subdiagEquiv j).symm (D.gridDiagEquiv j) (D.gridDiagEquiv (j + 1)) (ψ ϑ)
+      (fun i ↦ h_law ϑ i.1 i.2)
+      (fun g hg ↦ ⟨hg.2 (j + 1), fun k ↦ ⟨⟨fun z ↦ by
+          rw [update_of_ne (by grind), update_of_ne (by grind)]; exact hg.1 z,
+        fun a ↦ by obtain rfl | ha := eq_or_ne a j <;> [simp; simpa [ha] using hg.2 a]⟩, by simp⟩⟩)
+      (by simp) (by simp [IsVerticalEdge])
+      (by intro q hq; rcases (by simpa using hq) with rfl | rfl | rfl | rfl <;>
+            simp [Prod.le_def] <;> omega)
+      (by intro e he
+          simp only [w₀, gridPath, legEdges, mem_union, mem_image, mem_range, mem_Ico] at he
+          rcases he with (⟨i, hi, rfl⟩ | ⟨i, hi, rfl⟩) | (⟨i, hi, rfl⟩ | ⟨i, hi, rfl⟩) <;>
+            simp <;> grind)
+      (by simp [edgeChar, IsVerticalEdge])
+  have hΦ₀' (ϑ : D.MFoldTwist) :
+      D.IsPathDatum (n + (4 * j + 2)) (D.stageEdges (j + 1)) (Φ₀ ϑ) := by
+    rw [h_new_diag, show n + 2 * j + 2 * j + 2 = n + (4 * j + 2) by omega] at hΦ₀; exact hΦ₀ ϑ
+  refine ⟨Φ₀, hΦ₀', fun Ξ hΞ g ↦ ?_⟩
+  choose X₂ W₂ u₂ s₂ _ _ hΦ₂_sum using fun ϑ ↦ (hΦ₂ ϑ).isShortSum
+  choose X₀ W₀ u₀ s₀ _ _ hΦ₀_sum using fun ϑ ↦ (hΦ₀' ϑ).isShortSum
+  -- Pull the finite Fourier sum on the added line outside `periodPairing`.
+  have h_fourier_pair (ϑ : D.MFoldTwist) (scale : ℂ) (v : Matrix N Unit (gridModulus ϑ).ResidueRing)
+      (q : MvPolynomial (D.Φ × Unit × N) ℂ) (r : GInf D.E (D.gridSigns false 0 (j + 1) j))
+      (F : D.GridForm true j (j + 1)) (y : D.GridForm false (j + 1) j) :
+      periodPairing (isConjKernelPair_gridKernel ⟨hj.le, hj⟩)
+          (D.diagLineWeight j ϑ scale (matrixFourier (ψ ϑ) (Pi.single v 1)) q) r F y =
+        scale * ∑ k, ψ ϑ (k * v).trace * periodPairing (isConjKernelPair_gridKernel ⟨hj.le, hj⟩)
+          (D.diagLineWeight j ϑ 1 (Pi.single k 1) q) r F y := by
+    have h_wt (x) :
+        (D.diagLineWeight j ϑ scale (matrixFourier (ψ ϑ) (Pi.single v 1)) q).weightFn x =
+          scale * ∑ k, ψ ϑ (k * v).trace *
+            (D.diagLineWeight j ϑ 1 (Pi.single k 1) q).weightFn x := by
+      simp [diagLineWeight, modKernel, pairTheta, modDatum_eq_sum _ _ (matrixFourier _ _),
+        matrixFourier, Pi.single_apply, Finset.mul_sum]
+    have h_cmp (s' : ℂ) (Ψ' : Matrix Unit N (gridModulus ϑ).ResidueRing → ℂ) :
+        (D.diagLineWeight j ϑ s' Ψ' q).comparisonMap = D.subdiagMap j := rfl
+    simp only [periodPairing, LinearMap.mk₂_apply, h_wt, h_cmp, sum_mul, mul_assoc,
+      integral_const_mul]
+    exact congrArg (scale * ·) <| by
+      simpa [h_cmp, integral_const_mul, mul_assoc] using
+        integral_finsetSum (μ := (D.gridSpace 0 true j (j + 1)).quotMeasure) univ fun k _ ↦
+          (integrable_moderate_mul_forms (isConjKernelPair_gridKernel ⟨hj.le, hj⟩)
+            (D.diagLineWeight j ϑ 1 (Pi.single k 1) q) F y).const_mul (ψ ϑ (k * v).trace)
+  -- First seesaw across the diagonal square `(j, j)`, splitting the polynomial on the added line.
+  have h_seesaw := seesaw_periods D.PeriodTriple
+    (S := D.gridSpace 0 false j j) (T := D.gridSpace 0 false (j + 1) j)
+    (T' := D.gridSpace 0 true j j) (S' := D.gridSpace 0 true j (j + 1))
+    (𝔪 := fun x ↦ gridModulus x.1) (W := fun x ↦ W₂ x.1) (u := fun x ↦ u₂ x.1)
+    (c := fun x ↦ Ξ x / (c₃ / c_line) x.1) (r := g)
+    (y := fun x i ↦ transposedMove (s₂ x.1 i (columnEdge false j j))
+      (gridPathMap (s₂ x.1 i) false j (j + 1) x.2.1))
+    (f := fun x i ↦ gridPathMap (s₂ x.1 i) true j (j + 1) x.2.2)
+    (N := fun x _ ↦ D.diagWeight x.1 hj.le)
+    (Ψ' := fun x i ↦ Pi.single (s₂ x.1 i (columnEdge true j j)) 1)
+    (isEdgeFamily_grid_succ_left (z := false) (i := j) (j := j) Prod.fst hj hj.le)
+    (isEdgeFamily_grid_succ_right (z := true) (i := j) (j := j) Prod.fst hj.le hj)
+    (by
+      intro P _
+      have h_cover : ∀ i : D.Φ × D.GridIndex true j (j + 1) × D.GridIndex true j j,
+          i ∈ Set.range (Prod.map id (Prod.map (D.subdiagEquiv j).symm
+                (D.gridDiagEquiv j ∘ .inl))) ∪
+              Set.range (Prod.map id (Prod.map (D.subdiagEquiv j).symm
+                (D.gridDiagEquiv j ∘ .inr))) := by
+        simp [reindex_equiv (D.gridDiagEquiv j)]
+      refine mul_le.2 ?_ (mem_rename_range_mul _ _ h_cover P)
+      rintro _ ⟨A, rfl⟩ _ ⟨B, rfl⟩
+      refine subset_span ⟨A,
+        fun x i ↦ Pi.single ((s₂ x.1 i (columnEdge true j j)).submatrix (D.subdiagEquiv j).symm
+          (D.gridDiagEquiv j)).toCols₁ 1,
+        fun x i ↦ D.diagLineWeight j x.1 (c_line x.1) (matrixFourier (ψ x.1) (Pi.single
+          ((s₂ x.1 i (columnEdge true j j)).submatrix (D.subdiagEquiv j).symm
+            (D.gridDiagEquiv j)).toCols₂ 1)) (τ B),
+        fun r ↦ ?_, fun x i g₁ g₂ ↦ ?_⟩
+      · obtain ⟨β₀, hβ₀⟩ := D.seesaw_row_line_diagonal hj hΦ₀_sum hΞ (τ B) r
+        refine ⟨κ₀ * β₀, fun x ↦ ?_⟩
+        dsimp only
+        have h_move := h_eq₀ x.1
+          (fun S k ↦ (gridPathMap S false j (j + 1) x.2.1,
+            periodPairing (isConjKernelPair_gridKernel ⟨hj.le, hj⟩)
+              (D.diagLineWeight j x.1 1 (Pi.single k 1) (τ B)) r
+              (gridPathMap S true j (j + 1) x.2.2)))
+          fun S S' h_eq ↦ funext fun _ ↦ by
+            dsimp only
+            rw [gridPathMap_congr (z := false) fun e he ↦ h_eq e (by simp [w₀, he]),
+              gridPathMap_congr (z := true) fun e he ↦ h_eq e (by simp [w₀, he])]
+        simp only [toRows₁_fromRows, toRows₂_fromRows, toCols₁_fromCols,
+          toCols₂_fromCols] at h_move
+        have h_goal :
+            Φ₂ x.1 (fun S ↦ periodPairing (isConjKernelPair_gridKernel ⟨hj.le, hj⟩)
+              (D.diagLineWeight j x.1 (c_line x.1) (matrixFourier (ψ x.1)
+                (Pi.single ((S (columnEdge true j j)).submatrix
+                  (D.subdiagEquiv j).symm (D.gridDiagEquiv j)).toCols₂ 1)) (τ B)) r
+              (gridPathMap S true j (j + 1) x.2.2)
+              (liftMove ((S (columnEdge true j j)).submatrix (D.subdiagEquiv j).symm
+                (D.gridDiagEquiv j)).toCols₁
+                (transposedMove (S (columnEdge false j j))
+                  (gridPathMap S false j (j + 1) x.2.1)))) =
+            κ₀ * β₀ * (Ξ x / (c₃ / c_line) x.1) := by
+          simp_rw [h_fourier_pair, ← smul_eq_mul (c_line x.1 : ℂ)]
+          rw [← Pi.smul_def, map_smul, smul_eq_mul, h_move, hβ₀ x]
+          simp only [Pi.div_apply, Units.val_div_eq_div_val]
+          field_simp [(c_line x.1).ne_zero, (c₃ x.1).ne_zero]
+        rw [hΦ₂_sum x.1] at h_goal
+        dsimp only [liftMove] at h_goal
+        exact h_goal
+      · have h_char_j : gridChar x.1 false j (D.GridIndex true j j) =
+            gridChar x.1 false j (D.GridIndex false j j) * 1 := by
+          have h_rk : (card (D.GridIndex true j j) + 1) / 2 =
+              (card (D.GridIndex false j j) + 1) / 2 := by
+            simp only [card_gridIndex, ht, Bool.toNat_true, Bool.toNat_false]; grind
+          simp [gridChar, h_rk]
+        have h_dat := single_one_eq_mul_of_coordinates (s₂ x.1 i (columnEdge true j j))
+          (fun Y ↦ (Y.submatrix (D.subdiagEquiv j).symm (D.gridDiagEquiv j)).toCols₁)
+          (fun Y ↦ (Y.submatrix (D.subdiagEquiv j).symm (D.gridDiagEquiv j)).toCols₂) fun _ ↦ by
+            simp only [← fromCols_ext_iff, fromCols_toCols]
+            exact (Matrix.reindex (D.subdiagEquiv j) (D.gridDiagEquiv j).symm).injective.eq_iff
+        have h_poly :
+            (MvPolynomial.rename (Prod.map id (Prod.map (D.subdiagEquiv j).symm
+              (D.gridDiagEquiv j ∘ .inl)))).toRingHom A *
+              (MvPolynomial.rename (Prod.map id (Prod.map (D.subdiagEquiv j).symm
+                (D.gridDiagEquiv j ∘ .inr)))).toRingHom B =
+            renameRowsCols (D.subdiagEquiv j).symm (D.gridDiagEquiv j)
+              (renameRowsCols id .inl A * renameRowsCols id .inr B) := by
+          simp [renameRowsCols, Prod.map_comp_map]
+        change (1 : ℂ) * _ = (D.diagLineWeight j x.1 _ _ _).weightFn g₂ * _
+        simp only [diagLineWeight, diagWeight, one_mul, ContinuousMap.coe_mk, Bool.not_true]
+        rw [← h_flip x.1 B _ (D.subdiagMap j g₂), eq_comm, mul_comm, ← modKernel_sum_left,
+          ← modKernel_reindex (D.gridDiagEquiv j)
+            (D.sumElim_gridSigns_comp_gridDiagEquiv_symm hj.le) (D.subdiagEquiv j).symm
+            (D.gridSigns_subdiagEquiv j),
+          D.reindex_subdiagMap j, h_char_j, D.gridChar_subdiag j, h_dat, h_poly,
+          gridSpace_diag hj.le, D.gridSpace_subdiagEquiv j])
+  -- Combine the two interior row-descent transfers with the diagonal seesaw proportionality.
+  obtain ⟨β, hβ⟩ := h_seesaw
+  refine ⟨κ₁ * κ₂ * β, fun x ↦ ?_⟩
+  have h₁ := h_eq₁ x.1 x.2.1
+    (fun S ↦ (diagonalPeriodForm x.1 hj.le g).flip (gridPathMap S true j j x.2.2))
+    fun S S' h_eq ↦ by dsimp only; rw [gridPathMap_congr h_eq]
+  simp only [LinearMap.flip_apply] at h₁
+  have h₂ := h_eq₂ x.1 x.2.2
+    (fun S ↦ diagonalPeriodForm x.1 hj.le g
+      (transposedMove (S (columnEdge false j j)) (gridPathMap S false j (j + 1) x.2.1)))
+    fun S S' h_eq ↦ by
+      dsimp only
+      rw [h_eq (columnEdge false j j) (by simp [w₁]),
+        gridPathMap_congr fun e he ↦ h_eq e (by simp [w₁, he])]
+  have hβ' : Φ₂ x.1 (fun S ↦ diagonalPeriodForm x.1 hj.le g
+      (transposedMove (S (columnEdge false j j)) (gridPathMap S false j (j + 1) x.2.1))
+      (transposedMove (S (columnEdge true j j)) (gridPathMap S true j (j + 1) x.2.2))) =
+      β * (Ξ x / (c₃ / c_line) x.1) := by
+    rw [hΦ₂_sum x.1]
+    dsimp only [diagonalPeriodForm, diagWeight, transposedMove] at hβ ⊢
+    exact hβ x
+  calc D.gridPeriod hj.le Λ g x
+    _ = κ₁ / c₁ x.1 * _ := h₁
+    _ = κ₁ / c₁ x.1 * (κ₂ / c₂ x.1 * _) := by rw [h₂]
+    _ = κ₁ * κ₂ * β * (Ξ x / c_tot x.1) := by
+        rw [hβ']
+        simp [c_tot, Pi.mul_apply, Units.val_mul, Units.val_div_eq_div_val, field]
+
+/-- Composing the diagonal climbs from stage `0` to stage `j ≤ m`: there are nonzero factors `c ϑ`
+whose modulus up to a norm power is `∏ i ∈ range j, ∏ k ∈ range j, D.turnRatio i k` giving a route
+of order cost `2 * j ^ 2` from `stageEdges 0` to `stageEdges j`. -/
+lemma exists_hasRoute_zero_stage (D : Data P) {j : ℕ} (hj : j ≤ D.m) :
+    ∃ c : D.MFoldTwist → ℂˣ,
+      D.HasAbsUpToNormPower (fun ϑ : D.MFoldTwist ↦ c ϑ)
+        (∏ i ∈ range j, ∏ k ∈ range j, D.turnRatio i k) ∧
+      D.HasRoute zero_le hj (2 * j ^ 2) c := by
+  induction j with
+  | zero =>
+    refine ⟨1, by simpa [Pi.one_def] using HasAbsUpToNormPower.one,
+      fun n Λ hΛ ↦ ⟨Λ, by simpa using hΛ, fun Ξ hΞ g ↦ by simpa using hΞ g⟩⟩
+  | succ j ih =>
+    obtain ⟨c_prev, hc_prev, h_prev⟩ := ih (Nat.le_of_succ_le hj)
+    obtain ⟨c_step, hc_step, h_step⟩ := D.hasRoute_succ hj
+    refine ⟨c_prev * c_step, ?_, fun n Λ hΛ ↦ ?_⟩
+    · rw [show (fun ϑ : D.MFoldTwist ↦ ((c_prev * c_step) ϑ : ℂ)) =
+          (fun ϑ ↦ (c_prev ϑ : ℂ)) * fun ϑ ↦ (c_step ϑ : ℂ) from funext fun _ ↦ Units.val_mul ..,
+        ← show (∏ i ∈ range j, ∏ k ∈ range j, D.turnRatio i k) *
+            ((∏ i ∈ range j, D.turnRatio i j) * (∏ i ∈ range j, D.turnRatio j i) *
+              D.turnRatio j j) =
+          ∏ i ∈ range (j + 1), ∏ k ∈ range (j + 1), D.turnRatio i k from funext fun _ ↦ by
+            simp only [Pi.mul_apply, Finset.prod_apply, prod_range_succ, prod_mul_distrib]; ring]
+      exact hc_prev.mul hc_step
+    · obtain ⟨Φ₁, hΦ₁, h_back₁⟩ := h_prev n Λ hΛ
+      obtain ⟨Φ₂, hΦ₂, h_back₂⟩ := h_step (n + 2 * j ^ 2) Φ₁ hΦ₁
+      refine ⟨Φ₂, (show n + 2 * j ^ 2 + (4 * j + 2) = n + 2 * (j + 1) ^ 2 by ring) ▸ hΦ₂,
+        fun Ξ hΞ ↦ ?_⟩
+      simpa only [Pi.mul_apply, Units.val_mul, div_div, mul_comm] using h_back₁ _ (h_back₂ Ξ hΞ)
+
+/-- There are nonzero factors `c ϑ` whose modulus up to a norm power is the product of
+`D.turnRatio i j` over all `i, j < m`, giving a route of order cost `2 * m ^ 2` from the first path
+(`stageEdges 0`) to the last (`stageEdges m`). -/
+theorem exists_hasRoute_zero_last (D : Data P) :
+    ∃ c : D.MFoldTwist → ℂˣ,
+      D.HasAbsUpToNormPower (fun ϑ : D.MFoldTwist ↦ c ϑ)
+        (∏ i ∈ range D.m, ∏ j ∈ range D.m, D.turnRatio i j) ∧
+      D.HasRoute zero_le le_rfl (2 * D.m ^ 2) c :=
+  D.exists_hasRoute_zero_stage le_rfl
 
 end RowLadder
 

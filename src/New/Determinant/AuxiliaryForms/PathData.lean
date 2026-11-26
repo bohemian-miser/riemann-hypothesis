@@ -1,27 +1,32 @@
 module
 
 import Mathlib.Data.Rat.Cast.OfScientific
-import Mathlib.RingTheory.Coalgebra.CoassocSimps
 import Std.Tactic.BVDecide.Normalize.Bool
 public import Lib.Weil.DualPair.Flip
-public import New.Determinant.AuxiliaryForms.GridPaths
 public import New.Determinant.Chain.SquareLaw
 public import Lib.ClassField.HeckeCharacter.TameModulus
 public import Lib.Weil.Seesaw
 public import New.UpperBound.Objects.Rows
 public import Lib.Adelic.Unitary.RationalPoints -- shake: keep (needed public by an exposed definition)
-import Lib.Adelic.Unitary.WeakApproximation
 import New.OneLift.ComparisonOperator.ExchangeData
 
 /-!
-# Moduli, spaces, moves, path data and periods on the two grids
+# Moduli, spaces, moves, monadic grid data and periods on the two grids
 
 This file sets up the two grids of hermitian spaces attached to admissible data `D` and an `m`-fold
-twist `ϑ`. A node is a triple `(z, a, b)`: the space `Y^a_b` for `z = false` and `Ỹ^b_a` for
+twist `ϑ`, together with the linear integration functionals that carry periods from the first path
+to the last. A node is a triple `(z, a, b)`: the space `Y^a_b` for `z = false` and `Ỹ^b_a` for
 `z = true`. The element `ϖ = π_M = New.Data.piM`, of norm `M`, generates the product of the chosen
-places, and Q is the product of the places of `ϑ`. This file defines the moduli of the grids, the
-spaces, characters, levels and moves at the nodes and edges, then functions on tuples of matrices
-and the periods formed with them.
+places, and `Q` is the product of the places of `ϑ`.
+
+Rather than encoding path weights as pointwise functions `EdgeTuple ϑ → ℂ` summed over
+finite-support slices, we represent a path datum directly as its **linear integration functional**
+`GridDatum ϑ := (EdgeTuple ϑ → ℂ) →ₗ[ℂ] ℂ`. Extending a datum along an edge, symmetrizing over
+cosets of node levels, and turning a corner across a grid square (whether in the interior or on the
+diagonal) are all instances of a single monadic operation `GridDatum.bind`, which composes a datum
+with a finite root-of-unity-weighted family of edge-tuple updates. Likewise, paths need only follow
+L-shaped routes `gridPath z a b` that descend down the first column from `(0, m)` to `(0, b)` and
+then lift along row `b` to `(a, b)`.
 
 ## Main definitions and results
 
@@ -29,19 +34,22 @@ and the periods formed with them.
   (`New.Data.gridModulus_one_ideal`).
 * `New.Data.liftMove`, `New.Data.transposedMove`: the theta lift `(a, b) → (a + 1, b)` and the
   transposed lift `(a, b + 1) → (a, b)` with a single matrix as finite datum.
-* `New.Data.IsPathDatum`: functions of a matrix per edge of a path that are equivariant at the inner
-  nodes and under the level `𝔟` at `Ỹ^m_0`, vanish unless the vertical edges (those whose character
-  carries the twist) carry split injective matrices, and take sums of few roots of unity as values.
-* `New.Data.gridPeriod`, `New.Data.IsProportional`: the period of path data, and the relation
-  `Ψ ∝ Ξ`.
+* `New.Data.GridDatum`, `New.Data.GridDatum.bind`, `New.Data.IsShortSum`, `New.Data.IsPathDatum`:
+  linear functionals on functions of edge tuples, their monadic composition, short root-of-unity
+  combinations supported on left-invertible vertical edges (`New.Data.IsShortSum.bind`), and
+  equivariant path data.
+* `New.Data.legDescents`, `New.Data.gridPathMap`, `New.Data.stageEdges`: L-shaped paths through the
+  two grids and the composite maps on forms along them.
+* `New.Data.gridPeriod`, `New.Data.IsProportional`: the diagonal period at stage `j` and the
+  proportionality relation `Λ ∝ Ξ`.
 
 Notions from other files:
-* `New.Modulus`: a nonzero ideal of O_E prime to its complex conjugate.
-* `New.Data.MFoldTwist`: a twist ϑ whose tame part has ψ_wⁿ non-trivial for all w in Q and
-  1 ≤ n ≤ m.
+* `New.Modulus`: a nonzero ideal of `O_E` prime to its complex conjugate.
+* `New.Data.MFoldTwist`: a twist `ϑ` whose tame part has `ψ_wⁿ` non-trivial for all `w` in `Q` and
+  `1 ≤ n ≤ m`.
 * `New.Data.GridIndex`, `New.Data.gridSigns`, `New.Data.gridParam`: the index set of a basis, the
-  signs of the hermitian form and twice the parameter of the type at a node with an offset o; the
-  grids have o = 0.
+  signs of the hermitian form and twice the parameter of the type at a node with an offset `o`; the
+  grids have `o = 0`.
 * `New.Exchange.IsEdgeFamily`: a family of characters over two pairs of conjugate cuspidal types
   which, with a polynomial, form an edge for the real Weil representation.
 -/
@@ -105,8 +113,6 @@ the places of `ϑ`, if `z` is false, and `𝔟 = ϖ ^ D.natB` if `z` is true. He
 abbrev triangleModulus (z : Bool) (ϑ : D.MFoldTwist) : Modulus D.E :=
   D.twistModulus (triangleTwist ϑ z) (D.triangleExponent z)
 
-
-
 /-- Let `ϑ` be an `m`-fold twist, `Q` the product of its places, `ϖ = D.piM` the generator of the
 product of the chosen places, and `b = D.natB ≥ 1`. The triangle modulus of grid `z`, which is
 `ϖ Q` for `z = false` (grid `Y`) and `ϖ ^ b` for `z = true` (grid `Ỹ`), divides the grid modulus
@@ -141,8 +147,8 @@ end GridModuli
 ## Spaces, characters, levels and moves of the two grids
 
 The node `(false, a, b)` is `Y^a_b`, the node `(true, a, b)` is `Ỹ^b_a`, and `Y^0_j` is the space
-`Y_j`. Throughout, `ϖ` generates the product of the chosen places, `𝔟 = ϖ ^ D.natB`, and Q is the
-product of the places of the twist ϑ.
+`Y_j`. Throughout, `ϖ` generates the product of the chosen places, `𝔟 = ϖ ^ D.natB`, and `Q` is the
+product of the places of the twist `ϑ`.
 -/
 
 section GridDefs
@@ -183,7 +189,6 @@ vertical edge (`c = true`) the character is `μ ϑ ^ (l + 1) υ ^ ⌊card n / 2�
 def gridChar : AutChar D.E :=
   D.liftChar (bif c then ϑ.pow (l + 1) else TameChar.one) (l + 1) *
     WeilData.upsilonU1 ^ ((card n + (!c).toNat) / 2)
-
 
 /-- The tame part of `gridChar`: that of `liftChar` with the twist `ϑ ^ (l + 1)` if `c`, and with
 the trivial twist otherwise. -/
@@ -402,85 +407,42 @@ lemma levelIndex_eq_card_GL_untwisted {ϑ : D.MFoldTwist} {z : Bool} {a b : ℕ}
 
 end GridDefs
 
-end New.Data
-
 /-!
 ## Path data and periods on the two grids
 
-Tuples of matrices modulo `𝔪` on the edges of a path, path data, the maps on forms along a path,
-and periods with the relation `Ψ ∝ Ξ`. The groups of integral points act through their quotients,
-the invertible matrices modulo `𝔪`.
+Tuples of matrices modulo `𝔪` on the edges of a path, monadic path data, L-shaped maps on forms
+along a path, and periods with the relation `Λ ∝ Ξ`. The groups of integral points act through
+their quotients, the invertible matrices modulo `𝔪`.
+
+A `GridDatum ϑ` is a complex linear functional on functions `EdgeTuple ϑ → ℂ`. Instead of tracking
+pointwise support sets and multiset sums of roots of unity on raw functions of edge tuples, we
+package both into `IsShortSum`: a datum of order `n` on an edge set `w` is a sum of at most
+`edgeMatrixCountBound ϑ ^ n` point evaluations weighted by single roots of unity at tuples whose
+vertical edges in `w` carry left-invertible matrices. Composing a datum with a finite family of
+edge-tuple transitions (`GridDatum.bind`) preserves `IsShortSum` in one step (`IsShortSum.bind`),
+allowing single-edge point data, coset averages, interior square moves and diagonal square moves to
+share a single algebra.
 -/
 
-namespace New
+section GridData
 
-open Fintype Finset Function
-
-/-- `z` is a sum of at most `N` roots of unity. -/
-def IsSumOfRootsOfUnity (N : ℕ) (z : ℂ) : Prop :=
-  ∃ s : Multiset ℂ, s.card ≤ N ∧ (∀ c ∈ s, IsOfFinOrder c) ∧ s.sum = z
-
-namespace IsSumOfRootsOfUnity
-
-variable {N N' : ℕ} {z u : ℂ}
-
-lemma zero : IsSumOfRootsOfUnity N 0 := ⟨0, by simp, by simp, rfl⟩
-
-lemma of_isOfFinOrder (hu : IsOfFinOrder u) : IsSumOfRootsOfUnity 1 u :=
-  ⟨{u}, by simp, by simpa using hu, by simp⟩
-
-lemma mono (hz : IsSumOfRootsOfUnity N z) (hN : N ≤ N') : IsSumOfRootsOfUnity N' z :=
-  hz.imp fun _ hs ↦ ⟨hs.1.trans hN, hs.2⟩
-
-lemma mul_left (hz : IsSumOfRootsOfUnity N z) (hu : IsOfFinOrder u) :
-    IsSumOfRootsOfUnity N (u * z) := by
-  obtain ⟨s, h_card, h_root, rfl⟩ := hz
-  refine ⟨s.map (u * ·), by simpa using h_card, ?_, by
-    rw [Multiset.sum_map_mul_left, Multiset.map_id']⟩
-  simpa using fun d hd ↦ hu.mul (h_root d hd)
-
-/-- A sum over a finite type `X` of numbers that are sums of at most `N` roots of unity is a sum of
-at most `card X * N` roots of unity. -/
-lemma sum {X : Type*} [Fintype X] {f : X → ℂ} (hf : ∀ x : X, IsSumOfRootsOfUnity N (f x)) :
-    IsSumOfRootsOfUnity (card X * N) (∑ x : X, f x) := by
-  have h_exists : ∀ x : X,
-      ∃ s : Multiset ℂ, s.card ≤ N ∧ (∀ c ∈ s, IsOfFinOrder c) ∧ s.sum = f x := hf
-  choose s h_card h_root h_sum using h_exists
-  refine ⟨∑ x : X, s x, ?_, fun c hc ↦ ?_, by simp [Multiset.sum_sum, h_sum]⟩
-  · simpa [Multiset.card_sum] using sum_le_card_nsmul univ _ N fun x _ ↦ h_card x
-  · obtain ⟨x, -, hx⟩ := Multiset.mem_sum.1 hc
-    exact h_root x c hx
-
-open Pointwise in
-/-- Let `z` be a sum of at most `N` roots of unity. If a set contains `0` and all multiples of `a`
-by roots of unity, then `z * a` is a sum of `N` of its elements. -/
-lemma mul_mem_nsmul (hz : IsSumOfRootsOfUnity N z) {a : ℂ} {A : Set ℂ} (h_zero : 0 ∈ A)
-    (ha : ∀ c : ℂ, IsOfFinOrder c → c * a ∈ A) : z * a ∈ N • A := by
-  obtain ⟨s, h_card, h_root, rfl⟩ := hz
-  have h_mem (t : Multiset ℂ) (ht : ∀ c ∈ t, IsOfFinOrder c) : t.sum * a ∈ t.card • A := by
-    induction t using Multiset.induction_on with
-    | empty => simp
-    | cons c t ih =>
-      obtain ⟨hc, ht'⟩ := Multiset.forall_mem_cons.1 ht
-      rw [Multiset.sum_cons, add_mul, Multiset.card_cons, succ_nsmul']
-      exact Set.add_mem_add (ha c hc) (ih ht')
-  exact Set.nsmul_subset_nsmul_right h_zero h_card (h_mem s h_root)
-
-end IsSumOfRootsOfUnity
-
-namespace Data
-
-open Exchange Space
+open Fintype Finset Function Exchange Space
 
 variable {P : Parameters} {D : Data P} (ϑ : D.MFoldTwist)
 
-/-- A matrix modulo `𝔪` for each pair of nodes, where `𝔪` is `New.Data.gridModulus` of the twist
-`ϑ`. -/
+/-- A matrix modulo `𝔪` for each ordered pair of nodes, where `𝔪` is `New.Data.gridModulus` of the
+twist `ϑ`. -/
 abbrev EdgeTuple : Type :=
   ∀ e : GridNode × GridNode, Matrix (D.NodeIndex e.2) (D.NodeIndex e.1) (gridModulus ϑ).ResidueRing
 
 /-- An invertible matrix modulo `𝔪` for each node. -/
 abbrev NodeFamily : Type := ∀ p : GridNode, GL (D.NodeIndex p) (gridModulus ϑ).ResidueRing
+
+variable (D) in
+/-- A linear integration functional on complex functions of `EdgeTuple ϑ`. Representing path
+weights as linear functionals `(EdgeTuple ϑ → ℂ) →ₗ[ℂ] ℂ` eliminates manual finite-support slices
+and unifies edge extensions, coset symmetrizations and square turns under `GridDatum.bind`. -/
+abbrev GridDatum : Type := (EdgeTuple (D := D) ϑ → ℂ) →ₗ[ℂ] ℂ
 
 /-- The vertical edges, whose character carries the twist: from `p` to `q` the first index changes
 if `p` is in the grid of the `Ỹ`, and stays if it is in that of the `Y`. -/
@@ -493,143 +455,12 @@ def edgeChar (e : GridNode × GridNode) : MulChar (gridModulus ϑ).ResidueRing �
   (gridModulus ϑ).charOfTamePart
     (gridTamePart ϑ (IsVerticalEdge e.1 e.2) (if e.1.2.1 = e.2.2.1 then e.1.2.2 else e.1.2.1))
 
-open scoped Classical in
-/-- The tuples of matrices, one for each edge in `w`, extended by zero to the other pairs. -/
-def tuplesOn (w : Finset (GridNode × GridNode)) : Finset (EdgeTuple ϑ) :=
-  univ.image (updateFinset (0 : EdgeTuple ϑ) w)
-
 /-- A bound for the number of matrices of an edge between nodes with indices at most `D.m`: the
 order of the residue ring of `𝔪` to the power `(2 * D.n D.m) ^ 2`, where `2 * D.n D.m` bounds the
 ranks of such nodes. -/
 abbrev edgeMatrixCountBound : ℕ := card (D.gridModulus ϑ).ResidueRing ^ (2 * D.n D.m) ^ 2
 
-/-- A bound for the number of column vectors modulo `𝔪` of a space of the grids at indices at most
-`D.m`. -/
-abbrev vectorCountBound : ℕ := card (D.gridModulus ϑ).ResidueRing ^ (2 * D.n D.m)
-
 variable {ϑ}
-
-variable {w : Finset (GridNode × GridNode)} {S : EdgeTuple ϑ}
-
-/-- The families that must fix a path datum. At the ends `Y^0_m` and `Ỹ^m_0` the element lies in the
-level of the node (which is trivial modulo `𝔪` at `Y^0_m`), at `Ỹ^a_a` it is `g ⊕ 1` for the element
-`g` at `Y^a_a`, and elsewhere it is free. -/
-def IsAdmissibleFamily (g : NodeFamily ϑ) : Prop :=
-  (∀ z : Bool, g (z, 0, D.m) ∈ nodeLevel ϑ (z, 0, D.m)) ∧
-    ∀ a : ℕ, g (true, a, a) = blockInlGL (D.gridDiagEquiv a) (g (false, a, a))
-
-/-- The action of a family `g` of invertible matrices at the nodes on tuples: the matrix at the edge
-from `p` to `q` becomes `(g q)⁻¹ * S (p, q) * g p`. -/
-def tupleAction (g : NodeFamily ϑ) (S : EdgeTuple ϑ) : EdgeTuple ϑ :=
-  fun e : GridNode × GridNode ↦ ((g e.2)⁻¹).val * S e * (g e.1).val
-
-/-- The factor in the action on functions of the matrices of the edges `w`: the product over the
-edges from `p` to `q` of the characters `New.Data.edgeChar` at `det (g q) / det (g p)`. -/
-def edgeCharProd (g : NodeFamily ϑ) (w : Finset (GridNode × GridNode)) : ℂ :=
-  ∏ e ∈ w, (edgeChar ϑ e).toUnitHom ((g e.2).det / (g e.1).det)
-
-/-- A function `Ψ` of tuples of matrices is a path datum for a set `w` of edges if it depends on the
-matrices at `w` only, is fixed by the action of admissible families twisted by the characters of the
-edges (`New.Data.edgeCharProd`), vanishes unless the vertical edges carry matrices with left
-inverses, and has as values sums of at most `N` roots of unity. -/
-structure IsPathDatum (N : ℕ) (w : Finset (GridNode × GridNode)) (Ψ : EdgeTuple ϑ → ℂ) : Prop where
-  /-- `Ψ` is a function of the matrices of the edges in `w`. -/
-  dependsOn : DependsOn Ψ w
-  /-- (i) Admissible families fix `Ψ`, up to the factor `New.Data.edgeCharProd`. -/
-  invariant (g : NodeFamily ϑ) (hg : IsAdmissibleFamily g) (S : EdgeTuple ϑ) :
-    edgeCharProd g w * Ψ (tupleAction g S) = Ψ S
-  /-- (ii) `Ψ` vanishes unless the matrices of the vertical edges are split injective. -/
-  hasLeftInv (S : EdgeTuple ϑ) (hS : Ψ S ≠ 0) :
-    ∀ e ∈ w, IsVerticalEdge e.1 e.2 → HasLeftInv (S e)
-  /-- (iii) The values of `Ψ` are sums of at most `N` roots of unity. -/
-  isSumOfRootsOfUnity (S : EdgeTuple ϑ) : IsSumOfRootsOfUnity N (Ψ S)
-
-lemma IsPathDatum.mono {N N' : ℕ} {Ψ : EdgeTuple ϑ → ℂ} (hΨ : IsPathDatum N w Ψ) (hN : N ≤ N') :
-    IsPathDatum N' w Ψ :=
-  { hΨ with isSumOfRootsOfUnity S := (hΨ.isSumOfRootsOfUnity S).mono hN }
-
-/-- The factor `New.Data.edgeCharProd` of the edge characters is multiplicative in the family of
-invertible matrices. -/
-lemma edgeCharProd_mul (g g' : NodeFamily ϑ) (w : Finset (GridNode × GridNode)) :
-    edgeCharProd (g * g') w = edgeCharProd g w * edgeCharProd g' w := by
-  simp only [edgeCharProd, ← prod_mul_distrib]
-  refine prod_congr rfl fun e _ ↦ ?_
-  simp only [Pi.mul_apply, MonoidHom.map_mul, mul_div_mul_comm, Units.val_mul]
-
-lemma isOfFinOrder_edgeCharProd (g : NodeFamily ϑ) (w : Finset (GridNode × GridNode)) :
-    IsOfFinOrder (edgeCharProd g w) :=
-  (CommMonoid.torsion ℂ).prod_mem fun e _ ↦
-    show IsOfFinOrder (((edgeChar ϑ e).toUnitHom ((g e.2).det / (g e.1).det) : ℂˣ) : ℂ) from
-      (edgeChar ϑ e).isOfFinOrder (Units.isUnit _).isOfFinOrder
-
-/-- The action `New.Data.tupleAction` on tuples is a right action. -/
-lemma tupleAction_mul (g g' : NodeFamily ϑ) (S : EdgeTuple ϑ) :
-    tupleAction (g * g') S = tupleAction g' (tupleAction g S) := by
-  funext e
-  simp [tupleAction, Matrix.mul_assoc]
-
-lemma tupleAction_one (S : EdgeTuple ϑ) : tupleAction 1 S = S := by
-  funext e
-  simp [tupleAction]
-
-lemma mem_tuplesOn : S ∈ tuplesOn ϑ w ↔ ∀ e : GridNode × GridNode, e ∉ w → S e = 0 := by
-  simp only [tuplesOn, mem_image, mem_univ, true_and]
-  refine ⟨?_, fun hS ↦ ⟨fun e ↦ S e, funext fun e ↦ ?_⟩⟩
-  · rintro ⟨x, rfl⟩ e he
-    simp [updateFinset, he]
-  · by_cases he : e ∈ w <;> simp [updateFinset, he, hS e]
-
-lemma tuplesOn_empty : tuplesOn ϑ ∅ = {0} := by
-  ext S
-  simp [mem_tuplesOn, funext_iff]
-
-/-- Let `edges` be a finite set of pairs of nodes and `e` a pair not in it; `tuplesOn ϑ edges` is
-the set of tuples of matrices modulo `𝔪 = gridModulus ϑ` that vanish outside `edges`. A sum over
-the tuples on `insert e edges` is a sum over the tuples on `edges` and over the matrix at `e`. -/
-lemma sum_tuplesOn_insert {edges : Finset (GridNode × GridNode)} {e : GridNode × GridNode}
-    {M : Type*} [AddCommMonoid M] (he : e ∉ edges) (F : EdgeTuple ϑ → M) :
-    ∑ S ∈ tuplesOn ϑ (insert e edges), F S =
-      ∑ S ∈ tuplesOn ϑ edges,
-        ∑ y : Matrix (D.NodeIndex e.2) (D.NodeIndex e.1) (gridModulus ϑ).ResidueRing,
-          F (update S e y) := by
-  rw [← sum_product']
-  -- split off the matrix at `e`; the inverse map puts it back
-  refine sum_nbij' (fun S ↦ (update S e 0, S e)) (fun p ↦ update p.1 e p.2)
-    (fun S hS ↦ ?_) (fun p hp ↦ ?_) (fun S _ ↦ by simp) (fun p hp ↦ ?_) fun S _ ↦ by simp
-  · refine mem_product.2 ⟨mem_tuplesOn.2 fun e' he' ↦ ?_, mem_univ _⟩
-    change update S e 0 e' = 0
-    by_cases h : e' = e
-    · rw [h]
-      exact update_self e 0 S
-    · rw [update_of_ne h]
-      exact mem_tuplesOn.1 hS e' fun h' ↦ (mem_insert.1 h').elim h he'
-  · refine mem_tuplesOn.2 fun e' he' ↦ ?_
-    have h : e' ≠ e := fun h' ↦ he' (h' ▸ mem_insert_self e edges)
-    rw [update_of_ne h]
-    exact mem_tuplesOn.1 (mem_product.1 hp).1 e' fun h' ↦ he' (mem_insert_of_mem h')
-  · have h_zero : p.1 e = 0 := mem_tuplesOn.1 (mem_product.1 hp).1 e he
-    simp [← h_zero]
-
-/-- A sum over the tuples supported on `w` does not change when each tuple is moved by a family of
-invertible matrices at the nodes. -/
-lemma sum_tuplesOn_tupleAction {M : Type*} [AddCommMonoid M] (g : NodeFamily ϑ)
-    (F : EdgeTuple ϑ → M) :
-    ∑ S ∈ tuplesOn ϑ w, F (tupleAction g S) = ∑ S ∈ tuplesOn ϑ w, F S := by
-  have h_mem (g : NodeFamily ϑ) (S : EdgeTuple ϑ) (hS : S ∈ tuplesOn ϑ w) :
-      tupleAction g S ∈ tuplesOn ϑ w :=
-    mem_tuplesOn.2 fun e he ↦ by simp [tupleAction, mem_tuplesOn.1 hS e he]
-  exact sum_nbij' (tupleAction g) (tupleAction g⁻¹) (h_mem g) (h_mem g⁻¹)
-    (fun S _ ↦ by simp [← tupleAction_mul, tupleAction_one])
-    (fun S _ ↦ by simp [← tupleAction_mul, tupleAction_one]) fun _ _ ↦ rfl
-
-/-- For a path datum `Ψ` for the edges `w` and an admissible family `g`, the sum over
-`S ∈ tuplesOn ϑ w` of `Ψ S * f (tupleAction g S)` equals `edgeCharProd g w` times the sum of
-`Ψ S * f S`. -/
-lemma IsPathDatum.sum_tupleAction {N : ℕ} {Ψ : EdgeTuple ϑ → ℂ} (hΨ : IsPathDatum N w Ψ)
-    {g : NodeFamily ϑ} (hg : IsAdmissibleFamily g) (f : EdgeTuple ϑ → ℂ) :
-    ∑ S ∈ tuplesOn ϑ w, Ψ S * f (tupleAction g S) =
-      edgeCharProd g w * ∑ S ∈ tuplesOn ϑ w, Ψ S * f S := by
-  simp_rw [← sum_tuplesOn_tupleAction g fun S ↦ Ψ S * f S, mul_sum, ← mul_assoc, hΨ.invariant g hg]
 
 /-- For nodes `p` and `q` whose indices `p.2` and `q.2` are at most `(D.m, D.m)`, the number of
 matrices from `NodeIndex q` to `NodeIndex p` (rows indexed by `p`, columns by `q`) over the residue
@@ -644,18 +475,106 @@ lemma card_matrix_le_edgeMatrixCountBound {p q : GridNode} (hp : p.2 ≤ (D.m, D
   rw [card_congr Matrix.of.symm, card_fun, card_fun, ← pow_mul, edgeMatrixCountBound, sq]
   exact Nat.pow_le_pow_right Fintype.card_pos (Nat.mul_le_mul hq_card hp_card)
 
-/-- If the ends of the edges in `w` have indices at most `D.m`, there are at most
-`edgeMatrixCountBound ϑ ^ #w` tuples supported on `w`. -/
-lemma card_tuplesOn_le
-    (hw : ∀ p q : GridNode, (p, q) ∈ w → p.2 ≤ (D.m, D.m) ∧ q.2 ≤ (D.m, D.m)) :
-    #(tuplesOn ϑ w) ≤ edgeMatrixCountBound ϑ ^ #w := by
-  classical
-  refine card_image_le.trans ?_
-  rw [card_univ, Fintype.card_pi, ← card_coe w, ← card_univ]
-  refine prod_le_pow_card _ _ _ ?_
-  rintro ⟨⟨p, q⟩, hpq⟩ -
-  obtain ⟨hp, hq⟩ := hw p q hpq
-  exact card_matrix_le_edgeMatrixCountBound hq hp
+/-- The families that must fix a path datum up to edge characters. At the ends `Y^0_m` and `Ỹ^m_0`
+the element lies in the level of the node (which is trivial modulo `𝔪` at `Y^0_m`), at `Ỹ^a_a` it is
+`g ⊕ 1` for the element `g` at `Y^a_a`, and elsewhere it is free. -/
+def IsAdmissibleFamily (g : NodeFamily ϑ) : Prop :=
+  (∀ z : Bool, g (z, 0, D.m) ∈ nodeLevel ϑ (z, 0, D.m)) ∧
+    ∀ a : ℕ, g (true, a, a) = blockInlGL (D.gridDiagEquiv a) (g (false, a, a))
+
+/-- The action of a family `g` of invertible matrices at the nodes on tuples: the matrix at the edge
+from `p` to `q` becomes `(g q)⁻¹ * S (p, q) * g p`. -/
+def tupleAction (g : NodeFamily ϑ) (S : EdgeTuple ϑ) : EdgeTuple ϑ :=
+  fun e : GridNode × GridNode ↦ ((g e.2)⁻¹).val * S e * (g e.1).val
+
+/-- The action `New.Data.tupleAction` on tuples is a right action. -/
+lemma tupleAction_mul (g g' : NodeFamily ϑ) (S : EdgeTuple ϑ) :
+    tupleAction (g * g') S = tupleAction g' (tupleAction g S) := by
+  funext e
+  simp [tupleAction, Matrix.mul_assoc]
+
+lemma tupleAction_one (S : EdgeTuple ϑ) : tupleAction 1 S = S := by
+  funext e
+  simp [tupleAction]
+
+/-- The factor in the action on functions of the matrices of the edges `w`: the product over the
+edges from `p` to `q` of the characters `New.Data.edgeChar` at `det (g q) / det (g p)`. -/
+def edgeCharProd (g : NodeFamily ϑ) (w : Finset (GridNode × GridNode)) : ℂ :=
+  ∏ e ∈ w, (edgeChar ϑ e).toUnitHom ((g e.2).det / (g e.1).det)
+
+/-- The factor `New.Data.edgeCharProd` of the edge characters is multiplicative in the family of
+invertible matrices. -/
+lemma edgeCharProd_mul (g g' : NodeFamily ϑ) (w : Finset (GridNode × GridNode)) :
+    edgeCharProd (g * g') w = edgeCharProd g w * edgeCharProd g' w := by
+  simp [edgeCharProd, prod_mul_distrib, field]
+
+lemma isOfFinOrder_edgeCharProd (g : NodeFamily ϑ) (w : Finset (GridNode × GridNode)) :
+    IsOfFinOrder (edgeCharProd g w) :=
+  (CommMonoid.torsion ℂ).prod_mem fun e _ ↦
+    show IsOfFinOrder (((edgeChar ϑ e).toUnitHom ((g e.2).det / (g e.1).det) : ℂˣ) : ℂ) from
+      (edgeChar ϑ e).isOfFinOrder (Units.isUnit _).isOfFinOrder
+
+/-- Every vertical edge in `w` carries a matrix of `S` with a left inverse over the residue ring of
+`gridModulus ϑ`. -/
+abbrev LeftInvOnVerticalEdges (S : EdgeTuple ϑ) (w : Finset (GridNode × GridNode)) : Prop :=
+  ∀ e ∈ w, IsVerticalEdge e.1 e.2 → HasLeftInv (S e)
+
+/-- A functional `Λ : GridDatum ϑ` is a short sum of order `n` on the edge set `w` if it is a
+combination of at most `edgeMatrixCountBound ϑ ^ n` point evaluations, each nonzero coefficient
+being a root of unity at a tuple whose vertical edges in `w` carry left-invertible matrices. -/
+def IsShortSum (n : ℕ) (w : Finset (GridNode × GridNode)) (Λ : D.GridDatum ϑ) : Prop :=
+  ∃ (X : Type) (W : Finset X) (c : X → ℂ) (s : X → EdgeTuple ϑ),
+    #W ≤ edgeMatrixCountBound ϑ ^ n ∧
+    (∀ x : X, c x ≠ 0 → IsOfFinOrder (c x) ∧ LeftInvOnVerticalEdges (s x) w) ∧
+    ∀ f : EdgeTuple ϑ → ℂ, Λ f = ∑ x ∈ W, c x * f (s x)
+
+/-- Monadic composition of a grid datum `Λ` with a finite family of weights `κ S x` and updated
+edge tuples `t S x`, sending `f` to `Λ (fun S ↦ ∑ x, κ S x * f (t S x))`. -/
+def GridDatum.bind (Λ : D.GridDatum ϑ) {X : Type} [Fintype X]
+    (κ : EdgeTuple ϑ → X → ℂ) (t : EdgeTuple ϑ → X → EdgeTuple ϑ) : D.GridDatum ϑ :=
+  Λ ∘ₗ LinearMap.pi fun S ↦ ∑ x : X, κ S x • LinearMap.proj (t S x)
+
+@[simp]
+lemma GridDatum.bind_apply (Λ : D.GridDatum ϑ) {X : Type} [Fintype X]
+    (κ : EdgeTuple ϑ → X → ℂ) (t : EdgeTuple ϑ → X → EdgeTuple ϑ) (f : EdgeTuple ϑ → ℂ) :
+    Λ.bind κ t f = Λ fun S ↦ ∑ x : X, κ S x * f (t S x) :=
+  congrArg Λ (funext fun S ↦ by simp)
+
+/-- Composing a short sum of order `n` on `w` with a transition indexed by `X` of cardinality at
+most `edgeMatrixCountBound ϑ ^ k`, whose nonzero weights are roots of unity carrying
+left-invertibility on vertical edges from `w` to `w'`, yields a short sum of order `n + k` on
+`w'`. -/
+lemma IsShortSum.bind {n k : ℕ} {w w' : Finset (GridNode × GridNode)} {X : Type} [Fintype X]
+    {κ : EdgeTuple ϑ → X → ℂ} {t : EdgeTuple ϑ → X → EdgeTuple ϑ} {Λ : D.GridDatum ϑ}
+    (h_card : card X ≤ edgeMatrixCountBound ϑ ^ k)
+    (hκ : ∀ (S : EdgeTuple ϑ) (x : X), κ S x ≠ 0 → LeftInvOnVerticalEdges S w →
+      IsOfFinOrder (κ S x) ∧ LeftInvOnVerticalEdges (t S x) w')
+    (hΛ : IsShortSum n w Λ) :
+    IsShortSum (n + k) w' (Λ.bind κ t) := by
+  obtain ⟨Y, W, c, s, hW, hc, h_sum⟩ := hΛ
+  refine ⟨Y × X, W ×ˢ univ, fun p ↦ c p.1 * κ (s p.1) p.2, fun p ↦ t (s p.1) p.2, ?_, ?_, ?_⟩
+  · rw [card_product, card_univ, pow_add]
+    exact Nat.mul_le_mul hW h_card
+  · rintro ⟨y, x⟩ h_ne
+    obtain ⟨hc_root, hs_inv⟩ := hc y (left_ne_zero_of_mul h_ne)
+    obtain ⟨hκ_root, ht_inv⟩ := hκ (s y) x (right_ne_zero_of_mul h_ne) hs_inv
+    exact ⟨hc_root.mul hκ_root, ht_inv⟩
+  · intro f
+    simp [GridDatum.bind_apply, h_sum, sum_product, mul_sum, mul_assoc]
+
+/-- A linear functional `Λ` on functions of `EdgeTuple ϑ` is a path datum of order `n` for the
+edge set `w` if admissible families scale `Λ` by `edgeCharProd g w` and `Λ` is a short root-of-unity
+sum (`IsShortSum n w Λ`) supported on tuples whose vertical edges in `w` carry left-invertible
+matrices. -/
+structure IsPathDatum (n : ℕ) (w : Finset (GridNode × GridNode)) (Λ : D.GridDatum ϑ) : Prop where
+  /-- Admissible families scale `Λ` by the product of the characters of the edges in `w`. -/
+  equivariant (g : NodeFamily ϑ) (hg : IsAdmissibleFamily g) (f : EdgeTuple ϑ → ℂ) :
+    Λ (fun S ↦ f (tupleAction g S)) = edgeCharProd g w * Λ f
+  /-- `Λ` is a short root-of-unity combination of point evaluations with split-injective vertical
+  matrices on `w`. -/
+  isShortSum : IsShortSum n w Λ
+
+/-! ### L-shaped paths, composite moves and diagonal periods -/
 
 /-- The edge from `(a, b)` to `(a, b + 1)` in the grid `z`: the vertical edge `Y^a_b → Y^a_(b+1)`
 or the horizontal edge `Ỹ^b_a → Ỹ^(b+1)_a`. -/
@@ -665,114 +584,83 @@ abbrev columnEdge (z : Bool) (a b : ℕ) : GridNode × GridNode := ((z, a, b), z
 or the vertical edge `Ỹ^b_a → Ỹ^b_(a+1)`. -/
 abbrev rowEdge (z : Bool) (a b : ℕ) : GridNode × GridNode := ((z, a, b), z, a + 1, b)
 
-end Data
+variable (D) in
+/-- The edges of the first column of grid `z` between `(0, b)` and `(0, m)`: `(0, i) → (0, i + 1)`
+for `b ≤ i < m`. -/
+def legEdges (z : Bool) (b : ℕ) : Finset (GridNode × GridNode) :=
+  (Ico b D.m).image (columnEdge z 0)
 
-open Data Exchange Space
+variable (D) in
+/-- The edges of the L-shaped path from `(0, m)` to `(a, b)` in grid `z`: first the column edges
+from `(0, b)` to `(0, m)`, then the row edges `(i, b) → (i + 1, b)` for `i < a`. -/
+def gridPath (z : Bool) (a b : ℕ) : Finset (GridNode × GridNode) :=
+  (range a).image (fun i ↦ rowEdge z i b) ∪ D.legEdges z b
 
-variable {P : Parameters} {D : Data P} {ϑ : D.MFoldTwist} {S S' : EdgeTuple ϑ}
-  {z : Bool} {a₀ b₀ a b a' b' m : ℕ}
+variable (D) in
+/-- The edges of the two-grid staircase path at stage `j`, meeting the diagonal at `(j, j)`. For
+`j = 0` this is the first path along both first columns; for `j = D.m` it is the last path along
+row `D.m` in both grids. -/
+abbrev stageEdges (j : ℕ) : Finset (GridNode × GridNode) :=
+  D.gridPath false j j ∪ D.gridPath true j j
 
-namespace GridPath
+/-- The composite of the single-matrix transposed lifts `transposedMove` down the first column of
+grid `z` from `(0, m)` to `(0, b)`, using the matrices that `S` places on `legEdges`; the identity
+for `b = m`, and zero for `b > m`. -/
+def legDescents (S : EdgeTuple ϑ) (z : Bool) (b : ℕ) : D.GridForm z 0 D.m →ₗ[ℂ] D.GridForm z 0 b :=
+  if b < D.m then
+    transposedMove (S (columnEdge z 0 b)) ∘ₗ legDescents S z (b + 1)
+  else if h : D.m = b then by
+    subst h
+    exact LinearMap.id
+  else
+    0
 
-/-- The edges in the grid `z` of a monotone path from the node `(a₀, b₀)` to `(a, b)`: a step `down`
-from `(a, b + 1)` to `(a, b)` gives `columnEdge z a b`, and a step `right` from `(a, b)` to
-`(a + 1, b)` gives `rowEdge z a b`. -/
-def edges (z : Bool) : ∀ {a b : ℕ}, GridPath a₀ b₀ a b → Finset (GridNode × GridNode)
-  | _, _, nil => ∅
-  | a, b, down p => insert (columnEdge z a b) (p.edges z)
-  | _, b, right (a := a) p => insert (rowEdge z a b) (p.edges z)
+lemma legDescents_of_lt (S : EdgeTuple ϑ) (z : Bool) {b : ℕ} (hb : b < D.m) :
+    legDescents S z b = transposedMove (S (columnEdge z 0 b)) ∘ₗ legDescents S z (b + 1) := by
+  rw [legDescents, ite_eq_left hb]
 
-/-- The composite of the maps by the matrices of `S` along a path in the grid `z`: a transposed lift
-when the second index drops, a lift when the first index grows. It moves conjugate forms in the grid
-of the `Y` and forms in the grid of the `Ỹ`. -/
-def formMap (S : EdgeTuple ϑ) (z : Bool) :
-    ∀ {a b : ℕ}, GridPath a₀ b₀ a b → D.GridForm z a₀ b₀ →ₗ[ℂ] D.GridForm z a b
-  | _, _, nil => .id
-  | a, b, down p => transposedMove (S (columnEdge z a b)) ∘ₗ p.formMap S z
-  | _, b, right (a := a) p => liftMove (S (rowEdge z a b)) ∘ₗ p.formMap S z
+lemma legDescents_self (S : EdgeTuple ϑ) (z : Bool) : legDescents S z D.m = LinearMap.id := by
+  rw [legDescents, ite_eq_right (lt_irrefl _), dite_eq_left rfl]
 
-lemma edges_append (p : GridPath a₀ b₀ a b) (q : GridPath a b a' b') :
-    (p.append q).edges z = p.edges z ∪ q.edges z := by
-  induction q with
-  | nil => simp [append, edges]
-  | down q ih | right q ih => simp [append, edges, ih]
+/-- The map `legDescents` down the first column depends only on the matrices at `legEdges`. -/
+lemma legDescents_congr {S S' : EdgeTuple ϑ} {z : Bool} {b : ℕ}
+    (h_edges : ∀ e ∈ D.legEdges z b, S e = S' e) :
+    legDescents S z b = legDescents S' z b := by
+  fun_induction legDescents S z b with
+  | case1 b hb ih =>
+    have h_head : S (columnEdge z 0 b) = S' (columnEdge z 0 b) :=
+      h_edges _ (mem_image.2 ⟨b, mem_Ico.2 ⟨le_rfl, hb⟩, rfl⟩)
+    have h_tail : legDescents S z (b + 1) = legDescents S' z (b + 1) :=
+      ih fun e he ↦ h_edges e (image_subset_image (Ico_subset_Ico_left (Nat.le_succ b)) he)
+    rw [legDescents_of_lt S' z hb, h_head, h_tail]
+  | case2 =>
+    rw [legDescents_self]
+  | case3 b hb hne =>
+    rw [legDescents, ite_eq_right hb, dite_eq_right hne]
 
-/-- The map on forms along a concatenation of two paths is the composite of the two maps. -/
-lemma formMap_append (p : GridPath a₀ b₀ a b) (q : GridPath a b a' b') :
-    (p.append q).formMap S z = q.formMap S z ∘ₗ p.formMap S z := by
-  induction q with
-  | nil => simp [append, formMap]
-  | down q ih | right q ih => simp [append, formMap, ih, LinearMap.comp_assoc]
+/-- The composite map on forms along the L-shaped path from `(0, m)` to `(a, b)` in grid `z`:
+descend to `(0, b)` by `legDescents`, then lift `a` times along row `b` by `liftMove`. -/
+def gridPathMap (S : EdgeTuple ϑ) (z : Bool) :
+    ∀ a b : ℕ, D.GridForm z 0 D.m →ₗ[ℂ] D.GridForm z a b
+  | 0, b => legDescents S z b
+  | a + 1, b => liftMove (S (rowEdge z a b)) ∘ₗ gridPathMap S z a b
 
-/-- The map on forms along a path depends only on the matrices at the edges of the path. -/
-lemma formMap_congr (p : GridPath a₀ b₀ a b) (h_edges : ∀ e ∈ p.edges z, S e = S' e) :
-    p.formMap S z = p.formMap S' z := by
-  induction p with
-  | nil => rfl
-  | down p ih | right p ih =>
-    simp only [edges, Finset.forall_mem_insert] at h_edges
-    obtain ⟨h_last, h_old⟩ := h_edges
-    rw [formMap, formMap, h_last, ih h_old]
-
-/-- Both ends of an edge `(u, v)` of a path from `(a₀, b₀)` to `(a, b)` lie in the grid `z` of the
-path and in the rectangle spanned by its ends: the pairs of indices satisfy
-`(a₀, b) ≤ u.2 ≤ v.2 ≤ (a, b₀)` in the componentwise order. -/
-lemma eq_and_le_of_mem_edges {p : GridPath a₀ b₀ a b} {u v : GridNode} (he : (u, v) ∈ p.edges z) :
-    u.1 = z ∧
-      v.1 = z ∧
-      (a₀, b) ≤ u.2 ∧
-      u.2 ≤ v.2 ∧
-      v.2 ≤ (a, b₀) := by
-  -- The edge is the last step, bounded by `GridPath.le_and_le`, or an edge of the shorter path.
-  induction p with
-  | nil => simp [edges] at he
-  | @down a b p ih =>
-    obtain ⟨ha, hb⟩ : a₀ ≤ a ∧ b + 1 ≤ b₀ := p.le_and_le
-    rcases mem_insert.1 he with h_last | h_old
-    · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h_last
-      simp [ha, hb]
-    · obtain ⟨hu, hv, h_lower, h_step, h_upper⟩ := ih h_old
-      exact ⟨hu, hv, le_trans (by simp) h_lower, h_step, h_upper⟩
-  | @right a b p ih =>
-    obtain ⟨ha, hb⟩ : a₀ ≤ a ∧ b ≤ b₀ := p.le_and_le
-    rcases mem_insert.1 he with h_last | h_old
-    · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h_last
-      simp [ha, hb]
-    · obtain ⟨hu, hv, h_lower, h_step, h_upper⟩ := ih h_old
-      exact ⟨hu, hv, h_lower, h_step, h_upper.trans (by simp)⟩
-
-/-- A path from `(a₀, b₀)` to `(a, b)` has at most `(a - a₀) + (b₀ - b)` edges, stated without
-subtraction. -/
-lemma card_edges_le (p : GridPath a₀ b₀ a b) : #(p.edges z) + a₀ + b ≤ a + b₀ := by
-  induction p with
-  | nil => simp [edges]
-  | down p ih | right p ih =>
-    grw [edges, card_insert_le]
-    omega
-
-end GridPath
-
-/-- The edges of a path `Γ` through the two grids: those of its halves `Γ.half z`, each a path in
-the grid `z` from the node `(0, m)` to the diagonal node `(Γ.diagonalIndex, Γ.diagonalIndex)`. -/
-def TwoGridPath.edges (Γ : TwoGridPath m) : Finset (GridNode × GridNode) :=
-  (Γ.half false).edges false ∪ (Γ.half true).edges true
-
-namespace Data
-
-/-- A path `Γ` through the two grids `Y` and `Ỹ` has at most `2 * D.m` edges. So there are at most
-`edgeMatrixCountBound ϑ ^ (2 * D.m)` tuples `tuplesOn ϑ Γ.edges`, which carry a matrix on each edge
-of `Γ` and are zero elsewhere. -/
-lemma card_tuplesOn_edges_le (Γ : TwoGridPath D.m) :
-    #(tuplesOn ϑ Γ.edges) ≤ edgeMatrixCountBound ϑ ^ (2 * D.m) := by
-  refine (card_tuplesOn_le ?_).trans (Nat.pow_le_pow_right (pow_pos Fintype.card_pos _) ?_)
-  · intro p q hpq
-    obtain ⟨z, hz⟩ : ∃ z, (p, q) ∈ (Γ.half z).edges z := by simpa [TwoGridPath.edges] using hpq
-    obtain ⟨-, -, -, hp, hq⟩ := GridPath.eq_and_le_of_mem_edges hz
-    have hq' : q.2 ≤ (D.m, D.m) := hq.trans ⟨Γ.diagonalIndex_le, le_rfl⟩
-    exact ⟨hp.trans hq', hq'⟩
-  · have := (Γ.half false).card_edges_le (z := false)
-    have := (Γ.half true).card_edges_le (z := true)
-    exact (card_union_le _ _).trans (by omega)
+/-- The map `gridPathMap` along `gridPath z a b` depends only on the matrices on those edges. -/
+lemma gridPathMap_congr {S S' : EdgeTuple ϑ} {z : Bool} {a b : ℕ}
+    (h_edges : ∀ e ∈ D.gridPath z a b, S e = S' e) :
+    gridPathMap S z a b = gridPathMap S' z a b := by
+  induction a with
+  | zero =>
+    exact legDescents_congr fun e he ↦ h_edges e (mem_union_right _ he)
+  | succ a ih =>
+    have h_row : S (rowEdge z a b) = S' (rowEdge z a b) :=
+      h_edges _ (mem_union_left _ (mem_image.2 ⟨a, mem_range.2 (Nat.lt_succ_self a), rfl⟩))
+    have h_prev : gridPathMap S z a b = gridPathMap S' z a b :=
+      ih fun e he ↦ h_edges e <| by
+        rcases mem_union.1 he with h_left | h_right
+        · exact mem_union_left _ (image_subset_image (range_mono (Nat.le_succ a)) h_left)
+        · exact mem_union_right _ h_right
+    simp only [gridPathMap, h_row, h_prev]
 
 /-- The period of a conjugate form on `Y^j_j` and a form on `Ỹ^j_j` along `U(Y^j_j) → U(Ỹ^j_j)`. The
 second form is translated by a real point `g` of `U(Ỹ^j_j)` and, on the added line, by the `j`-th
@@ -804,25 +692,27 @@ variable (D) in
 /-- A twist, a conjugate form on `Y_m` and a form on `Ỹ^m_0`, of any levels. -/
 abbrev PeriodTriple : Type := D.MFoldTwist × D.GridForm false 0 D.m × D.GridForm true 0 D.m
 
-/-- The period `I(Ψ; g)` on the path `Γ`, as a function of a triple `x = (ϑ, y', φ)` of a twist, a
-conjugate form on `Y_m` and a form on `Ỹ^m_0`: the sum over the tuples `S` on `Γ` of `Ψ_ϑ(S)` times
-the pairing of the images of `y'` and `φ` along the two halves of `Γ`, which end at the diagonal
-nodes `(l, l)`, `l = Γ.diagonalIndex`. Here `g` is a real point of `U(Ỹ^l_l)`. -/
-def gridPeriod (Γ : TwoGridPath D.m) (Ψ : ∀ ϑ : D.MFoldTwist, EdgeTuple ϑ → ℂ)
-    (g : GInf D.E (D.gridSigns true 0 Γ.diagonalIndex Γ.diagonalIndex)) (x : D.PeriodTriple) : ℂ :=
-  ∑ S ∈ tuplesOn x.1 Γ.edges, Ψ x.1 S * diagonalPeriodForm x.1 Γ.diagonalIndex_le g
-    ((Γ.half false).formMap S false x.2.1)
-    ((Γ.half true).formMap S true x.2.2)
+variable (D) in
+/-- The period at stage `j` of a family `Λ` of grid data, as a function of a triple
+`x = (ϑ, y', φ)` of a twist, a conjugate form on `Y_m` and a form on `Ỹ^m_0`: `Λ ϑ` applied to the
+diagonal pairing at `(j, j)` of the images of `y'` and `φ` along the two L-shaped halves
+`gridPathMap`. Here `g` is a real point of `U(Ỹ^j_j)`. -/
+def gridPeriod {j : ℕ} (hj : j ≤ D.m) (Λ : ∀ ϑ : D.MFoldTwist, D.GridDatum ϑ)
+    (g : GInf D.E (D.gridSigns true 0 j j)) (x : D.PeriodTriple) : ℂ :=
+  Λ x.1 fun S ↦ diagonalPeriodForm x.1 hj g
+    (gridPathMap S false j j x.2.1)
+    (gridPathMap S true j j x.2.2)
 
-/-- The relation `Ψ ∝ Ξ`: at each real point `g` the period `New.Data.gridPeriod` of `Ψ` is a
-multiple of `Ξ` by a number that depends neither on the twist nor on the forms. -/
-def IsProportional (Γ : TwoGridPath D.m) (Ψ : ∀ ϑ : D.MFoldTwist, EdgeTuple ϑ → ℂ)
+variable (D) in
+/-- Proportionality at stage `j`: at each real point `g` of `U(Ỹ^j_j)`, the period `gridPeriod` of
+`Λ` is a scalar multiple of `Ξ`, with a scalar independent of the twist and the forms. -/
+def IsProportional {j : ℕ} (hj : j ≤ D.m) (Λ : ∀ ϑ : D.MFoldTwist, D.GridDatum ϑ)
     (Ξ : D.PeriodTriple → ℂ) : Prop :=
-  ∀ g : GInf D.E (D.gridSigns true 0 Γ.diagonalIndex Γ.diagonalIndex), ∃ β : ℂ,
-    ∀ x : D.PeriodTriple, gridPeriod Γ Ψ g x = β * Ξ x
+  ∀ g : GInf D.E (D.gridSigns true 0 j j), ∃ β : ℂ,
+    ∀ x : D.PeriodTriple, D.gridPeriod hj Λ g x = β * Ξ x
 
-end Data
+end GridData
 
-end New
+end New.Data
 
 end

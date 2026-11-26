@@ -670,11 +670,11 @@ abbrev lastPathChain (S : EdgeTuple ϑ) (z : Bool) (j : ℕ) (F : D.GridForm z 0
   chain (lastPathKernel ϑ z) (lastPathEdgeDatum S z) j (D.lastPathToAlgForm z F)
 
 /-- The finite sum `Ξ` on the last path. An `EdgeTuple` is a matrix modulo `𝔪` for each pair of
-nodes, and `tuplesOn` lists the tuples `S` that vanish off the edges of the last path. For each such
-`S` the two chains of lifts of `y false` and `y true` are paired and integrated over the finite
-points of `Y^m_m` modulo the rational points; `Ξ` is the sum of these integrals against `Ψ S`. -/
-def lastPathPeriod (Ψ : EdgeTuple ϑ → ℂ) (y : ∀ z : Bool, D.GridForm z 0 D.m) : ℂ :=
-  ∑ S ∈ tuplesOn ϑ (TwoGridPath.last D.m).edges, Ψ S *
+nodes. For each tuple `S`, the two chains of lifts of `y false` and `y true` are paired and
+integrated over the finite points of `Y^m_m` modulo the rational points; `Ξ` is the value of the
+linear functional `Λ : GridDatum ϑ` on this function of `S`. -/
+def lastPathPeriod (Λ : D.GridDatum ϑ) (y : ∀ z : Bool, D.GridForm z 0 D.m) : ℂ :=
+  Λ fun S ↦
     classIntegral stdRatPoints (lastPathLevel ϑ false D.m)
       fun h : Gf D.E (D.LastPathIndex false D.m) ↦
         D.lastPathPairing ((lastPathChain S false D.m (y false)).val h)
@@ -694,27 +694,21 @@ section LastPathPairingTerms
 
 open Finset Subgroup Pointwise Exchange Rows Matrix TensorChain
 
-variable {P : Parameters} {D : Data P} {ϑ : D.MFoldTwist} {N : ℕ} {Ψ : EdgeTuple ϑ → ℂ}
+variable {P : Parameters} {D : Data P} {ϑ : D.MFoldTwist} {N : ℕ} {Λ : D.GridDatum ϑ}
 
-/-- The edges of the last path are those of the row `m` in both grids. -/
-lemma edges_last : (TwoGridPath.last D.m).edges =
+/-- The edges `stageEdges m` of the last path are those of the row `m` in both grids. -/
+lemma stageEdges_last : D.stageEdges D.m =
     (range D.m).image (fun j : ℕ ↦ rowEdge false j D.m) ∪
       (range D.m).image fun j : ℕ ↦ rowEdge true j D.m := by
-  have h_row (z : Bool) (a : ℕ) :
-      (GridPath.row D.m a).edges z = (range a).image fun j ↦ rowEdge z j D.m := by
-    induction a with
-    | zero => rfl
-    | succ a ih => rw [GridPath.row, GridPath.edges, ih, range_add_one, image_insert]
-  rw [← h_row, ← h_row]
-  rfl
+  simp [stageEdges, gridPath, legEdges]
 
 /-- For a family `g` of invertible matrices at the nodes, the product `edgeCharProd g` of the
 characters of the edges of the last path splits into one factor for each of these edges. -/
-lemma edgeCharProd_last (g : NodeFamily ϑ) : edgeCharProd g (TwoGridPath.last D.m).edges =
+lemma edgeCharProd_last (g : NodeFamily ϑ) : edgeCharProd g (D.stageEdges D.m) =
     ∏ z : Bool, ∏ j ∈ range D.m, edgeCharProd g {rowEdge z j D.m} := by
   have h_inj (z : Bool) : Set.InjOn (fun j ↦ rowEdge z j D.m) (range D.m) := by simp [Set.InjOn]
   simp only [edgeCharProd, prod_singleton]
-  rw [edges_last, prod_union (by simp [disjoint_left]), prod_image (h_inj false),
+  rw [stageEdges_last, prod_union (by simp [disjoint_left]), prod_image (h_inj false),
     prod_image (h_inj true), Fintype.prod_bool, mul_comm]
 
 /-- Let `g` be a family of invertible matrices modulo `gridModulus ϑ` at the nodes. Let the integral
@@ -741,25 +735,25 @@ lemma lastPathKernel_omega_lastPathEdgeDatum {g : NodeFamily ϑ} {z : Bool} {j :
   simp_rw [vacuumDatum, ← modDatum_vacVector]
   exact pairWeil_modDatum_single _ _ (by simp [tupleAction, hu, hu'])
 
-/-- Let `Ψ` be a path datum: a function of the matrices on the edges, fixed by admissible families
-up to the characters of the edges, with sums of roots of unity as values. Let `a` be a family of
+/-- Let `Λ` be a path datum on `stageEdges m`: a linear functional on functions of the matrices on
+the edges, fixed by admissible families up to the characters of the edges. Let `a` be a family of
 elements of the levels along the last path with `a true m = diag (a false m, 1)`. Then moving the
-data of all lifts by `a` does not change the sum against `Ψ` of the pairings of linear images `β`,
-`β'` of the two tensors `pure` of data. -/
-lemma IsPathDatum.sum_lastPathPairing_omega_invariant
-    (hΨ : IsPathDatum N (TwoGridPath.last D.m).edges Ψ)
+data of all lifts by `a` does not change `Λ` applied to the pairings of linear images `β`, `β'` of
+the two tensors `pure` of data. -/
+lemma IsPathDatum.lastPathPairing_omega_invariant
+    (hΛ : D.IsPathDatum N (D.stageEdges D.m) Λ)
     (a : ∀ (z : Bool) (j : ℕ), lastPathLevel ϑ z j)
     (ha : (a true D.m).val = U.block (D.gridDiagEquiv D.m) ((a false D.m).val, 1))
     (β : TensorChain (D.LastPathFiniteDatum false) D.m →ₗ[ℂ] D.LastPathVector false D.m)
     (β' : TensorChain (D.LastPathFiniteDatum true) D.m →ₗ[ℂ] D.LastPathVector true D.m) :
-    ∑ S ∈ tuplesOn ϑ (TwoGridPath.last D.m).edges, Ψ S * D.lastPathPairing
+    Λ (fun S ↦ D.lastPathPairing
         (β (pure (fun j : ℕ ↦ (lastPathKernel ϑ false j).ω ((a false j).val, (a false (j + 1)).val)
           (lastPathEdgeDatum S false j)) D.m))
         (β' (pure (fun j : ℕ ↦ (lastPathKernel ϑ true j).ω ((a true j).val, (a true (j + 1)).val)
-          (lastPathEdgeDatum S true j)) D.m)) =
-      ∑ S ∈ tuplesOn ϑ (TwoGridPath.last D.m).edges, Ψ S * D.lastPathPairing
-        (β (pure (lastPathEdgeDatum S false) D.m)) (β' (pure (lastPathEdgeDatum S true) D.m)) := by
-  -- The residues of `a` form an admissible family, and `Ψ` is fixed by such families up to the
+          (lastPathEdgeDatum S true j)) D.m))) =
+      Λ (fun S ↦ D.lastPathPairing
+        (β (pure (lastPathEdgeDatum S false) D.m)) (β' (pure (lastPathEdgeDatum S true) D.m))) := by
+  -- The residues of `a` form an admissible family, and `Λ` is fixed by such families up to the
   -- characters of the edges.
   have h_mem (z : Bool) (j : ℕ) : ∃ u : stdLevel D.E (D.LastPathIndex z j),
       (gridModulus ϑ).reductionGL u ∈ nodeLevel ϑ (z, j, D.m) ∧ u.1 = (a z j).1 := (a z j).2
@@ -788,12 +782,22 @@ lemma IsPathDatum.sum_lastPathPairing_omega_invariant
     pure_smul (lastPathEdgeDatum S z) _ D.m fun j _ ↦
       lastPathKernel_omega_lastPathEdgeDatum (hg z j) (hg z (j + 1)) S
   refine mul_left_cancel₀
-    (isOfFinOrder_edgeCharProd g (TwoGridPath.last D.m).edges).isUnit.ne_zero ?_
-  rw [← hΨ.sum_tupleAction h_adm, mul_sum]
-  refine sum_congr rfl fun S _ ↦ ?_
-  simp only [h_pure, edgeCharProd_last, Fintype.prod_bool, map_smul,
-    LinearMap.smul_apply, smul_eq_mul]
-  ring
+    (isOfFinOrder_edgeCharProd g (D.stageEdges D.m)).isUnit.ne_zero ?_
+  let F (S : EdgeTuple ϑ) : ℂ := D.lastPathPairing
+    (β (pure (fun j : ℕ ↦ (lastPathKernel ϑ false j).ω (u false j, (u false (j + 1)).1)
+      (lastPathEdgeDatum S false j)) D.m))
+    (β' (pure (fun j : ℕ ↦ (lastPathKernel ϑ true j).ω (u true j, (u true (j + 1)).1)
+      (lastPathEdgeDatum S true j)) D.m))
+  have hF : (fun S ↦ F (tupleAction g S)) =
+      edgeCharProd g (D.stageEdges D.m) • fun S ↦ D.lastPathPairing
+        (β (pure (lastPathEdgeDatum S false) D.m))
+        (β' (pure (lastPathEdgeDatum S true) D.m)) := by
+    funext S
+    simp only [F, h_pure, edgeCharProd_last, Fintype.prod_bool, map_smul,
+      LinearMap.smul_apply, Pi.smul_apply, smul_eq_mul]
+    ring
+  exact (hΛ.equivariant g h_adm F).symm.trans ((congrArg Λ hF).trans
+    ((Λ.map_smul _ _).trans (smul_eq_mul _ _)))
 
 -- Keeps definitional checks from unfolding the finite sums.
 seal Finset.sum Finset.prod Finset.univ in
@@ -843,25 +847,25 @@ lemma lastPathPairing_lastPathChain_mem_smoothInvariants (S : EdgeTuple ϑ)
       simpa [incl, lastPathBlockPoint, ← map_mul] using ha_true (lastPathBlockPoint ϑ g)
     simp [ha_false g, h_true]
 
-/-- Let `Ψ` be a path datum (`IsPathDatum N`) for the edges of the last path `TwoGridPath.last D.m`.
-It is a function of tuples `S` of matrices modulo `𝔪 = gridModulus ϑ` on those edges. Let the forms
+/-- Let `Λ` be a path datum (`IsPathDatum N`) for the edges `stageEdges m` of the last path: a
+linear functional on functions of tuples `S` of matrices modulo `𝔪 = gridModulus ϑ`. Let the forms
 `y false`, `y true` have the levels at the outer ends of the path. For each `S`, lift both forms
 `m = D.m` times with the data given by `S` (`lastPathChain`). Pair (`D.lastPathPairing`) the values
 of the lifts at a finite point `g` of `Y^m_m` and at the block point `lastPathBlockPoint ϑ g` of
-`Ỹ^m_m`. The sum over `S` of `Ψ S` times this pairing does not change if `g` is replaced by `g * u`.
-Here `u` is an integral point whose reduction modulo `𝔪` lies in the level
-`nodeLevel ϑ (false, D.m, D.m)` at `Y^m_m`. -/
-lemma IsPathDatum.sum_lastPathPairing_mul_level (hΨ : IsPathDatum N (TwoGridPath.last D.m).edges Ψ)
+`Ỹ^m_m`. Applying `Λ` to this pairing does not change if `g` is replaced by `g * u`. Here `u` is an
+integral point whose reduction modulo `𝔪` lies in the level `nodeLevel ϑ (false, D.m, D.m)` at
+`Y^m_m`. -/
+lemma IsPathDatum.lastPathPairing_mul_level (hΛ : D.IsPathDatum N (D.stageEdges D.m) Λ)
     {y : ∀ z : Bool, D.GridForm z 0 D.m} (hy : FixedByOuterLevels ϑ y)
     {u : stdLevel D.E (D.LastPathIndex false D.m)}
     (hu : (gridModulus ϑ).reductionGL u ∈ nodeLevel ϑ (false, D.m, D.m))
     (g : Gf D.E (D.LastPathIndex false D.m)) :
-    ∑ S ∈ tuplesOn ϑ (TwoGridPath.last D.m).edges, Ψ S *
+    Λ (fun S ↦
         D.lastPathPairing ((lastPathChain S false D.m (y false)).val (g * u.val))
-          ((lastPathChain S true D.m (y true)).val (lastPathBlockPoint ϑ (g * u.val))) =
-      ∑ S ∈ tuplesOn ϑ (TwoGridPath.last D.m).edges, Ψ S *
+          ((lastPathChain S true D.m (y true)).val (lastPathBlockPoint ϑ (g * u.val)))) =
+      Λ (fun S ↦
         D.lastPathPairing ((lastPathChain S false D.m (y false)).val g)
-          ((lastPathChain S true D.m (y true)).val (lastPathBlockPoint ϑ g)) := by
+          ((lastPathChain S true D.m (y true)).val (lastPathBlockPoint ϑ g))) := by
   -- Act by `u` and `diag(u, 1)` at the node `(m, m)` of the two grids.
   obtain ⟨h_int, h_red⟩ :=
     map_block_eq_blockGL (gridModulus ϑ).reduction (D.gridDiagEquiv D.m) u 1
@@ -884,24 +888,24 @@ lemma IsPathDatum.sum_lastPathPairing_mul_level (hΨ : IsPathDatum N (TwoGridPat
     exists_linearMap_chain_eq_apply_pure (lastPathKernel ϑ true) D.m
       (D.lastPathToAlgForm true (y true))
       (lastPathBlockPoint ϑ g)
-  convert hΨ.sum_lastPathPairing_omega_invariant a ha β β' <;>
+  convert hΛ.lastPathPairing_omega_invariant a ha β β' using 2 <;> funext S <;>
     simp [a, ← hβ, ← hβ', chain_equivariant, hy _, lastPathBlockPoint, ← map_mul]
 
 -- Keeps definitional checks from unfolding the finite sums.
 seal Finset.univ in
-/-- Let `Ψ` be a path datum whose values are sums of at most `N` roots of unity, and let the forms
-`y` have the levels at the outer ends. Let `σ` be a homomorphism from `ℂ` to a normed field. Let
-`IsReached z j g v` be a property of a vector `v` at a finite point `g` of the node `(z, j, m)`,
-such as membership in a set that contains all vectors reached by the lifts: it holds at `j = 0` for
-the values of the two forms and is preserved by the kernels. Suppose that `‖σ (M * a)‖ ≤ R`, for a
-fixed number `M`, for each pairing `a` of vectors with this property at corresponding points `g` and
-`lastPathBlockPoint g` of `Y^m_m` and `Ỹ^m_m`.
+/-- Let `Λ` be a path datum of order `N` on `stageEdges m`, and let the forms `y` have the levels at
+the outer ends. Let `σ` be a homomorphism from `ℂ` to a normed field. Let `IsReached z j g v` be a
+property of a vector `v` at a finite point `g` of the node `(z, j, m)`, such as membership in a set
+that contains all vectors reached by the lifts: it holds at `j = 0` for the values of the two forms
+and is preserved by the kernels. Suppose that `‖σ (M * a)‖ ≤ R`, for a fixed number `M`, for each
+pairing `a` of vectors with this property at corresponding points `g` and `lastPathBlockPoint g` of
+`Y^m_m` and `Ỹ^m_m`.
 
-Then the sum `Ξ = lastPathPeriod Ψ y` over the last path is a sum of numbers with this bound. The
+Then the sum `Ξ = lastPathPeriod Λ y` over the last path is a sum of numbers with this bound. The
 number of summands is `L` times the product of the numbers of classes (`StdClasses`) of the
-`2 * m + 1` levels that occur, for some `L ≤ N * edgeMatrixCountBound ^ (2 * m)`. -/
-theorem exists_lastPathPeriod_mem_smul_norm_le {ϑ : D.MFoldTwist} {N : ℕ} {Ψ : EdgeTuple ϑ → ℂ}
-    (hΨ : IsPathDatum N (TwoGridPath.last D.m).edges Ψ)
+`2 * m + 1` levels that occur, for some `L ≤ edgeMatrixCountBound ϑ ^ N`. -/
+theorem exists_lastPathPeriod_mem_smul_norm_le {ϑ : D.MFoldTwist} {N : ℕ} {Λ : D.GridDatum ϑ}
+    (hΛ : D.IsPathDatum N (D.stageEdges D.m) Λ)
     {y : ∀ z : Bool, D.GridForm z 0 D.m} (hy : FixedByOuterLevels ϑ y)
     (IsReached : ∀ (z : Bool) (j : ℕ), Gf D.E (D.LastPathIndex z j) → D.LastPathVector z j → Prop)
     {F : Type*} {M : ℂ} {R : ℝ} [NormedField F] (σ : ℂ →+* F)
@@ -915,13 +919,13 @@ theorem exists_lastPathPeriod_mem_smul_norm_le {ϑ : D.MFoldTwist} {N : ℕ} {Ψ
       {v : D.LastPathVector true D.m}, IsReached false D.m g v' →
       IsReached true D.m (lastPathBlockPoint ϑ g) v →
       ‖σ (M * D.lastPathPairing v' v)‖ ≤ R) :
-    ∃ L ≤ N * edgeMatrixCountBound ϑ ^ (2 * D.m), lastPathPeriod Ψ y ∈
+    ∃ L ≤ edgeMatrixCountBound ϑ ^ N, lastPathPeriod Λ y ∈
       (L * ∏ z : Bool, ∏ j ∈ range (D.m + (!z).toNat),
         Nat.card (StdClasses (lastPathLevel ϑ z j))) • {a : ℂ | ‖σ (M * a)‖ ≤ R} := by
-  -- The sum against `Ψ` is invariant under the levels, so the last integral and both chains of
-  -- lifts are plain sums over classes. Each term is a sum over the tuples `S` of pairings of
-  -- reached vectors, with coefficients `Ψ S`.
-  let W : Finset (EdgeTuple ϑ) := tuplesOn ϑ (TwoGridPath.last D.m).edges
+  -- The functional `Λ` is invariant under the levels, so the last integral and both chains of
+  -- lifts are plain sums over classes. Each term is a sum over `W` of pairings of reached vectors,
+  -- with root-of-unity coefficients `c x`.
+  obtain ⟨X, W, c, s, hW_le, hc, h_apply⟩ := hΛ.isShortSum
   let A : Set ℂ := {a : ℂ | ‖σ (M * a)‖ ≤ R}
   let classes (z : Bool) : ℕ := ∏ j ∈ range D.m, Nat.card (StdClasses (lastPathLevel ϑ z j))
   -- For the half `z` and the tuple `S`: the tensor of the data of the lifts, and the lifted form.
@@ -934,42 +938,44 @@ theorem exists_lastPathPeriod_mem_smul_norm_le {ϑ : D.MFoldTwist} {N : ℕ} {Ψ
       ∀ g : Gf D.E (D.LastPathIndex z j), classAut stdRatPoints (lastPathLevel ϑ z j) g = ⊥ :=
     D.classAut_eq_bot_of_le_chosenLevel ((lastPathLevel_le_principalLevel ϑ z j).trans
       (D.principalLevel_le_chosenLevel piM_dvd_gridLevelGen)) (card_lastPathIndex_le z hj)
-  -- As `Ψ S` is a sum of at most `N` roots of unity, each tuple gives `N` numbers in `A`.
+  -- Each nonzero `c x` is a root of unity, so each summand lies in `A`.
   have h_tuples {g : Gf D.E (D.LastPathIndex false D.m)}
-      {v' : EdgeTuple ϑ → D.LastPathVector false D.m} {v : EdgeTuple ϑ → D.LastPathVector true D.m}
-      (hv' : ∀ S ∈ W, IsReached false D.m g (v' S))
-      (hv : ∀ S ∈ W, IsReached true D.m (lastPathBlockPoint ϑ g) (v S)) :
-      ∑ S ∈ W, Ψ S * D.lastPathPairing (v' S) (v S) ∈ #W • N • A := by
+      {v' : X → D.LastPathVector false D.m} {v : X → D.LastPathVector true D.m}
+      (hv' : ∀ x ∈ W, IsReached false D.m g (v' x))
+      (hv : ∀ x ∈ W, IsReached true D.m (lastPathBlockPoint ϑ g) (v x)) :
+      ∑ x ∈ W, c x * D.lastPathPairing (v' x) (v x) ∈ #W • A := by
     rw [← sum_const]
-    refine Set.finsetSum_mem_finsetSum _ _ _ fun S hS ↦ ?_
-    have h_pair : ‖σ (M * D.lastPathPairing (v' S) (v S))‖ ≤ R := h_bound (hv' S hS) (hv S hS)
-    have h_zero : 0 ∈ A := by simpa [A] using (norm_nonneg _).trans h_pair
-    refine (hΨ.isSumOfRootsOfUnity S).mul_mem_nsmul h_zero fun c hc ↦ ?_
-    have h_norm : ‖σ c‖ = 1 := (σ.isOfFinOrder hc).norm_eq_one
-    rwa [Set.mem_ofPred_eq, mul_left_comm, map_mul, norm_mul, h_norm, one_mul]
+    refine Set.finsetSum_mem_finsetSum _ _ _ fun x hx ↦ ?_
+    have h_pair : ‖σ (M * D.lastPathPairing (v' x) (v x))‖ ≤ R := h_bound (hv' x hx) (hv x hx)
+    by_cases hcx : c x = 0
+    · simpa [hcx, A] using (norm_nonneg _).trans h_pair
+    · have h_norm : ‖σ (c x)‖ = 1 := (σ.isOfFinOrder (hc x hcx).1).norm_eq_one
+      rwa [Set.mem_ofPred_eq, mul_left_comm, map_mul, norm_mul, h_norm, one_mul]
   -- The chain in the grid of the `Ỹ` is a sum over classes.
   have h_sum_tilde_chain (g : Gf D.E (D.LastPathIndex false D.m))
       (β : TensorChain (D.LastPathFiniteDatum false) D.m →ₗ[ℂ] D.LastPathVector false D.m)
-      (hβ : ∀ S ∈ W, IsReached false D.m g (β (data false S))) :
-      ∑ S ∈ W, Ψ S * D.lastPathPairing (β (data false S)) (value true S (lastPathBlockPoint ϑ g)) ∈
-        classes true • #W • N • A := by
+      (hβ : ∀ x ∈ W, IsReached false D.m g (β (data false (s x)))) :
+      ∑ x ∈ W, c x * D.lastPathPairing (β (data false (s x)))
+          (value true (s x) (lastPathBlockPoint ϑ g)) ∈
+        classes true • #W • A := by
     have h_inv : IsJointlyInvariant (lastPathKernel ϑ true) D.m W
-        (fun S ↦ Ψ S • D.lastPathPairing (β (data false S)))
-        fun S ↦ lastPathEdgeDatum S true := by
+        (fun x ↦ c x • D.lastPathPairing (β (data false (s x))))
+        fun x ↦ lastPathEdgeDatum (s x) true := by
       -- Use the family that is `a` in this grid and `1` in the other one.
       intro a ha β'
       have h_ends : (a D.m).val =
           U.block (D.gridDiagEquiv D.m) ((1 : lastPathLevel ϑ false D.m).val, 1) := by
         simp [ha, Prod.mk_one_one]
-      simpa [data, Prod.mk_one_one] using hΨ.sum_lastPathPairing_omega_invariant (Bool.rec 1 a)
-        h_ends β β'
+      simpa [h_apply, data, Prod.mk_one_one] using
+        hΛ.lastPathPairing_omega_invariant (Bool.rec 1 a) h_ends β β'
     exact h_inv.sum_chain_mem_nsmul (lastPathKernel ϑ true) (fun j hj ↦ h_free true j hj.le)
-      (hy true) (IsReached true) (fun S _ ↦ h_step S true) (h_start true)
+      (hy true) (IsReached true) (fun x _ ↦ h_step (s x) true) (h_start true)
       fun _ hβ' ↦ h_tuples hβ hβ'
   -- So is the chain in the grid of the `Y`.
   have h_sum_both_chains (g : Gf D.E (D.LastPathIndex false D.m)) :
-      ∑ S ∈ W, Ψ S * D.lastPathPairing (value false S g) (value true S (lastPathBlockPoint ϑ g)) ∈
-        classes false • classes true • #W • N • A := by
+      ∑ x ∈ W, c x * D.lastPathPairing (value false (s x) g)
+          (value true (s x) (lastPathBlockPoint ϑ g)) ∈
+        classes false • classes true • #W • A := by
     obtain ⟨β', hβ'⟩ :
         ∃ β' : TensorChain (D.LastPathFiniteDatum true) D.m →ₗ[ℂ] D.LastPathVector true D.m,
           ∀ S : EdgeTuple ϑ, value true S (lastPathBlockPoint ϑ g) = β' (data true S) :=
@@ -977,31 +983,33 @@ theorem exists_lastPathPeriod_mem_smul_norm_le {ϑ : D.MFoldTwist} {N : ℕ} {Ψ
         (D.lastPathToAlgForm true (y true)) (lastPathBlockPoint ϑ g)).imp
         fun _ h_value S ↦ h_value (lastPathEdgeDatum S true)
     have h_inv : IsJointlyInvariant (lastPathKernel ϑ false) D.m W
-        (fun S ↦ Ψ S • D.lastPathPairing.flip (value true S (lastPathBlockPoint ϑ g)))
-        fun S ↦ lastPathEdgeDatum S false := by
+        (fun x ↦ c x • D.lastPathPairing.flip (value true (s x) (lastPathBlockPoint ϑ g)))
+        fun x ↦ lastPathEdgeDatum (s x) false := by
       intro a ha β
       have h_ends : (1 : lastPathLevel ϑ true D.m).val =
           U.block (D.gridDiagEquiv D.m) ((a D.m).val, 1) := by
         simp [ha, Prod.mk_one_one]
-      simpa [hβ', data, Prod.mk_one_one] using hΨ.sum_lastPathPairing_omega_invariant (Bool.rec a 1)
-        h_ends β β'
+      simpa [h_apply, hβ', data, Prod.mk_one_one] using
+        hΛ.lastPathPairing_omega_invariant (Bool.rec a 1) h_ends β β'
     exact h_inv.sum_chain_mem_nsmul (lastPathKernel ϑ false) (fun j hj ↦ h_free false j hj.le)
-      (hy false) (IsReached false) (fun S _ ↦ h_step S false) (h_start false) (h_sum_tilde_chain g)
+      (hy false) (IsReached false) (fun x _ ↦ h_step (s x) false) (h_start false)
+      (h_sum_tilde_chain g)
   -- The integrands are smooth and left invariant, so the integral commutes with the sum.
-  have h_swap : lastPathPeriod Ψ y = classIntegral stdRatPoints (lastPathLevel ϑ false D.m) fun g ↦
-      ∑ S ∈ W, Ψ S * D.lastPathPairing (value false S g) (value true S (lastPathBlockPoint ϑ g)) :=
-    (classIntegral_sum W (fun S ↦ .mulLeft (Ψ S)) 1
-      (fun S ↦ lastPathPairing_lastPathChain_mem_smoothInvariants S y) (by simp [value])).symm
+  have h_swap : lastPathPeriod Λ y = classIntegral stdRatPoints (lastPathLevel ϑ false D.m) fun g ↦
+      ∑ x ∈ W, c x * D.lastPathPairing (value false (s x) g)
+        (value true (s x) (lastPathBlockPoint ϑ g)) :=
+    (h_apply _).trans (classIntegral_sum W (fun x ↦ .mulLeft (c x)) 1
+      (fun x ↦ lastPathPairing_lastPathChain_mem_smoothInvariants (s x) y) (by simp [value])).symm
   have h_count : ∏ z : Bool, ∏ j ∈ range (D.m + (!z).toNat),
       Nat.card (StdClasses (lastPathLevel ϑ z j)) =
         classes true * classes false * Nat.card (StdClasses (lastPathLevel ϑ false D.m)) := by
     simp [classes, prod_range_succ, mul_assoc]
-  refine ⟨N * #W, Nat.mul_le_mul_left N (card_tuplesOn_edges_le _), ?_⟩
-  rw [h_swap, h_count, mul_nsmul, mul_nsmul, mul_nsmul, mul_nsmul]
+  refine ⟨#W, hW_le, ?_⟩
+  rw [h_swap, h_count, mul_nsmul, mul_nsmul, mul_nsmul]
   refine classIntegral_mem_nsmul (h_free false D.m le_rfl) ?_ h_sum_both_chains
   -- The integrand is right invariant under the level of `Y^m_m`.
   rintro _ ⟨u, hu, rfl⟩ g
-  exact hΨ.sum_lastPathPairing_mul_level hy hu g
+  simpa [h_apply, value] using hΛ.lastPathPairing_mul_level hy hu g
 
 end LastPathPairingTerms
 
@@ -1019,17 +1027,17 @@ open Space Fintype Modulus
 variable {P : Parameters} (D : Data P)
 
 /-- Let `D` be admissible data with `m = D.m` lifts, let `z` be a half of the last path, through
-the nodes `(z, i, m)`, and let `j ≤ m`. Here `GridPath.row m j` is the path along the first `j`
-edges of this half, from the node `(z, 0, m)` to `(z, j, m)`, and its map `formMap` is the composite
-of the theta lifts along these edges, for the data given by a tuple `S` of matrices on the
-edges. There is a constant `c` such that, for every twist `ϑ`, tuple `S` and form `F` at
-`(z, 0, m)`, the function of the lifted form is that given by `ofAlgForm` from `c` times the ratio
-of the indices of the levels at the two ends (`levelIndex`) times the algebraic chain of lifts
-`lastPathChain S z j F`. -/
+the nodes `(z, i, m)`, and let `j ≤ m`. Here `gridPathMap S z j m` is the composite of the theta
+lifts along the first `j` edges of this half, from the node `(z, 0, m)` to `(z, j, m)`, for the
+data given by a tuple `S` of matrices on the edges. There is a constant `c` such that, for every
+twist `ϑ`, tuple `S` and form `F` at `(z, 0, m)`, the function of the lifted form is that given by
+`ofAlgForm` from `c` times the ratio of the indices of the levels at the two ends (`levelIndex`)
+times the algebraic chain of lifts `lastPathChain S z j F`, which lives on the standard definite
+spaces of the last path. -/
 theorem exists_gridPathMap_eq_ofAlgForm_smul_lastPathChain (D : Data P) (z : Bool) {j : ℕ}
     (hj : j ≤ D.m) :
     ∃ c : ℂ, ∀ (ϑ : D.MFoldTwist) (S : EdgeTuple ϑ) (F : D.GridForm z 0 D.m),
-      ((GridPath.row D.m j).formMap S z F).val =
+      (gridPathMap S z j D.m F).val =
         ofAlgForm (-D.gridParam z 0 j D.m) (D.gridSigns z 0 j D.m)
           ((c * levelIndex ϑ z j D.m / levelIndex ϑ z 0 D.m) • lastPathChain S z j F) := by
   -- Each edge multiplies the lift by a constant over the index of the level at its lower end, and
@@ -1041,7 +1049,7 @@ theorem exists_gridPathMap_eq_ofAlgForm_smul_lastPathChain (D : Data P) (z : Boo
     suffices h_form :
         F.val = ofAlgForm (-D.gridParam z 0 0 D.m) (D.gridSigns z 0 0 D.m)
           (lastPathChain S z 0 F) by
-      simpa [GridPath.row, GridPath.formMap, Subgroup.index_ne_zero_of_finite] using h_form
+      simpa [gridPathMap, legDescents_self, Subgroup.index_ne_zero_of_finite] using h_form
     -- By definition `lastPathChain S z 0 F` is the algebraic form of `F`.
     exact (ofAlgForm_toAlgForm (D.isHCParam_lastPathColumns z hj) F).symm
   | succ j ih =>
@@ -1090,8 +1098,8 @@ theorem exists_gridPathMap_eq_ofAlgForm_smul_lastPathChain (D : Data P) (z : Boo
         Nat.cast_ne_zero.2 Subgroup.index_ne_zero_of_finite
       rw [h_upper]
       field_simp [h_index]
-    calc ((GridPath.row D.m (j + 1)).formMap S z F).val
-        = (liftMove (S (rowEdge z j D.m)) ((GridPath.row D.m j).formMap S z F)).val := rfl
+    calc (gridPathMap S z (j + 1) D.m F).val
+        = (liftMove (S (rowEdge z j D.m)) (gridPathMap S z j D.m F)).val := rfl
       _ = (β / stdLevelIndex (lastPathLevel ϑ z j)) •
             ofAlgForm (-D.gridParam z 0 (j + 1) D.m) (D.gridSigns z 0 (j + 1) D.m)
               (T ((c * levelIndex ϑ z j D.m / levelIndex ϑ z 0 D.m) • lastPathChain S z j F)) :=
@@ -1099,19 +1107,19 @@ theorem exists_gridPathMap_eq_ofAlgForm_smul_lastPathChain (D : Data P) (z : Boo
       _ = _ := by
           rw [h_lower, h_chain, map_smul T, map_smul, smul_smul, h_const, smul_smul, map_smul]
 
-/-- Let `Ψ` be a family of functions on edge tuples, one for each twist. At each real point `g`
-there is a number `β` such that, for every twist `ϑ`, conjugate form `y` on `Y_m` and form `φ` on
-`Ỹ^m_0`, the period of `Ψ` on the last path at `g` is `β` times the sum `lastPathPeriod (Ψ ϑ)` at
-`(y, φ)` divided by `triangleGLCard false ϑ m`. This last number is the order of the general linear
-group of the rank of `Y_m` modulo `𝔪₀ = ϖ Q`, with `ϖ = D.piM` and `Q` the product of the places of
-`ϑ`. -/
-theorem isProportional_lastPathPeriod (Ψ : ∀ ϑ : D.MFoldTwist, EdgeTuple ϑ → ℂ) :
-    IsProportional (.last D.m) Ψ fun ((ϑ, y, φ) : D.PeriodTriple) ↦
-      lastPathPeriod (Ψ ϑ) (fun z : Bool ↦ z.rec y φ) / triangleGLCard false ϑ D.m := by
+/-- Let `Λ` be a family of linear functionals `GridDatum ϑ`, one for each twist. At each real point
+`g` there is a number `β` such that, for every twist `ϑ`, conjugate form `y` on `Y_m` and form `φ`
+on `Ỹ^m_0`, the period `gridPeriod le_rfl Λ g` on the last path at `g` is `β` times the sum
+`lastPathPeriod (Λ ϑ)` at `(y, φ)` divided by `triangleGLCard false ϑ m`. This last number is the
+order of the general linear group of the rank of `Y_m` modulo `𝔪₀ = ϖ Q`, with `ϖ = D.piM` and `Q`
+the product of the places of `ϑ`. -/
+theorem isProportional_lastPathPeriod (Λ : ∀ ϑ : D.MFoldTwist, D.GridDatum ϑ) :
+    D.IsProportional le_rfl Λ fun ((ϑ, y, φ) : D.PeriodTriple) ↦
+      lastPathPeriod (Λ ϑ) (fun z : Bool ↦ z.rec y φ) / triangleGLCard false ϑ D.m := by
   intro g
   have h_chain (z : Bool) : ∃ c : ℂ,
       ∀ (ϑ : D.MFoldTwist) (S : EdgeTuple ϑ) (F : D.GridForm z 0 D.m),
-        ((GridPath.row D.m D.m).formMap S z F).val =
+        (gridPathMap S z D.m D.m F).val =
           ofAlgForm (-D.gridParam z 0 D.m D.m) (D.gridSigns z 0 D.m D.m)
             ((c * levelIndex ϑ z D.m D.m / levelIndex ϑ z 0 D.m) • lastPathChain S z D.m F) :=
     D.exists_gridPathMap_eq_ofAlgForm_smul_lastPathChain z le_rfl
@@ -1122,22 +1130,22 @@ theorem isProportional_lastPathPeriod (Ψ : ∀ ϑ : D.MFoldTwist, EdgeTuple ϑ 
     D.exists_triangleGLCard_eq_mul_levelIndex D.m
   let γ : ℂ := β * (∏ z : Bool, c z) * D.levelIndex 1 true D.m D.m / D.levelIndex 1 true 0 D.m
   refine ⟨γ * κ, fun ⟨ϑ, y, φ⟩ ↦ ?_⟩
-  -- Compare the two sides for each tuple `S`; `I S` is its term of `Ξ` without the factor `Ψ S`.
+  -- Compare the two sides for each tuple `S`; `I S` is its term of `Ξ`.
   let I (S : EdgeTuple ϑ) : ℂ := classIntegral stdRatPoints (lastPathLevel ϑ false D.m) fun h ↦
     D.lastPathPairing ((lastPathChain S false D.m y).val h)
       ((lastPathChain S true D.m φ).val (lastPathBlockPoint ϑ h))
   have h_term (S : EdgeTuple ϑ) :
-      diagonalPeriodForm ϑ le_rfl g ((GridPath.row D.m D.m).formMap S false y)
-          ((GridPath.row D.m D.m).formMap S true φ) = γ / levelIndex ϑ false 0 D.m * I S := by
+      diagonalPeriodForm ϑ le_rfl g (gridPathMap S false D.m D.m y)
+          (gridPathMap S true D.m D.m φ) = γ / levelIndex ϑ false 0 D.m * I S := by
     suffices h_integral : ∫ x : New.G D.E (D.gridSigns false 0 D.m D.m),
-        ((GridPath.row D.m D.m).formMap S false y).val x *
-          ((GridPath.row D.m D.m).formMap S true φ).val
+        (gridPathMap S false D.m D.m y).val x *
+          (gridPathMap S true D.m D.m φ).val
             (G.reindex (D.gridDiagEquiv D.m) (D.sumElim_gridSigns_comp_gridDiagEquiv_symm le_rfl)
               (.sum (x, 1, (gridModulus ϑ).flipScalar ^ D.m)) *
               ((g, 1) : New.G D.E (D.gridSigns true 0 D.m D.m)))
           ∂(D.gridSpace 0 false D.m D.m).quotMeasure = γ / levelIndex ϑ false 0 D.m * I S by
       simpa [periodPairing] using h_integral
-    -- `erw`, as the grid spaces at `(m, m)` agree with those of `hc` and `hβ` by definition.
+    -- Identify the grid spaces at `(m, m)` with those of `hc` and `hβ` by definition.
     rw [hc, hc, hβ _ _ _ _ (lastPathLevel ϑ false D.m)]
     -- The index at `Y^m_m` cancels, and those in the grid of the `Ỹ` do not depend on the twist.
     simp [I, γ, lastPathLevel, stdLevelIndex_levelOfSubgroup, levelIndex_eq_card_GL_untwisted,
@@ -1148,13 +1156,16 @@ theorem isProportional_lastPathPeriod (Ψ : ∀ ϑ : D.MFoldTwist, EdgeTuple ϑ 
     have h_order_ne : (triangleGLCard false ϑ D.m : ℂ) ≠ 0 := Nat.cast_ne_zero.2 card_ne_zero
     have hκ_ne : κ ≠ 0 := left_ne_zero_of_mul (by rwa [← hκ ϑ])
     rw [hκ ϑ, mul_comm γ κ, mul_div_mul_left _ _ hκ_ne]
-  change gridPeriod (.last D.m) Ψ g (ϑ, y, φ) =
-    γ * κ * (lastPathPeriod (Ψ ϑ) (fun z : Bool ↦ z.rec y φ) / triangleGLCard false ϑ D.m)
-  rw [mul_div_assoc', ← div_mul_eq_mul_div, ← h_index, gridPeriod, lastPathPeriod, Finset.mul_sum]
-  refine Finset.sum_congr rfl fun S _ ↦ ?_
-  rw [mul_left_comm, ← h_term S]
-  -- The period along `TwoGridPath.last` is `diagonalPeriodForm` at `(m, m)` by definition.
-  rfl
+  have h_fn :
+      (fun S ↦ diagonalPeriodForm ϑ le_rfl g (gridPathMap S false D.m D.m y)
+          (gridPathMap S true D.m D.m φ)) =
+        (γ / levelIndex ϑ false 0 D.m) • I :=
+    funext h_term
+  -- The period along stage `m` is `diagonalPeriodForm` at `(m, m)` by definition.
+  change D.gridPeriod le_rfl Λ g (ϑ, y, φ) =
+    γ * κ * (lastPathPeriod (Λ ϑ) (fun z : Bool ↦ z.rec y φ) / triangleGLCard false ϑ D.m)
+  rw [gridPeriod, h_fn, (Λ ϑ).map_smul, smul_eq_mul, h_index, lastPathPeriod, mul_div_assoc']
+  exact div_mul_eq_mul_div _ _ _
 
 end LastPathPeriods
 

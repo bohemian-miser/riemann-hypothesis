@@ -3,22 +3,25 @@ module
 import Std.Tactic.BVDecide.Normalize.Bool
 public import New.Determinant.AuxiliaryForms.PathData
 import Lib.Adelic.AutomorphicForms.Cuspidality
-import Lib.Adelic.Unitary.RationalPoints
 import New.Determinant.Chain.Moduli
 import New.OneLift.ComparisonOperator.ExchangeData
 import New.OneLift.ComparisonOperator.GluedLattices
 import New.UpperBound.Seesaw.LevelIdeles
 
 /-!
-# Periods on the diagonal and path data on the first path
+# Periods on the diagonal and monadic path data on the first path
 
 The first path goes from `Ỹ^m_0` to `Ỹ^0_0 = Y₀ ⊕ E ẽ₀` and from `Y₀` to `Y_m`. Its spaces are the
 nodes `(z, 0, i)`, the first columns of the two grids: `(false, 0, i)` is `Y_i` and `(true, 0, i)`
 is `Ỹ^i_0`. A form on `Ỹ^m_0` and a conjugate form on `Y_m` move down these columns by transposed
-lifts and meet at `i = 0`. The product `Ψ¹` of the point data of the edges computes the period of
-the two iterated transposed lifts `New.Data.transposedChain`. The sum `Ψ⁰` of the translates of
-`Ψ¹`, weighted by the characters of the edges, is a path datum, and its period is the number of
-translates times that of `Ψ¹`.
+lifts and meet at `i = 0`.
+
+Starting from the point evaluation at the zero tuple, extending one first-column edge at a time by
+`GridDatum.bind` with `edgePointDatum` builds a level-equivariant functional `Φ` of order `2 m` that
+computes the period of the two iterated transposed lifts `New.Data.transposedChain`. Composing `Φ`
+once more via `GridDatum.bind` with the coset translates `LevelCosets` weighted by `edgeCharProd`
+yields an equivariant `GridDatum` of order `4 m` on `stageEdges 0` whose period is a constant
+multiple of that of `Φ`.
 
 ## Main definitions and results
 
@@ -27,9 +30,11 @@ translates times that of `Ψ¹`.
 * `New.Data.diagonalPeriodForm_tupleAction`: translating the matrices by a family that is `1` at
   the ends and `diag(g, 1)` at `(0, 0)` of the `Ỹ`, `g` being its member at `(0, 0)` of the `Y`,
   multiplies the period by the characters of the edges.
-* `New.Data.firstPointDatum`, `New.Data.firstPathDatum`: the functions `Ψ¹` and `Ψ⁰`.
-* `New.Data.exists_isPathDatum_diagonalPeriodForm_eq`: the period of the iterated transposed lifts
-  is a constant times the period of path data on the first path.
+* `New.Data.IsLevelPathDatum`, `New.Data.exists_isLevelPathDatum_transposedChain_eq`: building the
+  first-column functional edge by edge via `GridDatum.bind`.
+* `New.Data.exists_isPathDatum_diagonalPeriodForm_eq`: symmetrizing over `LevelCosets` via
+  `GridDatum.bind` expresses the period of the iterated transposed lifts as a constant times the
+  period of a path datum on `stageEdges 0`.
 
 Notions from other files:
 * `New.Data.triangleModulus`: the modulus `𝔪₀ = π_M Q` for the chain of the `Y` and `𝔟 = π_M ^ b`
@@ -43,7 +48,8 @@ Notions from other files:
 * `New.Data.EdgeTuple`: a matrix modulo `𝔪` for each pair of nodes. A `NodeFamily` of invertible
   matrices acts on it by `New.Data.tupleAction`; `New.Data.edgeCharProd` is the product of the
   characters of the edges at the determinants of such a family.
-* `New.GridPath.formMap`: the composite of the maps by the matrices of a tuple along a path.
+* `New.Data.legDescents`, `New.Data.gridPathMap`: the composite of the maps by the matrices of a
+  tuple along a first column or L-shaped path.
 -/
 
 @[expose] public section
@@ -57,6 +63,7 @@ namespace New.Data
 
 The period of a conjugate form on `Y^j_j` and a form on `Ỹ^j_j` does not see a common translation.
 -/
+
 section GridStart
 
 open Function Matrix Fintype Finset Exchange Rows Ideal Quotient Space Gf LevelPlaces
@@ -72,14 +79,13 @@ lemma finMean_isUnit_indicator {n R : Type} [Fintype n] [DecidableEq n] [CommRin
   simp [finMean, card_congr of.symm, sq, pow_mul, ↓finsum_eq_sum_of_fintype,
     (card_congr (.ofInjective _ Units.val_injective)).trans (card_subtype IsUnit)]
 
-/-- The edges of a first column in the two grids are disjoint. -/
-lemma disjoint_edges_column {D : Data P} {b : ℕ} (hb : b ≤ D.m) :
-    Disjoint ((GridPath.column hb).edges false) ((GridPath.column hb).edges true) := by
+/-- The edges of the first columns in the two grids are disjoint. -/
+lemma disjoint_legEdges {D : Data P} {b : ℕ} :
+    Disjoint (D.legEdges false b) (D.legEdges true b) := by
   rw [disjoint_left]
-  rintro ⟨u, v⟩ h_false h_true
-  have hu_false : u.1 = false := (GridPath.eq_and_le_of_mem_edges h_false).1
-  have hu_true : u.1 = true := (GridPath.eq_and_le_of_mem_edges h_true).1
-  simp [hu_false] at hu_true
+  intro e hf ht
+  simp only [legEdges, mem_image, mem_Ico] at hf ht
+  grind
 
 /-- Reduction modulo `𝔪₀ = π_M Q` from the residue ring of `𝔪 = 𝔟Q` (`reduceToTriangle ϑ false`, for
 the grid of the `Y`) is a local homomorphism, because the two moduli have the same primes. -/
@@ -174,7 +180,8 @@ lemma diagonalPeriodForm_formRep (D : Data P) (ϑ : D.MFoldTwist) {j : ℕ} {hj 
       simp
       rfl
   rw [h_int, h_int, ← (integral_comp_mul_right u h_rat h_cont).1]
-  simp only [F, h_mul] -- before `Prod.mul_def` takes the product in `h_mul` apart
+  -- before `Prod.mul_def` takes the product in `h_mul` apart
+  simp only [F, h_mul]
   simp [Prod.mul_def]
 
 /-- Let `𝔟` be `D.gridLevelGen = D.piM ^ D.natB`. A form `φ` in `D.gridLevelForms 0`, that is of
@@ -302,24 +309,24 @@ lemma exists_petersson_eq_diagonalPeriodForm (D : Data P)
 /-- Put `m = D.m` and `𝔪 = gridModulus ϑ`. Let `S` be a tuple of matrices modulo `𝔪`, one for each
 pair of nodes, and `F` a form at the end `(z, 0, m)` of the first column. Let the family `g` of
 invertible matrices modulo `𝔪` be `1` at that end, and let `k` be an integral lift of `g (z, 0, b)`,
-equal to `1` if `b = m`. Translate `S` by `g`, map `F` down the column to `(z, 0, b)` by `formMap`,
-and translate the image on the right by `k`. The result is the image of `F` for `S` times
-`edgeCharProd g`, the product over the edges from `p` to `q` of the column of their characters at
-`det (g q) / det (g p)`. -/
-lemma formRep_formMap_column_tupleAction {D : Data P} {ϑ : D.MFoldTwist} {g : NodeFamily ϑ}
+equal to `1` if `b = m`. Translate `S` by `g`, map `F` down the column to `(z, 0, b)` by
+`legDescents`, and translate the image on the right by `k`. The result is the image of `F` for `S`
+times `edgeCharProd g`, the product over the edges from `p` to `q` of the column of their characters
+at `det (g q) / det (g p)`. -/
+lemma formRep_legDescents_tupleAction {D : Data P} {ϑ : D.MFoldTwist} {g : NodeFamily ϑ}
     {z : Bool} {b : ℕ} (hb : b ≤ D.m)
     (hg_end : g (z, 0, D.m) = 1) (S : EdgeTuple ϑ) (F : D.GridForm z 0 D.m)
     (k : stdLevel D.E (D.NodeIndex (z, 0, b))) (hk : g (z, 0, b) = (gridModulus ϑ).reductionGL k)
     (hk_end : b = D.m → k = 1) :
     (D.gridSpace 0 z 0 b).formRep (D.gridKernel z 0 b true) k.val
-        ((GridPath.column hb).formMap (tupleAction g S) z F) =
-      edgeCharProd g ((GridPath.column hb).edges z) • (GridPath.column hb).formMap S z F := by
+        (legDescents (tupleAction g S) z b F) =
+      edgeCharProd g (D.legEdges z b) • legDescents S z b F := by
   -- Downward induction on `b`: across the edge from `(0, b)` to `(0, b + 1)` the translation by
   -- `k` becomes one by a lift `u` of `g (z, 0, b + 1)`, at the price of the character of the edge.
   induction hb using Nat.decreasingInduction with
   | self =>
-    rw [GridPath.column_self, GridPath.formMap, GridPath.edges, edgeCharProd, Finset.prod_empty,
-      one_smul, hk_end rfl, OneMemClass.coe_one, map_one]
+    rw [legDescents_self, legDescents_self, legEdges, Ico_self, image_empty, edgeCharProd,
+      Finset.prod_empty, one_smul, hk_end rfl, OneMemClass.coe_one, map_one]
     rfl
   | of_succ b hb ih =>
     let u : stdLevel D.E (D.NodeIndex (z, 0, b + 1)) :=
@@ -339,32 +346,34 @@ lemma formRep_formMap_column_tupleAction {D : Data P} {ϑ : D.MFoldTwist} {g : N
       refine ((D.isEdgeFamily_grid_succ_right (z := z) id zero_le hb).isArrow_modDatum.2
         |>.formRep_formLift_of_eq_smul (pairWeil_modDatum_single k u) _).trans ?_
       simp [gridChar_det, edgeCharProd, hk, hu, div_eq_mul_inv]
-      rfl -- Both sides are the transposed lift that defines `transposedMove`.
-    have he : columnEdge z 0 b ∉ (GridPath.column hb).edges z := by
-      intro h_mem
-      obtain ⟨-, -, h_le, -⟩ := GridPath.eq_and_le_of_mem_edges h_mem
-      simp at h_le
-    simp only [GridPath.column_of_lt hb, GridPath.formMap, GridPath.edges, LinearMap.comp_apply]
-    rw [h_edge, ih u hu (ite_eq_left ·), map_smul, smul_smul, edgeCharProd, prod_singleton,
-      edgeCharProd, edgeCharProd, prod_insert he]
+      rfl
+    have he : columnEdge z 0 b ∉ D.legEdges z (b + 1) := by simp [legEdges]
+    have h_edges : D.legEdges z b = insert (columnEdge z 0 b) (D.legEdges z (b + 1)) := by
+      simp [legEdges, ← insert_Ico_add_one_left_eq_Ico hb]
+    have h_char_step :
+        edgeCharProd g {columnEdge z 0 b} * edgeCharProd g (D.legEdges z (b + 1)) =
+          edgeCharProd g (D.legEdges z b) := by
+      simp [h_edges, edgeCharProd, prod_insert he]
+    rw [legDescents_of_lt _ z hb, legDescents_of_lt _ z hb, LinearMap.comp_apply,
+      LinearMap.comp_apply, h_edge, ih u hu (ite_eq_left ·), map_smul, smul_smul, h_char_step]
 
 /-- Let `g` be a family of invertible matrices modulo `gridModulus ϑ`, one at each node, that is `1`
 at the ends `(z, 0, D.m)` of both first columns and is the block matrix `diag(g (false, 0, 0), 1)`
 at `(true, 0, 0)`. Map a conjugate form `y'` on `Y_m` and a form `φ` on `Ỹ^m_0` down these columns
-by the matrices `S`, and take the period at the real point `gInf`. Replacing the matrix from `p` to
-`q` by `(g q)⁻¹ * S (p, q) * g p` multiplies this period by `edgeCharProd`, the product over the
-edges of both columns of their characters at `det (g q) / det (g p)`. -/
+by `legDescents`, and take the period at the real point `gInf`. Replacing the matrix from `p` to `q`
+by `(g q)⁻¹ * S (p, q) * g p` multiplies this period by `edgeCharProd`, the product over the edges
+of both columns (`D.stageEdges 0`) of their characters at `det (g q) / det (g p)`. -/
 lemma diagonalPeriodForm_tupleAction {D : Data P} {ϑ : D.MFoldTwist} {g : NodeFamily ϑ}
     (hg_end : ∀ z : Bool, g (z, 0, D.m) = 1)
     (hg_diag : g (true, 0, 0) = blockInlGL (D.gridDiagEquiv 0) (g (false, 0, 0)))
     (gInf : GInf D.E (D.gridSigns true 0 0 0)) (y' : D.GridForm false 0 D.m)
     (φ : D.GridForm true 0 D.m) (S : EdgeTuple ϑ) :
     diagonalPeriodForm ϑ zero_le gInf
-        ((GridPath.column D.m.zero_le).formMap (tupleAction g S) false y')
-        ((GridPath.column D.m.zero_le).formMap (tupleAction g S) true φ) =
-      edgeCharProd g (TwoGridPath.first D.m).edges * diagonalPeriodForm ϑ zero_le gInf
-        ((GridPath.column D.m.zero_le).formMap S false y')
-        ((GridPath.column D.m.zero_le).formMap S true φ) := by
+        (legDescents (tupleAction g S) false 0 y')
+        (legDescents (tupleAction g S) true 0 φ) =
+      edgeCharProd g (D.stageEdges 0) * diagonalPeriodForm ϑ zero_le gInf
+        (legDescents S false 0 y')
+        (legDescents S true 0 φ) := by
   -- A lift `u` of `g (false, 0, 0)` translates both forms, and the period does not see it.
   let u : stdLevel D.E (D.GridIndex false 0 0) := Rows.liftMod (g (false, 0, 0))
   have hu : (gridModulus ϑ).reductionGL u = g (false, 0, 0) := reductionGL_liftMod _
@@ -375,29 +384,33 @@ lemma diagonalPeriodForm_tupleAction {D : Data P} {ϑ : D.MFoldTwist} {g : NodeF
     refine hg_diag.trans (.trans ?_ h_red.symm)
     simp [← hu, Modulus.reductionGL]
   have hm : 0 ≠ D.m := by simp [m_eq_two_mul_varrho_add_two]
-  let p : GridPath 0 D.m 0 0 := .column D.m.zero_le
-  have h_char : edgeCharProd g (TwoGridPath.first D.m).edges =
-      edgeCharProd g (p.edges false) * edgeCharProd g (p.edges true) :=
-    prod_union (disjoint_edges_column _)
+  have h_stage : D.stageEdges 0 = D.legEdges false 0 ∪ D.legEdges true 0 := by
+    simp [stageEdges, gridPath]
+  have h_char : edgeCharProd g (D.stageEdges 0) =
+      edgeCharProd g (D.legEdges false 0) * edgeCharProd g (D.legEdges true 0) := by
+    rw [h_stage]
+    exact prod_union disjoint_legEdges
   have h_false : (D.gridSpace 0 false 0 0).formRep (D.gridKernel false 0 0 true) u.val
-        (p.formMap (tupleAction g S) false y') =
-      edgeCharProd g (p.edges false) • p.formMap S false y' :=
-    formRep_formMap_column_tupleAction _ (hg_end false) S y' u hu.symm (absurd · hm)
+        (legDescents (tupleAction g S) false 0 y') =
+      edgeCharProd g (D.legEdges false 0) • legDescents S false 0 y' :=
+    formRep_legDescents_tupleAction D.m.zero_le (hg_end false) S y' u hu.symm (absurd · hm)
   have h_true : (D.gridSpace 0 true 0 0).formRep (D.gridKernel true 0 0 true)
         (U.block (D.gridDiagEquiv 0) (u.val, 1))
-        (p.formMap (tupleAction g S) true φ) =
-      edgeCharProd g (p.edges true) • p.formMap S true φ :=
-    formRep_formMap_column_tupleAction _ (hg_end true) S φ u' hu' (absurd · hm)
+        (legDescents (tupleAction g S) true 0 φ) =
+      edgeCharProd g (D.legEdges true 0) • legDescents S true 0 φ :=
+    formRep_legDescents_tupleAction D.m.zero_le (hg_end true) S φ u' hu' (absurd · hm)
   rw [← diagonalPeriodForm_formRep D ϑ u.val, h_false, h_true, h_char,
     LinearMap.map_smul₂, map_smul, smul_smul, smul_eq_mul]
 
 end GridStart
 
 /-!
-## Path data on the first path
+## Monadic path data on the first path
 
-The product `Ψ¹` of the point data of the edges is symmetrized to the path datum `Ψ⁰`, the sum of
-its translates.
+Starting from the point evaluation at `0`, `GridDatum.bind` attaches the single-edge point data
+`edgePointDatum` down both first columns to form a level-equivariant functional `Φ`, and a final
+`GridDatum.bind` over `LevelCosets` symmetrizes `Φ` into an equivariant `IsPathDatum` on
+`stageEdges 0`.
 -/
 
 section GridFirstColumns
@@ -405,46 +418,6 @@ section GridFirstColumns
 open Function Matrix Fintype Finset Exchange Rows Subgroup MulAction Equiv
 
 variable {P : Parameters} {D : Data P}
-
-/-- For a set `w` of pairs of nodes, `tuplesOn ϑ w` is the set of tuples of matrices modulo
-`gridModulus ϑ`, one for each pair of nodes, that are zero outside `w`. A tuple on the union of
-disjoint sets `w` and `w'` is glued by `Finset.piecewise` from a tuple on `w` and one on `w'`, so a
-sum over tuples on the union is a double sum. -/
-lemma sum_tuplesOn_union {ϑ : D.MFoldTwist} {w w' : Finset (GridNode × GridNode)}
-    (hw : Disjoint w w') (F : EdgeTuple ϑ → ℂ) :
-    ∑ S ∈ tuplesOn ϑ (w ∪ w'), F S =
-      ∑ S ∈ tuplesOn ϑ w, ∑ S' ∈ tuplesOn ϑ w', F (w.piecewise S S') := by
-  rw [← sum_product']
-  -- The inverse of gluing cuts a tuple into its parts on `w` and off `w`.
-  refine sum_nbij' (fun S ↦ (w.piecewise S 0, w.piecewise 0 S)) (fun p ↦ w.piecewise p.1 p.2)
-    (fun S hS ↦ by
-      simp only [mem_product, mem_tuplesOn] at hS ⊢
-      refine ⟨fun e he ↦ by simp [Finset.piecewise, he], fun e he ↦ ?_⟩
-      by_cases h : e ∈ w
-      · simp [Finset.piecewise, h]
-      · simp [Finset.piecewise, h, hS e (by simp [h, he])])
-    (fun p hp ↦ by
-      simp only [mem_product, mem_tuplesOn] at hp ⊢
-      intro e he
-      simp only [mem_union, not_or] at he
-      simp [Finset.piecewise, he.1, hp.2 e he.2])
-    (fun S _ ↦ by simp [piecewise_same]) (fun p hp ↦ ?_) fun S _ ↦ by simp [piecewise_same]
-  simp only [mem_product, mem_tuplesOn] at hp
-  ext e : 2 <;> by_cases he : e ∈ w <;> simp [he, hp, disjoint_left.1 hw]
-
-/-- The edges of the column from `(0, m)` down to `(0, b)` in the grid `z` are those from `(0, i)`
-to `(0, i + 1)` with `b ≤ i < m`. -/
-lemma edges_column {z : Bool} {b : ℕ} (hb : b ≤ D.m) :
-    (GridPath.column hb).edges z = (Ico b D.m).image (columnEdge z 0) := by
-  induction hb using Nat.decreasingInduction with
-  | self => simp [GridPath.column_self, GridPath.edges]
-  | of_succ b hb ih =>
-    simp [GridPath.column_of_lt hb, GridPath.edges, ih, ← insert_Ico_add_one_left_eq_Ico hb]
-
-/-- An edge lies on the first path exactly when it is an edge of the first column of a grid. -/
-lemma mem_edges_first {e : GridNode × GridNode} :
-    e ∈ (TwoGridPath.first D.m).edges ↔ ∃ z : Bool, ∃ i < D.m, columnEdge z 0 i = e := by
-  simp [TwoGridPath.edges, TwoGridPath.first, edges_column]
 
 /-! ### The point data -/
 
@@ -455,38 +428,6 @@ def edgePointDatum {ϑ : D.MFoldTwist} (z : Bool) (b : ℕ)
     (y : Matrix (D.NodeIndex (z, 0, b + 1)) (D.NodeIndex (z, 0, b)) (gridModulus ϑ).ResidueRing) :
     ℂ :=
   pointDatum (triangleModulus z ϑ).ResidueRing (y.map (reduceToTriangle ϑ z))
-
-/-- The product of the point data `edgePointDatum` of the edges from `(0, b)` to `(0, m)` in the
-grid `z`, at the matrices of `S`: the indicator that each of these matrices reduces to the standard
-inclusion modulo `triangleModulus z ϑ`. -/
-def columnPointDatum {ϑ : D.MFoldTwist} (z : Bool) (b : ℕ) (S : EdgeTuple ϑ) : ℂ :=
-  ∏ i ∈ Ico b D.m, edgePointDatum z i (S (columnEdge z 0 i))
-
-/-- The product `Ψ¹` of the point data of the edges of the first path. -/
-def firstPointDatum {ϑ : D.MFoldTwist} (S : EdgeTuple ϑ) : ℂ :=
-  columnPointDatum false 0 S * columnPointDatum true 0 S
-
-/-- The product of the point data from `(0, b)` to `(0, m)` depends only on the matrices of the
-edges between these two nodes. -/
-lemma columnPointDatum_congr {ϑ : D.MFoldTwist} {z : Bool} {b : ℕ} {S S' : EdgeTuple ϑ}
-    (hS : ∀ i ∈ Ico b D.m, S (columnEdge z 0 i) = S' (columnEdge z 0 i)) :
-    columnPointDatum z b S = columnPointDatum z b S' :=
-  prod_congr rfl fun i hi ↦ by rw [hS i hi]
-
-/-- A value of `Ψ¹` is `0` or `1`, so it is a sum of at most one root of unity. -/
-lemma isSumOfRootsOfUnity_firstPointDatum {ϑ : D.MFoldTwist} (S : EdgeTuple ϑ) :
-    IsSumOfRootsOfUnity 1 (firstPointDatum S) := by
-  by_cases hS : firstPointDatum S = 0
-  · simpa only [hS] using IsSumOfRootsOfUnity.zero
-  have h_one (z : Bool) (hz : columnPointDatum z 0 S ≠ 0) : columnPointDatum z 0 S = 1 :=
-    prod_eq_one fun i hi ↦ by
-      have h_eq : (S (columnEdge z 0 i)).map (reduceToTriangle ϑ z) =
-          inclMatrix (triangleModulus z ϑ).ResidueRing .inl :=
-        Pi.support_single_subset (prod_ne_zero_iff.1 hz i hi)
-      exact (congrArg (pointDatum (triangleModulus z ϑ).ResidueRing) h_eq).trans
-        (Pi.single_eq_same _ _)
-  rw [firstPointDatum, h_one _ (left_ne_zero_of_mul hS), h_one _ (right_ne_zero_of_mul hS), mul_one]
-  exact .of_isOfFinOrder .one
 
 /-- Let `y` be a matrix modulo `𝔪 = gridModulus ϑ` from the space `Y_b` at the node `(false, 0, b)`
 to `Y_(b+1)`. If `edgePointDatum false b y` is nonzero, that is, `y` reduces to the standard
@@ -535,108 +476,16 @@ lemma pointTransposedLift_eq_sum {ϑ : D.MFoldTwist} {z : Bool} {b : ℕ} :
   simp only [map_smul]
   rfl
 
-/-- Let `b ≤ m = D.m` and take the first column of the grid `z` from `(0, m)` down to `(0, b)`. With
-`π_M = D.piM`, `𝔟 = π_M ^ D.natB` and `Q` the product of the places of `ϑ`, the modulus
-`triangleModulus z ϑ` is `π_M Q` for `false` and `𝔟` for `true`, and `triangleGLCard z ϑ i` is the
-order of `GL` of the node `(0, i)` modulo it. The composite `transposedChain ϑ z b` of the
-transposed theta lifts `pointTransposedLift` along the column is the product of these orders,
-`b ≤ i < m`, times a sum over the tuples `S` of matrices modulo `𝔪 = 𝔟Q` on its edges: the composite
-`formMap` of the transposed lifts whose data are the single matrices of `S`, weighted by the
-indicator `columnPointDatum z b S` that each matrix reduces to the standard inclusion modulo
-`triangleModulus z ϑ`. -/
-lemma transposedChain_eq_sum {ϑ : D.MFoldTwist} {z : Bool} {b : ℕ} (hb : b ≤ D.m) :
-    transposedChain ϑ z b = (∏ i ∈ Ico b D.m, (triangleGLCard z ϑ i : ℂ)) •
-      ∑ S ∈ tuplesOn ϑ ((GridPath.column hb).edges z),
-        columnPointDatum z b S • (GridPath.column hb).formMap S z := by
-  induction hb using Nat.decreasingInduction with
-  | self => simp [transposedChain_self, GridPath.column_self, GridPath.edges, GridPath.formMap,
-      tuplesOn_empty, columnPointDatum]
-  | of_succ b hb ih =>
-    -- The factors and the maps of the later edges do not see the matrix `y` of the new edge.
-    let M := Matrix (D.NodeIndex (z, 0, b + 1)) (D.NodeIndex (z, 0, b)) (gridModulus ϑ).ResidueRing
-    have h_new : columnEdge z 0 b ∉ (GridPath.column hb).edges z := by simp [edges_column]
-    have h_datum (S : EdgeTuple ϑ) (y : M) :
-        columnPointDatum z b (update S (columnEdge z 0 b) y) =
-          edgePointDatum z b y * columnPointDatum z (b + 1) S := by
-      rw [columnPointDatum, prod_eq_prod_Ico_succ_bot hb, update_self]
-      exact congrArg _ (columnPointDatum_congr fun i hi ↦ update_of_ne (fun h ↦ by
-        have : i = b := congrArg (fun e : GridNode × GridNode ↦ e.1.2.2) h
-        have := (mem_Ico.1 hi).1
-        omega) _ _)
-    have h_map (S : EdgeTuple ϑ) (y : M) :
-        (GridPath.column hb).formMap (update S (columnEdge z 0 b) y) z =
-          (GridPath.column hb).formMap S z :=
-      GridPath.formMap_congr _ fun e he ↦ update_of_ne (ne_of_mem_of_not_mem he h_new) _ _
-    rw [transposedChain_of_lt ϑ hb, ih, pointTransposedLift_eq_sum, GridPath.column_of_lt hb,
-      GridPath.edges, sum_tuplesOn_insert h_new, prod_eq_prod_Ico_succ_bot hb]
-    ext φ : 1
-    simp only [GridPath.formMap, h_datum, h_map, update_self, LinearMap.comp_apply,
-      LinearMap.smul_apply, LinearMap.sum_apply, map_sum, map_smul, smul_sum, smul_smul]
-    refine sum_congr rfl fun _ _ ↦ sum_congr rfl fun _ _ ↦ ?_
-    rw [mul_comm (_ * _), mul_mul_mul_comm]
-
-/-- In the grid of the `Ỹ` the iterated transposed lifts `transposedChain` along the first column do
-not depend on the twist. -/
-lemma transposedChain_one_true_eq_transposedChain {b : ℕ} (ϑ : D.MFoldTwist) (hb : b ≤ D.m) :
-    D.transposedChain 1 true b = transposedChain ϑ true b := by
-  induction hb using Nat.decreasingInduction with
-  | self => rw [transposedChain_self, transposedChain_self]
-  | of_succ b hb ih =>
-    have h_step : D.pointTransposedLift 1 true b = D.pointTransposedLift ϑ true b := by
-      have h_char : gridChar 1 (!true) b = gridChar ϑ (!true) b := by
-        funext n _
-        simp only [gridChar, Bool.not_true, Bool.cond_false]
-      dsimp only [pointTransposedLift, triangleGLCard, triangleModulus, triangleTwist,
-        Bool.cond_true, Bool.cond_false]
-      rw [h_char]
-    rw [transposedChain_of_lt 1 hb, transposedChain_of_lt ϑ hb, ih, h_step]
-
-/-- Let `ϑ` be an m-fold twist (`MFoldTwist`), `y'` a conjugate form on `Y_m` and `φ` a form on
-`Ỹ^m_0`. Move them to `Y₀` and `Ỹ^0_0` by `transposedChain`, the composites of transposed theta
-lifts down the first columns of the two grids `Y` (`false`) and `Ỹ` (`true`). The pairing of the
-images by a bilinear form `B` equals a product times a sum. The product runs over `i < D.m` and both
-grids `z` of `triangleGLCard z ϑ i`, the order of `GL` at the node `(z, 0, i)` modulo
-`triangleModulus z ϑ`. The sum runs over the tuples `S ∈ tuplesOn ϑ` of matrices on the edges of the
-first path `TwoGridPath.first D.m`, which goes down both first columns. Its term is
-`firstPointDatum S`, the indicator that each matrix reduces to the standard inclusion modulo
-`triangleModulus z ϑ`, times `B` of the two forms mapped down the columns by `S` (`formMap`). -/
-lemma pairing_transposedChain_eq_sum {ϑ : D.MFoldTwist}
-    (B : D.GridForm false 0 0 →ₗ[ℂ] D.GridForm true 0 0 →ₗ[ℂ] ℂ)
-    (y' : D.GridForm false 0 D.m) (φ : D.GridForm true 0 D.m) :
-    B (transposedChain ϑ false 0 y') (D.transposedChain 1 true 0 φ) =
-      (∏ i ∈ range D.m, (triangleGLCard false ϑ i : ℂ) * triangleGLCard true ϑ i) *
-        ∑ S ∈ tuplesOn ϑ (TwoGridPath.first D.m).edges, firstPointDatum S *
-          B ((GridPath.column D.m.zero_le).formMap S false y')
-            ((GridPath.column D.m.zero_le).formMap S true φ) := by
-  set p : GridPath 0 D.m 0 0 := .column D.m.zero_le
-  have h_disjoint : Disjoint (p.edges false) (p.edges true) := disjoint_edges_column _
-  have h_glue_true (S S' : EdgeTuple ϑ) :
-      ∀ e ∈ p.edges true, (p.edges false).piecewise S S' e = S' e :=
-    fun e he ↦ piecewise_eq_of_notMem _ _ _ (disjoint_right.1 h_disjoint he)
-  have h_mem (z : Bool) : ∀ i ∈ Ico 0 D.m, columnEdge z 0 i ∈ p.edges z := by
-    simp +contextual [p, edges_column]
-  -- Of a tuple glued from `S` and `S'` the column of the `Y` sees `S`, that of the `Ỹ` sees `S'`.
-  have h_datum (S S' : EdgeTuple ϑ) : firstPointDatum ((p.edges false).piecewise S S') =
-      columnPointDatum false 0 S * columnPointDatum true 0 S' := by
-    rw [firstPointDatum, columnPointDatum_congr fun i hi ↦ h_glue_true S S' _ (h_mem true i hi),
-      columnPointDatum_congr fun i hi ↦ piecewise_eq_of_mem _ _ _ (h_mem false i hi)]
-  have h_formMap_false (S S' : EdgeTuple ϑ) :
-      p.formMap ((p.edges false).piecewise S S') false = p.formMap S false :=
-    p.formMap_congr fun e ↦ piecewise_eq_of_mem _ S S'
-  have h_sum : ∑ S ∈ tuplesOn ϑ (p.edges false ∪ p.edges true),
-        firstPointDatum S * B (p.formMap S false y') (p.formMap S true φ) =
-      B ((∑ S ∈ tuplesOn ϑ (p.edges false), columnPointDatum false 0 S • p.formMap S false) y')
-        ((∑ S ∈ tuplesOn ϑ (p.edges true), columnPointDatum true 0 S • p.formMap S true) φ) := by
-    rw [sum_tuplesOn_union h_disjoint, sum_comm]
-    simp only [h_datum, h_formMap_false, p.formMap_congr (h_glue_true _ _), LinearMap.coe_sum,
-      Finset.sum_apply, LinearMap.smul_apply, map_sum, map_smul, smul_eq_mul, mul_sum, mul_assoc]
-    exact sum_congr rfl fun _ _ ↦ sum_congr rfl fun _ _ ↦ mul_left_comm _ _ _
-  rw [show (TwoGridPath.first D.m).edges = p.edges false ∪ p.edges true from rfl, h_sum,
-    transposedChain_one_true_eq_transposedChain ϑ zero_le, transposedChain_eq_sum zero_le,
-      transposedChain_eq_sum zero_le,
-      range_eq_Ico]
-  rw [prod_mul_distrib, LinearMap.smul_apply, map_smul, LinearMap.smul_apply, LinearMap.smul_apply,
-    map_smul, smul_eq_mul, smul_eq_mul, mul_assoc]
+/-- In the grid of the `Ỹ`, the single-step transposed lift `pointTransposedLift` along the first
+column does not depend on the twist. -/
+lemma pointTransposedLift_one_true_eq {b : ℕ} (ϑ : D.MFoldTwist) :
+    D.pointTransposedLift 1 true b = D.pointTransposedLift ϑ true b := by
+  have h_char : gridChar 1 (!true) b = gridChar ϑ (!true) b := by
+    funext n _
+    simp only [gridChar, Bool.not_true, Bool.cond_false]
+  dsimp only [pointTransposedLift, triangleGLCard, triangleModulus, triangleTwist,
+    Bool.cond_true, Bool.cond_false]
+  rw [h_char]
 
 /-! ### Invariance -/
 
@@ -652,8 +501,8 @@ lemma map_eq_one_and_edgeChar_eq_one_of_mem_nodeLevel {ϑ : D.MFoldTwist} {z : B
     (hk : k ∈ nodeLevel ϑ (z, 0, i)) :
     k.map (reduceToTriangle ϑ z) = 1 ∧ edgeChar ϑ (columnEdge z 0 b) k.val.det = 1 := by
   cases z
-  · -- For `z = false` the level is trivial.
-    simp [show k = 1 by simpa [nodeLevel] using hk]
+  -- For `z = false` the level is trivial.
+  · simp [show k = 1 by simpa [nodeLevel] using hk]
   -- For `z = true` the character is untwisted, so it may be read at the modulus of the trivial
   -- twist, where `k` is `1`.
   replace hk : k.map (reduceToTriangle ϑ true) = 1 := by simpa [nodeLevel] using hk
@@ -668,29 +517,138 @@ lemma map_eq_one_and_edgeChar_eq_one_of_mem_nodeLevel {ϑ : D.MFoldTwist} {z : B
     (gridChar_det (ϑ := ϑ) false b Unit 1 k₀).symm.trans (gridChar_det (ϑ := 1) false b Unit 1 k₀)
   exact ⟨hk, by simp [h_char, hk₀]⟩
 
-/-- Let `g` be a family of invertible matrices modulo `gridModulus ϑ`, one at each node, whose
-members on the first path (the nodes `(z, 0, i)`, `i ≤ D.m`) lie in `nodeLevel`: they are `1` for
-`z = false` and `1` modulo `D.piM ^ D.natB` for `z = true`. Then `g` fixes `Ψ¹ = firstPointDatum`,
-the indicator that each matrix of the path reduces to the standard inclusion, under the action on
-functions of tuples: the matrix from `p` to `q` becomes `(g q)⁻¹ * S (p, q) * g p`, and the value
-is multiplied by the product of the characters of the edges at `det (g q) / det (g p)`. -/
-lemma firstPointDatum_invariant {ϑ : D.MFoldTwist} {g : NodeFamily ϑ}
-    (hg : ∀ z : Bool, ∀ i ≤ D.m, g (z, 0, i) ∈ nodeLevel ϑ (z, 0, i)) (S : EdgeTuple ϑ) :
-    edgeCharProd g (TwoGridPath.first D.m).edges * firstPointDatum (tupleAction g S) =
-      firstPointDatum S := by
-  have h_char : edgeCharProd g (TwoGridPath.first D.m).edges = 1 := prod_eq_one fun e he ↦ by
-    obtain ⟨z, i, hi, rfl⟩ := mem_edges_first.1 he
-    simp [(map_eq_one_and_edgeChar_eq_one_of_mem_nodeLevel (hg z i hi.le)).2,
-      (map_eq_one_and_edgeChar_eq_one_of_mem_nodeLevel (hg z (i + 1) hi)).2]
-  have h_red (z : Bool) (j : ℕ) (hj : j ≤ D.m) : (g (z, 0, j)).map (reduceToTriangle ϑ z) = 1 :=
-    (map_eq_one_and_edgeChar_eq_one_of_mem_nodeLevel (b := 0) (hg z j hj)).1
-  have h_column (z : Bool) : columnPointDatum z 0 (tupleAction g S) = columnPointDatum z 0 S := by
-    refine prod_congr rfl fun i hi ↦ ?_
-    replace hi : i < D.m := (mem_Ico.1 hi).2
-    -- `-coe_units_inv` keeps the inverse a unit, so that the map passes through it.
-    simp [edgePointDatum, tupleAction, Matrix.map_mul, -coe_units_inv,
-      ← GeneralLinearGroup.val_map_apply, h_red z i hi.le, h_red z (i + 1) hi]
-  simp [h_char, firstPointDatum, h_column]
+variable (D) in
+/-- A functional `Λ : GridDatum ϑ` is level-equivariant of order `n` on `w` if it is a short sum
+(`IsShortSum n w Λ`) and is scaled by `edgeCharProd g w` under every family `g` whose entries along
+both first columns `(z, 0, i)`, `i ≤ m`, lie in `nodeLevel`. -/
+structure IsLevelPathDatum {ϑ : D.MFoldTwist} (n : ℕ) (w : Finset (GridNode × GridNode))
+    (Λ : D.GridDatum ϑ) : Prop where
+  /-- `Λ` is a short root-of-unity combination with split-injective vertical edges on `w`. -/
+  isShortSum : IsShortSum n w Λ
+  /-- Families in `nodeLevel` along the first columns scale `Λ` by `edgeCharProd`. -/
+  equivariant (g : NodeFamily ϑ) (hg : ∀ z : Bool, ∀ i ≤ D.m, g (z, 0, i) ∈ nodeLevel ϑ (z, 0, i))
+    (f : EdgeTuple ϑ → ℂ) :
+    Λ (fun S ↦ f (tupleAction g S)) = edgeCharProd g w * Λ f
+
+/-- Extending a level-equivariant datum `Λ` on `w` across a single first-column edge
+`columnEdge z 0 b` (`b < D.m`) not in `w`, weighted by `edgePointDatum z b`, yields a
+level-equivariant datum of order `n + 1` on `insert (columnEdge z 0 b) w`. -/
+lemma IsLevelPathDatum.bind_columnEdge {ϑ : D.MFoldTwist} {n b : ℕ} {z : Bool}
+    {w : Finset (GridNode × GridNode)} {Λ : D.GridDatum ϑ} (hb : b < D.m)
+    (hw : columnEdge z 0 b ∉ w) (hΛ : D.IsLevelPathDatum n w Λ) :
+    D.IsLevelPathDatum (n + 1) (insert (columnEdge z 0 b) w)
+      (Λ.bind (fun _ ↦ edgePointDatum z b)
+        (fun S y ↦ update S (columnEdge z 0 b) y)) where
+  isShortSum := by
+    let e : GridNode × GridNode := columnEdge z 0 b
+    have h_card : card (Matrix (D.NodeIndex e.2) (D.NodeIndex e.1) (gridModulus ϑ).ResidueRing) ≤
+        edgeMatrixCountBound ϑ ^ 1 := by
+      simpa [e] using card_matrix_le_edgeMatrixCountBound (p := e.2) (q := e.1)
+        ⟨zero_le, hb⟩ ⟨zero_le, hb.le⟩
+    refine hΛ.isShortSum.bind h_card fun S y hy hS_inv ↦ ?_
+    have hy_one : edgePointDatum z b y = 1 :=
+      (congrArg (pointDatum (triangleModulus z ϑ).ResidueRing) (Pi.support_single_subset hy)).trans
+        (Pi.single_eq_same _ _)
+    refine ⟨hy_one ▸ .one, fun e' he' h_vert ↦ ?_⟩
+    rcases mem_insert.1 he' with rfl | he'_w
+    · obtain rfl : z = false := by simpa [IsVerticalEdge] using h_vert
+      simpa using hasLeftInv_of_edgePointDatum_ne_zero hy
+    · rw [update_of_ne (ne_of_mem_of_not_mem he'_w hw)]
+      exact hS_inv e' he'_w h_vert
+  equivariant g hg f := by
+    let e : GridNode × GridNode := columnEdge z 0 b
+    obtain ⟨h_red₀, h_char₀⟩ :=
+      map_eq_one_and_edgeChar_eq_one_of_mem_nodeLevel (b := b) (hg z b hb.le)
+    obtain ⟨h_red₁, h_char₁⟩ :=
+      map_eq_one_and_edgeChar_eq_one_of_mem_nodeLevel (b := b) (hg z (b + 1) hb)
+    have h_bij : Bijective (fun y : Matrix (D.NodeIndex e.2) (D.NodeIndex e.1)
+        (gridModulus ϑ).ResidueRing ↦ (g e.2).val * y * (g e.1)⁻¹.val) :=
+      ((mul_left_injective_of_invertible (g e.1)⁻¹.val).comp
+        (mul_right_injective_of_invertible (g e.2).val)).bijective_of_finite
+    have h_sum (S : EdgeTuple ϑ) :
+        (∑ y, edgePointDatum z b y * f (tupleAction g (update S e y))) =
+          ∑ y', edgePointDatum z b y' * f (update (tupleAction g S) e y') := by
+      rw [← h_bij.sum_comp]
+      refine sum_congr rfl fun y' _ ↦ congrArg₂ (· * ·)
+        (by simp [e, edgePointDatum, Matrix.map_mul, -coe_units_inv,
+          ← GeneralLinearGroup.val_map_apply, h_red₀, h_red₁])
+        (congrArg f <| funext fun e' ↦ by
+          rcases eq_or_ne e' e with rfl | hne
+          · simp [tupleAction, ← Matrix.mul_assoc]
+          · simp [tupleAction, hne])
+    simp only [GridDatum.bind_apply]
+    have h_fn : (fun S ↦ ∑ x, edgePointDatum z b x * f (tupleAction g (update S e x))) =
+        fun S ↦ ∑ y', edgePointDatum z b y' * f (update (tupleAction g S) e y') := funext h_sum
+    change Λ (fun S ↦ ∑ x, edgePointDatum z b x * f (tupleAction g (update S e x))) = _
+    rw [h_fn, hΛ.equivariant g hg (fun T ↦ ∑ y', edgePointDatum z b y' * f (update T e y'))]
+    simp [e, edgeCharProd, prod_insert hw, h_char₀, h_char₁]
+
+/-- For `b ≤ m`, downward induction along both first columns produces a level-equivariant functional
+`Φ` of order `2 * (m - b)` on `legEdges false b ∪ legEdges true b` that expands any bilinear pairing
+of `transposedChain` into the weighted pairing of `legDescents`. -/
+lemma exists_isLevelPathDatum_transposedChain_eq {ϑ : D.MFoldTwist} {b : ℕ} (hb : b ≤ D.m) :
+    ∃ Φ : D.GridDatum ϑ,
+      D.IsLevelPathDatum (2 * (D.m - b)) (D.legEdges false b ∪ D.legEdges true b) Φ ∧
+      ∀ (B : D.GridForm false 0 b →ₗ[ℂ] D.GridForm true 0 b →ₗ[ℂ] ℂ)
+        (y' : D.GridForm false 0 D.m) (φ : D.GridForm true 0 D.m),
+        B (transposedChain ϑ false b y') (D.transposedChain 1 true b φ) =
+          (∏ i ∈ Ico b D.m, (triangleGLCard false ϑ i : ℂ) * triangleGLCard true ϑ i) *
+            Φ fun S ↦ B (legDescents S false b y') (legDescents S true b φ) := by
+  induction hb using Nat.decreasingInduction with
+  | self =>
+    have h_empty : D.legEdges false D.m ∪ D.legEdges true D.m = ∅ := by simp [legEdges]
+    refine ⟨LinearMap.proj (0 : EdgeTuple ϑ), ⟨?_, fun g _ f ↦ by
+      simp [h_empty, edgeCharProd, show tupleAction g (0 : EdgeTuple ϑ) = 0 from
+        funext fun _ ↦ by simp [tupleAction]]⟩,
+      fun _ _ _ ↦ by simp [transposedChain_self, legDescents_self]⟩
+    rw [Nat.sub_self, mul_zero, h_empty]
+    exact ⟨Unit, univ, fun _ ↦ 1, fun _ ↦ 0, by simp,
+      fun _ _ ↦ ⟨.one, by simp [LeftInvOnVerticalEdges]⟩, fun _ ↦ by simp⟩
+  | of_succ b hb ih =>
+    obtain ⟨Φ, hΦ, h_eq⟩ := ih
+    let u₀ : GridNode × GridNode := columnEdge false 0 b
+    let u₁ : GridNode × GridNode := columnEdge true 0 b
+    let w₁ : Finset (GridNode × GridNode) := D.legEdges false (b + 1) ∪ D.legEdges true (b + 1)
+    let Φ' : D.GridDatum ϑ :=
+      (Φ.bind (fun _ ↦ edgePointDatum true b) (fun S y ↦ update S u₁ y)).bind
+        (fun _ ↦ edgePointDatum false b) (fun S y ↦ update S u₀ y)
+    refine ⟨Φ', ?_, fun B y' φ ↦ ?_⟩
+    · rw [← show 2 * (D.m - (b + 1)) + 1 + 1 = 2 * (D.m - b) by omega,
+        ← show insert u₀ (insert u₁ w₁) = D.legEdges false b ∪ D.legEdges true b by
+          ext e; simp [u₀, u₁, w₁, legEdges]; grind]
+      exact (hΦ.bind_columnEdge hb (by simp [legEdges])).bind_columnEdge hb
+        (by simp [u₁, w₁, legEdges])
+    · let B' := (B.comp (pointTransposedLift ϑ false b)).compl₂ (D.pointTransposedLift 1 true b)
+      have h_inner (S : EdgeTuple ϑ) :
+          B' (legDescents S false (b + 1) y') (legDescents S true (b + 1) φ) =
+            ((triangleGLCard false ϑ b : ℂ) * triangleGLCard true ϑ b) *
+              ∑ y₁, edgePointDatum true b y₁ * ∑ y₀, edgePointDatum false b y₀ *
+                B (legDescents (update (update S u₁ y₁) u₀ y₀) false b y')
+                  (legDescents (update (update S u₁ y₁) u₀ y₀) true b φ) := by
+        have h_congr (y₁) (y₀) (z : Bool) :
+            legDescents (update (update S u₁ y₁) u₀ y₀) z (b + 1) = legDescents S z (b + 1) :=
+          legDescents_congr fun e he ↦ by
+            rw [update_of_ne (by rintro rfl; simp [u₀, legEdges] at he),
+              update_of_ne (by rintro rfl; simp [u₁, legEdges] at he)]
+        change B (pointTransposedLift ϑ false b (legDescents S false (b + 1) y'))
+            (D.pointTransposedLift 1 true b (legDescents S true (b + 1) φ)) = _
+        rw [pointTransposedLift_one_true_eq ϑ, pointTransposedLift_eq_sum,
+          pointTransposedLift_eq_sum]
+        simp only [legDescents_of_lt _ _ hb, LinearMap.comp_apply, h_congr,
+          show ∀ y₁ y₀, update (update S u₁ y₁) u₀ y₀ (columnEdge false 0 b) = y₀ from
+            fun _ _ ↦ update_self ..,
+          show ∀ y₁ y₀, update (update S u₁ y₁) u₀ y₀ (columnEdge true 0 b) = y₁ from
+            fun _ _ ↦ by rw [update_of_ne (by simp [u₀]), update_self],
+          LinearMap.smul_apply, LinearMap.sum_apply, map_smul, map_sum, smul_eq_mul, mul_sum]
+        exact sum_congr rfl fun _ _ ↦ sum_congr rfl fun _ _ ↦ by ring
+      have h_step := h_eq B' y' φ
+      rw [show B' (transposedChain ϑ false (b + 1) y') (D.transposedChain 1 true (b + 1) φ) =
+          B (transposedChain ϑ false b y') (D.transposedChain 1 true b φ) by
+        rw [transposedChain_of_lt ϑ hb, transposedChain_of_lt 1 hb]; rfl] at h_step
+      rw [h_step, prod_eq_prod_Ico_succ_bot hb]
+      simp_rw [h_inner, ← smul_eq_mul ((triangleGLCard false ϑ b : ℂ) * _)]
+      rw [← Pi.smul_def, Φ.map_smul, smul_eq_mul]
+      simp only [Φ', GridDatum.bind_apply]; ring
 
 /-- The cosets of the level `nodeLevel` at a node form a finite type. -/
 instance fintypeQuotientNodeLevel {ϑ : D.MFoldTwist} (z : Bool) (a b : ℕ) :
@@ -716,59 +674,6 @@ moves with `Y^0_0`. -/
 def LevelCosets.family {ϑ : D.MFoldTwist} (x : LevelCosets ϑ) : NodeFamily ϑ :=
   update x.out (true, 0, 0) (blockInlGL (D.gridDiagEquiv 0) (x.out (false, 0, 0)))
 
-/-- The sum `Ψ⁰` of the translates of `Ψ¹` over the coset families, each weighted by the
-characters of the edges. The coset at `Ỹ^0_0` does not act, so each translate is counted a constant
-number of times. -/
-def firstPathDatum (ϑ : D.MFoldTwist) (S : EdgeTuple ϑ) : ℂ :=
-  ∑ x : LevelCosets ϑ, edgeCharProd x.family (TwoGridPath.first D.m).edges *
-    firstPointDatum (tupleAction x.family S)
-
-/-- Let `g` be an admissible family of invertible matrices modulo `gridModulus ϑ`: it is `1` at
-`(false, 0, D.m)`, is `1` modulo `D.piM ^ D.natB` at `(true, 0, D.m)`, and at `(true, a, a)` is the
-block sum of `g (false, a, a)` with `1`. Then `g` fixes `Ψ⁰ = firstPathDatum ϑ` under translation
-of the matrices (`tupleAction`) followed by multiplication by the product `edgeCharProd` of the
-characters of the edges, because `Ψ⁰` is the sum of the translates of the indicator
-`firstPointDatum` over cosets of the levels `nodeLevel`, and `g` permutes these cosets. -/
-lemma firstPathDatum_invariant {ϑ : D.MFoldTwist} {g : NodeFamily ϑ} (hg : IsAdmissibleFamily g)
-    (S : EdgeTuple ϑ) :
-    edgeCharProd g (TwoGridPath.first D.m).edges * firstPathDatum ϑ (tupleAction g S) =
-      firstPathDatum ϑ S := by
-  obtain ⟨hg_end, hg_diag⟩ : (∀ z : Bool, g (z, 0, D.m) ∈ nodeLevel ϑ (z, 0, D.m)) ∧
-      ∀ a : ℕ, g (true, a, a) = blockInlGL (D.gridDiagEquiv a) (g (false, a, a)) := hg
-  let σ : LevelCosets ϑ ≃ LevelCosets ϑ := piCongrRight fun p ↦ toPerm (g (p.1, 0, p.2))
-  -- Reindex the translates by `σ`: the family of `σ x` and `g` times that of `x` differ by a
-  -- family in the levels, which fixes `Ψ¹`.
-  rw [firstPathDatum, firstPathDatum, mul_sum,
-    ← σ.sum_comp fun y ↦ _ * firstPointDatum (tupleAction y.family S)]
-  refine sum_congr rfl fun x _ ↦ ?_
-  have h_coset (z : Bool) (i : ℕ) (hi : i ≤ D.m) :
-      ((σ x).out (z, 0, i))⁻¹ * (g (z, 0, i) * x.out (z, 0, i)) ∈ nodeLevel ϑ (z, 0, i) := by
-    obtain rfl | hi := hi.eq_or_lt
-    · rw [LevelCosets.out_zero, LevelCosets.out_zero, dite_eq_right (lt_irrefl _),
-        dite_eq_right (lt_irrefl _), inv_one, one_mul, mul_one]
-      exact hg_end z
-    · rw [LevelCosets.out_zero, LevelCosets.out_zero, dite_eq_left hi, dite_eq_left hi,
-        ← QuotientGroup.eq]
-      exact (QuotientGroup.out_eq' (σ x (z, ⟨i, hi⟩))).trans
-        (Quotient.mk_smul_out (nodeLevel ϑ (z, 0, i)) (g (z, 0, i)) (x (z, ⟨i, hi⟩))).symm
-  -- The level at `Y^0_0` is trivial, so the component at `Ỹ^0_0` is `1`.
-  have h_zero : ((σ x).out (false, 0, 0))⁻¹ * (g (false, 0, 0) * x.out (false, 0, 0)) = 1 :=
-    mem_bot.1 (h_coset false 0 D.m.zero_le)
-  have h_level (z : Bool) (i : ℕ) (hi : i ≤ D.m) :
-      ((σ x).family⁻¹ * (g * x.family)) (z, 0, i) ∈ nodeLevel ϑ (z, 0, i) := by
-    by_cases h_corner : ((z, 0, i) : GridNode) = (true, 0, 0)
-    · cases h_corner
-      rw [Pi.mul_apply, Pi.inv_apply, Pi.mul_apply, LevelCosets.family, LevelCosets.family,
-        update_self, update_self, hg_diag 0, ← MonoidHom.map_mul (blockInlGL (D.gridDiagEquiv 0)),
-        ← MonoidHom.map_inv (blockInlGL (D.gridDiagEquiv 0)),
-        ← MonoidHom.map_mul (blockInlGL (D.gridDiagEquiv 0)), h_zero, MonoidHom.map_one]
-      exact one_mem _
-    · rw [Pi.mul_apply, Pi.inv_apply, Pi.mul_apply, LevelCosets.family, LevelCosets.family,
-        update_of_ne h_corner, update_of_ne h_corner]
-      exact h_coset z i hi
-  rw [← firstPointDatum_invariant h_level (tupleAction (σ x).family S)]
-  simp only [← mul_assoc, ← edgeCharProd_mul, ← tupleAction_mul, mul_inv_cancel, one_mul]
-
 /-- The number of coset families `LevelCosets ϑ` is at most `edgeMatrixCountBound ϑ ^ (2 * D.m)`.
 `edgeMatrixCountBound ϑ` bounds the number of matrices modulo `gridModulus ϑ` of an edge between
 nodes of index at most `D.m`. -/
@@ -781,75 +686,6 @@ lemma card_levelCosets_le {ϑ : D.MFoldTwist} :
     _ ≤ card (Matrix (D.NodeIndex (z, 0, i)) (D.NodeIndex (z, 0, i)) (gridModulus ϑ).ResidueRing) :=
         card_le_of_injective _ Units.val_injective
     _ ≤ edgeMatrixCountBound ϑ := card_matrix_le_edgeMatrixCountBound (by simp) (by simp)
-
-/-- Put `m = D.m`. The function `Ψ⁰ = firstPathDatum ϑ`, the weighted sum of the translates of the
-indicator `firstPointDatum`, is a path datum on the first path, the edges from `(z, 0, i)` to
-`(z, 0, i + 1)` with `i < m`. Its values are sums of at most `N ^ (2 m)` roots of unity, where
-`N = edgeMatrixCountBound ϑ` bounds the number of matrices modulo `gridModulus ϑ` between two nodes
-with indices at most `m`. -/
-lemma isPathDatum_firstPathDatum (ϑ : D.MFoldTwist) :
-    IsPathDatum (edgeMatrixCountBound ϑ ^ (2 * D.m)) (TwoGridPath.first D.m).edges
-      (firstPathDatum ϑ) where
-  dependsOn S S' hS := by
-    have h_column (x : LevelCosets ϑ) (z : Bool) : columnPointDatum z 0 (tupleAction x.family S) =
-        columnPointDatum z 0 (tupleAction x.family S') :=
-      columnPointDatum_congr fun i hi ↦ by
-        rw [tupleAction, tupleAction, hS _ (mem_edges_first.2 ⟨z, i, (mem_Ico.1 hi).2, rfl⟩)]
-    simp only [firstPathDatum, firstPointDatum, h_column]
-  invariant _ := firstPathDatum_invariant
-  hasLeftInv S hS e he h_vertical := by
-    -- Some translate of `Ψ¹` is nonzero at `S`, and translation keeps split injectivity.
-    obtain ⟨x, -, hx⟩ := exists_ne_zero_of_sum_ne_zero hS
-    obtain ⟨z, i, hi, rfl⟩ := mem_edges_first.1 he
-    obtain rfl : z = false := by simpa [IsVerticalEdge] using h_vertical
-    have h_false : columnPointDatum false 0 (tupleAction x.family S) ≠ 0 :=
-      left_ne_zero_of_mul (right_ne_zero_of_mul hx)
-    obtain ⟨L, hL⟩ : HasLeftInv (tupleAction x.family S (columnEdge false 0 i)) :=
-      hasLeftInv_of_edgePointDatum_ne_zero (prod_ne_zero_iff.1 h_false i (by simpa))
-    refine ⟨(x.family (false, 0, i)).val * L * (x.family (false, 0, i + 1))⁻¹.val, ?_⟩
-    -- Conjugate the equation of the left inverse `L` by the matrix at `(0, i)`.
-    simpa only [tupleAction, Matrix.mul_assoc, Matrix.mul_one, ← Units.val_mul, mul_inv_cancel,
-      Units.val_one] using congrArg
-      (fun M ↦ (x.family (false, 0, i)).val * M * (x.family (false, 0, i))⁻¹.val) hL
-  isSumOfRootsOfUnity S := by
-    have h_sum : IsSumOfRootsOfUnity (card (LevelCosets ϑ) * 1) (firstPathDatum ϑ S) := .sum fun x ↦
-      (isSumOfRootsOfUnity_firstPointDatum _).mul_left (isOfFinOrder_edgeCharProd _ _)
-    exact h_sum.mono (by simpa using card_levelCosets_le)
-
-/-- For a tuple `S` of matrices let `periodAt S` be the period, for the twist `ϑ` and at the real
-point `gInf`, of the images under `formMap S` down the first columns of a conjugate form `y'` on
-`Y_m` and a form `φ` on `Ỹ^m_0`. The sum of `periodAt` over the tuples on the first path weighted by
-`Ψ⁰` is the cardinality of `LevelCosets ϑ` times the sum weighted by `Ψ¹`, because every translate
-of `Ψ¹` gives the same sum. -/
-lemma sum_firstPathDatum_mul {ϑ : D.MFoldTwist} (gInf : GInf D.E (D.gridSigns true 0 0 0))
-    (y' : D.GridForm false 0 D.m) (φ : D.GridForm true 0 D.m) :
-    let periodAt (S : EdgeTuple ϑ) : ℂ := diagonalPeriodForm ϑ zero_le gInf
-      ((GridPath.column D.m.zero_le).formMap S false y')
-      ((GridPath.column D.m.zero_le).formMap S true φ)
-    ∑ S ∈ tuplesOn ϑ (TwoGridPath.first D.m).edges, firstPathDatum ϑ S * periodAt S =
-      card (LevelCosets ϑ) * ∑ S ∈ tuplesOn ϑ (TwoGridPath.first D.m).edges,
-        firstPointDatum S * periodAt S := by
-  intro periodAt
-  set pathEdges : Finset (GridNode × GridNode) := (TwoGridPath.first D.m).edges
-  have h_end (x : LevelCosets ϑ) (z : Bool) : x.family (z, 0, D.m) = 1 := by
-    have hne : ((z, 0, D.m) : GridNode) ≠ (true, 0, 0) := fun h ↦ by
-      have hm : D.m = 0 := congrArg (fun p : GridNode ↦ p.2.2) h
-      simp [m_eq_two_mul_varrho_add_two] at hm
-    rw [LevelCosets.family, update_of_ne hne, LevelCosets.out_zero, dite_eq_right (lt_irrefl _)]
-  have h_diag (x : LevelCosets ϑ) :
-      x.family (true, 0, 0) = blockInlGL (D.gridDiagEquiv 0) (x.family (false, 0, 0)) := by
-    simp [LevelCosets.family]
-  have h_period (x : LevelCosets ϑ) (S : EdgeTuple ϑ) :
-      periodAt (tupleAction x.family S) = edgeCharProd x.family pathEdges * periodAt S :=
-    diagonalPeriodForm_tupleAction (h_end x) (h_diag x) gInf y' φ S
-  have h_translate (x : LevelCosets ϑ) : ∑ S ∈ tuplesOn ϑ pathEdges,
-      edgeCharProd x.family pathEdges * firstPointDatum (tupleAction x.family S) * periodAt S =
-        ∑ S ∈ tuplesOn ϑ pathEdges, firstPointDatum S * periodAt S := by
-    rw [← sum_tuplesOn_tupleAction x.family fun S ↦ firstPointDatum S * periodAt S]
-    refine sum_congr rfl fun S _ ↦ ?_
-    rw [h_period, mul_left_comm, ← mul_assoc]
-  simp only [firstPathDatum, sum_mul]
-  rw [sum_comm, sum_eq_card_nsmul fun x _ ↦ h_translate x, card_univ, nsmul_eq_mul]
 
 /-- The number of coset families `LevelCosets` is the product of the indices `levelIndex` of the
 levels of the nodes `(0, i)` in the grid of the `Y` and of the orders `triangleGLCard` in that of
@@ -864,46 +700,132 @@ lemma card_levelCosets_eq (ϑ : D.MFoldTwist) : (card (LevelCosets ϑ) : ℂ) =
   rw [Fintype.card_pi, Nat.cast_prod, Fintype.prod_prod_type, Fintype.prod_bool, mul_comm]
   simp only [h_index, h_true, prod_range, prod_mul_distrib]
 
-/-- Let `y'` be a conjugate form on `Y_m`, `φ` a form on `Ỹ^m_0`, and `g` a real point of the
-unitary group of `Ỹ^0_0`. Move `y'` and `φ` down the first columns by the composites
-`transposedChain` of transposed theta lifts, `y'` at the twist `ϑ` and `φ` at the trivial twist `1`.
-The period at `g` of the images is a constant, independent of `ϑ`, times `gridPeriod` of
-`Ψ⁰ = firstPathDatum` at `(ϑ, y', φ)`: the sum over the tuples `S` on the first path of `Ψ⁰ ϑ S`
-times the period at `g` of the images of `y'` and `φ` under the matrices of `S`. -/
-lemma exists_diagonalPeriodForm_transposedChain_eq :
-    ∃ C : ℂ, ∀ (ϑ : D.MFoldTwist) (g : GInf D.E (D.gridSigns true 0 0 0))
-      (y' : D.GridForm false 0 D.m) (φ : D.GridForm true 0 D.m),
-      diagonalPeriodForm ϑ zero_le g (transposedChain ϑ false 0 y')
-          (D.transposedChain 1 true 0 φ) =
-        C * gridPeriod (.first D.m) firstPathDatum g (ϑ, y', φ) := by
-  choose κ hκ using (D.exists_triangleGLCard_eq_mul_levelIndex :
-    ∀ j : ℕ, ∃ C : ℂ, ∀ ϑ : D.MFoldTwist, D.triangleGLCard false ϑ j = C * levelIndex ϑ false 0 j)
-  refine ⟨∏ i ∈ range D.m, κ i, fun ϑ g y' φ ↦ ?_⟩
-  have h_period : gridPeriod (.first D.m) firstPathDatum g (ϑ, y', φ) = _ :=
-    sum_firstPathDatum_mul g y' φ
-  -- The period of `Ψ⁰` is the number of coset families times that of `Ψ¹`. This number is the
-  -- product of the indices of the levels, and the orders for the `Y` are `κ i` times the indices.
-  rw [h_period, card_levelCosets_eq, pairing_transposedChain_eq_sum]
-  simp only [hκ, prod_mul_distrib, mul_assoc]
+/-- For an admissible family `g` and cosets `x`, let `y` be `x` translated on the left by `g`. Then
+`y.family⁻¹ * (g * x.family)` lies in `nodeLevel` at every node `(z, 0, i)` with `i ≤ m`. -/
+lemma LevelCosets.inv_family_mul_mem_nodeLevel {ϑ : D.MFoldTwist} {g : NodeFamily ϑ}
+    (hg : IsAdmissibleFamily g) (x : LevelCosets ϑ) :
+    let y : LevelCosets ϑ := piCongrRight (fun p ↦ toPerm (g (p.1, 0, p.2))) x
+    ∀ z : Bool, ∀ i ≤ D.m, (y.family⁻¹ * (g * x.family)) (z, 0, i) ∈ nodeLevel ϑ (z, 0, i) := by
+  intro y z i hi
+  obtain ⟨hg_end, hg_diag⟩ := hg
+  have h_coset (z' : Bool) (j : ℕ) (hj : j ≤ D.m) :
+      (y.out (z', 0, j))⁻¹ * (g (z', 0, j) * x.out (z', 0, j)) ∈ nodeLevel ϑ (z', 0, j) := by
+    obtain rfl | hj := hj.eq_or_lt
+    · rw [LevelCosets.out_zero, LevelCosets.out_zero, dite_eq_right (lt_irrefl _),
+        dite_eq_right (lt_irrefl _), inv_one, one_mul, mul_one]
+      exact hg_end z'
+    · rw [LevelCosets.out_zero, LevelCosets.out_zero, dite_eq_left hj, dite_eq_left hj,
+        ← QuotientGroup.eq]
+      exact (QuotientGroup.out_eq' (y (z', ⟨j, hj⟩))).trans
+        (Quotient.mk_smul_out (nodeLevel ϑ (z', 0, j)) (g (z', 0, j)) (x (z', ⟨j, hj⟩))).symm
+  -- The level at `Y^0_0` is trivial, so the component at `Ỹ^0_0` is `1`.
+  have h_zero : (y.out (false, 0, 0))⁻¹ * (g (false, 0, 0) * x.out (false, 0, 0)) = 1 :=
+    mem_bot.1 (h_coset false 0 D.m.zero_le)
+  by_cases h_corner : ((z, 0, i) : GridNode) = (true, 0, 0)
+  · cases h_corner
+    rw [Pi.mul_apply, Pi.inv_apply, Pi.mul_apply, LevelCosets.family, LevelCosets.family,
+      update_self, update_self, hg_diag 0, ← MonoidHom.map_mul (blockInlGL (D.gridDiagEquiv 0)),
+      ← MonoidHom.map_inv (blockInlGL (D.gridDiagEquiv 0)),
+      ← MonoidHom.map_mul (blockInlGL (D.gridDiagEquiv 0)), h_zero, MonoidHom.map_one]
+    exact one_mem _
+  · rw [Pi.mul_apply, Pi.inv_apply, Pi.mul_apply, LevelCosets.family, LevelCosets.family,
+      update_of_ne h_corner, update_of_ne h_corner]
+    exact h_coset z i hi
 
-/-- Put `m = D.m`; the first path `TwoGridPath.first m` consists of the edges from `(z, 0, i)` to
-`(z, 0, i + 1)` with `i < m`. There are a constant `C` and, for each `m`-fold twist `ϑ`, a path
-datum `Ψ ϑ` on the first path. They satisfy the following for a conjugate form `y'` on `Y^0_m`, a
-form `φ` on `Ỹ^m_0` (`GridForm true 0 m`) and a point `g` of the archimedean unitary group `GInf` of
-`Ỹ^0_0`. Move `y'` and `φ` down the first columns by the composites `transposedChain` of transposed
-theta lifts, `y'` at `ϑ` and `φ` at the trivial twist `1`. The period `diagonalPeriodForm` at `g` of
-the images is `C` times `gridPeriod`: the sum over the tuples `S` on the first path of `Ψ ϑ S` times
-the period at `g` of the images of `y'` and `φ` under the matrices of `S`. -/
+/-- Symmetrizing a level-equivariant datum `Φ` of order `2 m` on `stageEdges 0` across `LevelCosets`
+via `GridDatum.bind` produces an equivariant `IsPathDatum` of order `4 m` on `stageEdges 0`. -/
+lemma IsLevelPathDatum.bind_levelCosets {ϑ : D.MFoldTwist} {Φ : D.GridDatum ϑ}
+    (hΦ : D.IsLevelPathDatum (2 * D.m) (D.stageEdges 0) Φ) :
+    D.IsPathDatum (4 * D.m) (D.stageEdges 0)
+      (Φ.bind (fun _ (x : LevelCosets ϑ) ↦ edgeCharProd x.family (D.stageEdges 0))
+        (fun S x ↦ tupleAction x.family⁻¹ S)) where
+  isShortSum := by
+    rw [show 4 * D.m = 2 * D.m + 2 * D.m by omega]
+    refine hΦ.isShortSum.bind card_levelCosets_le fun S x _ hS_inv ↦
+      ⟨isOfFinOrder_edgeCharProd _ _, fun e he h_vert ↦ ?_⟩
+    obtain ⟨L, hL⟩ := hS_inv e he h_vert
+    refine ⟨(x.family e.1).val * L * (x.family e.2)⁻¹.val, ?_⟩
+    simp only [tupleAction, Pi.inv_apply, inv_inv, ← Matrix.mul_assoc]
+    rw [Matrix.mul_assoc _ (x.family e.2)⁻¹.val, Units.inv_mul, Matrix.mul_one,
+      Matrix.mul_assoc (x.family e.1).val, hL, Matrix.mul_one, Units.mul_inv]
+  equivariant g hg f := by
+    let τ : LevelCosets ϑ ≃ LevelCosets ϑ := piCongrRight fun p ↦ toPerm (g (p.1, 0, p.2))
+    have h_lin (F : LevelCosets ϑ → EdgeTuple ϑ → ℂ) :
+        Φ (fun S ↦ ∑ x : LevelCosets ϑ, edgeCharProd x.family (D.stageEdges 0) * F x S) =
+          ∑ x : LevelCosets ϑ, edgeCharProd x.family (D.stageEdges 0) * Φ (F x) := by
+      rw [show (fun S ↦ ∑ x, edgeCharProd x.family (D.stageEdges 0) * F x S) =
+          ∑ x, edgeCharProd x.family (D.stageEdges 0) • F x from funext fun _ ↦ by simp, map_sum]
+      simp [map_smul]
+    simp only [GridDatum.bind_apply, h_lin]
+    rw [← τ.sum_comp, mul_sum]
+    refine sum_congr rfl fun x _ ↦ ?_
+    let y : LevelCosets ϑ := τ x
+    let k : NodeFamily ϑ := y.family⁻¹ * (g * x.family)
+    have h_act (S : EdgeTuple ϑ) :
+        tupleAction g (tupleAction y.family⁻¹ S) = tupleAction x.family⁻¹ (tupleAction k S) := by
+      rw [← tupleAction_mul, ← tupleAction_mul,
+        show y.family⁻¹ * g = k * x.family⁻¹ from
+          funext fun p ↦ by simp only [k, Pi.mul_apply, Pi.inv_apply]; group]
+    have h_prod : edgeCharProd y.family (D.stageEdges 0) * edgeCharProd k (D.stageEdges 0) =
+        edgeCharProd g (D.stageEdges 0) * edgeCharProd x.family (D.stageEdges 0) := by
+      rw [← edgeCharProd_mul, ← edgeCharProd_mul,
+        show y.family * k = g * x.family from
+          funext fun p ↦ by simp only [k, Pi.mul_apply, Pi.inv_apply]; group]
+    change edgeCharProd y.family (D.stageEdges 0) *
+        Φ (fun S ↦ f (tupleAction g (tupleAction y.family⁻¹ S))) = _
+    simp_rw [h_act]
+    rw [hΦ.equivariant k (x.inv_family_mul_mem_nodeLevel hg) (fun T ↦ f (tupleAction x.family⁻¹ T)),
+      ← mul_assoc, h_prod, mul_assoc]
+
+/-- Put `m = D.m`; the first path `D.stageEdges 0` consists of the edges from `(z, 0, i)` to
+`(z, 0, i + 1)` with `i < m`. There are a constant `C` and, for each `m`-fold twist `ϑ`, an
+equivariant path datum `Λ ϑ : GridDatum ϑ` of order `4 * m` on the first path. They satisfy the
+following for a conjugate form `y'` on `Y^0_m`, a form `φ` on `Ỹ^m_0` (`GridForm true 0 m`) and a
+point `g` of the archimedean unitary group `GInf` of `Ỹ^0_0`. Move `y'` and `φ` down the first
+columns by the composites `transposedChain` of transposed theta lifts, `y'` at `ϑ` and `φ` at the
+trivial twist `1`. The period `diagonalPeriodForm` at `g` of the images is `C` times `gridPeriod`:
+`Λ ϑ` applied to the period at `g` of the images of `y'` and `φ` under `legDescents`. -/
 lemma exists_isPathDatum_diagonalPeriodForm_eq :
-    ∃ (C : ℂ) (Ψ : ∀ ϑ : D.MFoldTwist, EdgeTuple ϑ → ℂ), ∀ ϑ : D.MFoldTwist,
-      IsPathDatum (edgeMatrixCountBound ϑ ^ (2 * D.m)) (TwoGridPath.first D.m).edges (Ψ ϑ) ∧
+    ∃ (C : ℂ) (Λ : ∀ ϑ : D.MFoldTwist, D.GridDatum ϑ), ∀ ϑ : D.MFoldTwist,
+      D.IsPathDatum (4 * D.m) (D.stageEdges 0) (Λ ϑ) ∧
       ∀ (g : GInf D.E (D.gridSigns true 0 0 0)) (y' : D.GridForm false 0 D.m)
         (φ : D.GridForm true 0 D.m),
         diagonalPeriodForm ϑ zero_le g (transposedChain ϑ false 0 y')
             (D.transposedChain 1 true 0 φ) =
-          C * gridPeriod (.first D.m) Ψ g (ϑ, y', φ) := by
-  obtain ⟨C, hC⟩ := exists_diagonalPeriodForm_transposedChain_eq (D := D)
-  exact ⟨C, firstPathDatum, fun ϑ ↦ ⟨isPathDatum_firstPathDatum ϑ, hC ϑ⟩⟩
+          C * D.gridPeriod zero_le Λ g (ϑ, y', φ) := by
+  choose κ hκ using (D.exists_triangleGLCard_eq_mul_levelIndex :
+    ∀ j : ℕ, ∃ C : ℂ, ∀ ϑ : D.MFoldTwist, D.triangleGLCard false ϑ j = C * levelIndex ϑ false 0 j)
+  choose Φ hΦ h_eq using fun ϑ : D.MFoldTwist ↦
+    exists_isLevelPathDatum_transposedChain_eq (D := D) (ϑ := ϑ) D.m.zero_le
+  simp only [Nat.sub_zero,
+    ← show D.stageEdges 0 = D.legEdges false 0 ∪ D.legEdges true 0 by simp [stageEdges, gridPath]]
+    at hΦ
+  let Λ (ϑ : D.MFoldTwist) : D.GridDatum ϑ :=
+    (Φ ϑ).bind (fun _ (x : LevelCosets ϑ) ↦ edgeCharProd x.family (D.stageEdges 0))
+      (fun S x ↦ tupleAction x.family⁻¹ S)
+  refine ⟨∏ i ∈ range D.m, κ i, Λ, fun ϑ ↦ ⟨(hΦ ϑ).bind_levelCosets, fun gInf y' φ ↦ ?_⟩⟩
+  let P (S : EdgeTuple ϑ) : ℂ := diagonalPeriodForm ϑ zero_le gInf
+    (legDescents S false 0 y') (legDescents S true 0 φ)
+  have h_term (x : LevelCosets ϑ) (S : EdgeTuple ϑ) :
+      edgeCharProd x.family (D.stageEdges 0) * P (tupleAction x.family⁻¹ S) = P S := by
+    have h_end (z : Bool) : x.family⁻¹ (z, 0, D.m) = 1 := by
+      have hne : ((z, 0, D.m) : GridNode) ≠ (true, 0, 0) := fun h ↦ by
+        have := congrArg (fun p : GridNode ↦ p.2.2) h; simp [m_eq_two_mul_varrho_add_two] at this
+      rw [Pi.inv_apply, LevelCosets.family, update_of_ne hne, LevelCosets.out_zero,
+        dite_eq_right (lt_irrefl _), inv_one]
+    dsimp only [P]
+    rw [diagonalPeriodForm_tupleAction h_end (by simp [LevelCosets.family, ← map_inv]) gInf y' φ S,
+      ← mul_assoc, ← edgeCharProd_mul, mul_inv_cancel]
+    simp [edgeCharProd]
+  have h_period : D.gridPeriod zero_le Λ gInf (ϑ, y', φ) = card (LevelCosets ϑ) * Φ ϑ P := by
+    change Λ ϑ P = _
+    rw [GridDatum.bind_apply, show (fun S ↦ ∑ x : LevelCosets ϑ,
+        edgeCharProd x.family (D.stageEdges 0) * P (tupleAction x.family⁻¹ S)) =
+      (card (LevelCosets ϑ) : ℂ) • P from funext fun _ ↦ by simp [h_term],
+      (Φ ϑ).map_smul, smul_eq_mul]
+  rw [h_period, card_levelCosets_eq, h_eq ϑ (diagonalPeriodForm ϑ zero_le gInf) y' φ,
+    ← range_eq_Ico]
+  simp only [P, hκ, prod_mul_distrib, mul_assoc]
 
 end GridFirstColumns
 
