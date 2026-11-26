@@ -1,7 +1,8 @@
 module
 
-import Mathlib.Data.Finset.Slice
+public import TauCeti.Algebra.Lie.GeneralLinear.Casimir
 import TauCeti.Algebra.Lie.GeneralLinear.Oscillator.Casimir
+import Lib.DiscreteSeries.Theta.BlockRule
 public import Lib.DiscreteSeries.Theta.FockDualPair
 
 /-!
@@ -48,34 +49,16 @@ open Fintype (card)
 
 section SumsOfSquares
 
-/-- The sum `∑ (2k - c)²` over `k < d`, times `3`, in closed form. -/
-theorem three_mul_sum_range_two_mul_sub_sq (c : ℤ) (d : ℕ) :
-    3 * ∑ k ∈ range d, (2 * (k : ℤ) - c) ^ 2 =
-      2 * d * (d - 1) * (2 * d - 1) - 6 * c * d * (d - 1) + 3 * d * c ^ 2 := by
-  induction d with
-  | zero => simp
-  | succ d ih =>
-    rw [sum_range_succ, mul_add, ih]
-    grind
-
-/-- A set of `d` distinct integers of the parity of `d - 1` and of modulus below `d` is
-`{1 - d, 3 - d, …, d - 1}`, so the sum of their squares is `d (d² - 1) / 3`. -/
-theorem three_mul_sum_sq_of_injOn {α : Type*} (s : Finset α) (f : α → ℤ) (h_inj : Set.InjOn f s)
-    (h_parity : ∀ i ∈ s, Even (f i + #s - 1)) (h_bound : ∀ i ∈ s, |f i| < #s) :
-    3 * ∑ i ∈ s, f i ^ 2 = #s * (#s ^ 2 - 1) := by
-  let g (k : ℕ) : ℤ := 2 * k - (#s - 1)
-  have hg_inj : Function.Injective g := fun j k hjk ↦ by simpa [g] using hjk
-  have h_subset : s.image f ⊆ (range #s).image g := by
-    intro z hz
-    obtain ⟨i, hi, rfl⟩ := mem_image.1 hz
-    obtain ⟨k, hk⟩ := h_parity i hi
-    have hi_bound := abs_lt.1 (h_bound i hi)
-    exact mem_image.2 ⟨k.toNat, mem_range.2 (by lia), by grind⟩
-  have h_image : s.image f = (range #s).image g := eq_of_subset_of_card_le h_subset <| by
-    simp [card_image_of_injective _ hg_inj, card_image_of_injOn h_inj]
-  calc 3 * ∑ i ∈ s, f i ^ 2 = 3 * ∑ z ∈ s.image f, z ^ 2 := by rw [sum_image h_inj]
-    _ = 3 * ∑ k ∈ range #s, g k ^ 2 := by rw [h_image, sum_image hg_inj.injOn]
-    _ = #s * (#s ^ 2 - 1) := by linear_combination three_mul_sum_range_two_mul_sub_sq (#s - 1) #s
+/-- The sum of the squares of `(x / 2)` over `x ∈ doubledBlock d = {d - 1, d - 3, …, 1 - d}` is
+`d (d² - 1) / 12`, via `TauCeti.sum_rho_sq`. -/
+private theorem sum_doubledBlock_div_two_sq (d : ℕ) :
+    ∑ x ∈ doubledBlock d, ((x : ℂ) / 2) ^ 2 = (d : ℂ) * (d ^ 2 - 1) / 12 := by
+  have hg : Function.Injective fun b : ℕ ↦ (d : ℤ) - 1 - 2 * b := fun j k h ↦ by simpa using h
+  rw [doubledBlock, sum_image hg.injOn, ← TauCeti.sum_rho_sq (F := ℂ) d,
+    Fin.sum_univ_eq_sum_range fun b : ℕ ↦ (((d : ℂ) - 1) / 2 - b) ^ 2]
+  refine sum_congr rfl fun b _ ↦ ?_
+  push_cast
+  ring
 
 variable {n : Type} [Fintype n]
 
@@ -85,18 +68,25 @@ variable {n : Type} [Fintype n]
 theorem three_mul_sum_twoRho_sq {l : n → ℤ} (hl : l.Injective) :
     3 * ∑ i : n, twoRho l ⊤ i ^ 2 = card n * (card n ^ 2 - 1) := by
   classical
-  have h_count (i : n) : (#{j | l j < l i} + #{j | l i < l j} + 1 : ℤ) = card n :=
-    mod_cast card_lt_add_card_gt_add_one hl i
-  have h_value (i : n) : twoRho l ⊤ i = #{j | l j < l i} - #{j | l i < l j} := by
-    simp [twoRho]
-  have h_inj : Function.Injective (twoRho l ⊤) := by
-    intro a b hab
-    obtain h | h | h := lt_trichotomy (l a) (l b)
-    exacts [absurd hab (twoRho_lt_twoRho h).ne, hl h, absurd hab (twoRho_lt_twoRho h).ne']
-  have h_parity (i : n) : Even (twoRho l ⊤ i + card n - 1) :=
-    ⟨#{j | l j < l i}, by linear_combination h_value i - h_count i⟩
-  have h_bound (i : n) : |twoRho l ⊤ i| < card n := by grind
-  exact three_mul_sum_sq_of_injOn univ _ h_inj.injOn (fun i _ ↦ h_parity i) fun i _ ↦ h_bound i
+  have h_inj : Function.Injective (twoRho l ⊤) := fun a b hab ↦ by
+    obtain hlt | heq | hgt := lt_trichotomy (l a) (l b)
+    exacts [absurd hab (twoRho_lt_twoRho hlt).ne, hl heq,
+      absurd hab (twoRho_lt_twoRho hgt).ne']
+  have h_img : univ.image (twoRho l ⊤) = doubledBlock (card n) := by
+    refine eq_of_subset_of_card_le (fun _ hx ↦ ?_) ?_
+    · obtain ⟨i, -, rfl⟩ := mem_image.1 hx
+      have h_count : #{j | l j < l i} + #{j | l i < l j} + 1 = card n :=
+        card_lt_add_card_gt_add_one hl i
+      refine mem_image.2 ⟨#{j | l i < l j}, mem_range.2 (by omega), ?_⟩
+      simp [twoRho]
+      omega
+    · simp [card_image_of_injective _ h_inj, card_doubledBlock]
+  have h_sum : ∑ a : n, ((twoRho l ⊤ a : ℂ) / 2) ^ 2 = (card n : ℂ) * (card n ^ 2 - 1) / 12 := by
+    rw [← sum_doubledBlock_div_two_sq, ← h_img, sum_image h_inj.injOn]
+  have h_cast : (3 * ∑ a : n, (twoRho l ⊤ a : ℂ) ^ 2 : ℂ) = card n * (card n ^ 2 - 1) := by
+    simp only [div_pow, ← sum_div] at h_sum
+    linear_combination 12 * h_sum
+  exact_mod_cast h_cast
 
 /-- For a symmetric relation `r`, the entries of `twoRho l r` sum to zero. -/
 theorem sum_twoRho_eq_zero (l : n → ℤ) (r : n → n → Prop) [DecidableRel r]
@@ -152,79 +142,7 @@ theorem FockDualPair.centeredParam_injective (T : FockDualPair ε ε' ι) {l : H
     (hl : Function.Injective l) : Function.Injective (T.centeredParam l) :=
   fun a b hab ↦ hl (by simpa [FockDualPair.centeredParam] using hab)
 
-/-- Let `l`, `l'` be matching parameters of the pair `T`: they have a large gap, and each row and
-column is matched, with opposite centred parameters, or has a small one. Let `n' ≤ n` for
-`n = card R` and `n' = card C`. The squares of the centred parameters `l r - 2 T.rowShift + n'` of
-the rows and `l' c - 2 T.columnShift + n` of the columns (the rows of `T.swap`) differ in sum by
-`d₀ (d₀² - 1) / 3` with `d₀ = n - n'`, the share of the unmatched rows. -/
-theorem IsMatch.three_mul_sum_sq_sub_of_le {T : FockDualPair ε ε' ι} {l : HCParam ε}
-    {l' : HCParam ε'} (hm : IsMatch T l l') (h_le : card C ≤ card R) :
-    3 * (∑ r : R, T.centeredParam l r ^ 2 - ∑ c : C, T.swap.centeredParam l' c ^ 2) =
-      (card R - card C) * ((card R - card C) ^ 2 - 1) := by
-  -- Every index of the smaller group is matched, with one row `m c`.
-  have h_matched (c : C) : ∃ r : R, T.centeredParam l r = -T.swap.centeredParam l' c := by
-    obtain ⟨r, h_eq, -⟩ | h_lt := hm.right c
-    · exact ⟨r, h_eq⟩
-    · grind [abs_nonneg]
-  choose m h_opposite using h_matched
-  have h_row_inj : Function.Injective (T.centeredParam l) :=
-    T.centeredParam_injective hm.hasGap_row.injective
-  have hm_inj : Function.Injective m := by
-    refine fun c c' hc ↦
-        T.swap.centeredParam_injective hm.hasGap_column.injective (neg_injective ?_)
-    rw [← h_opposite c, ← h_opposite c', hc]
-  -- So the larger group has `n - n'` unmatched entries.
-  set free : Finset R := (univ.image m)ᶜ with h_free
-  have h_card : (#free : ℤ) = card R - card C := by
-    simp [h_free, card_compl, card_image_of_injective _ hm_inj, h_le]
-  have h_split : ∑ r, T.centeredParam l r ^ 2 =
-      ∑ c, T.swap.centeredParam l' c ^ 2 + ∑ r ∈ free, T.centeredParam l r ^ 2 := by
-    rw [← sum_add_sum_compl (univ.image m), sum_image hm_inj.injOn]
-    simp only [h_opposite, neg_sq, h_free]
-  -- They are distinct, of the parity of `n - n' - 1` and of modulus below `n - n'`.
-  have h_small (r : R) (hr : r ∈ free) : |T.centeredParam l r| < #free := by
-    rw [h_card]
-    refine (hm.left r).resolve_left ?_
-    rintro ⟨c, hr_eq, -⟩
-    have h_eq : m c = r := h_row_inj ((h_opposite c).trans hr_eq.symm)
-    exact mem_compl.1 hr (mem_image.2 ⟨c, mem_univ c, h_eq⟩)
-  have h_parity (r : R) (_ : r ∈ free) : Even (T.centeredParam l r + #free - 1) := by
-    obtain ⟨k, hk⟩ : Even (l r + card R - 1) := hm.hasGap_row.parity r
-    refine ⟨k - T.rowShift, ?_⟩
-    rw [h_card, FockDualPair.centeredParam]
-    lia
-  rw [h_split, add_sub_cancel_left, ← h_card]
-  exact three_mul_sum_sq_of_injOn free _ h_row_inj.injOn h_parity h_small
-
-/-- For matching parameters `l`, `l'` of the pair `T`, the squares of the centred parameters
-`l r - 2γ + n'` of the rows and `l' c - 2γ' + n` of the columns differ in sum by `d₀ (d₀² - 1) / 3`,
-where `n = card R`, `n' = card C`, and `d₀ = n - n'` may have either sign. -/
-theorem IsMatch.three_mul_sum_sq_sub [DecidableEq C] {T : FockDualPair ε ε' ι} {l : HCParam ε}
-    {l' : HCParam ε'} (hm : IsMatch T l l') :
-    3 * (∑ r : R, T.centeredParam l r ^ 2 - ∑ c : C, T.swap.centeredParam l' c ^ 2) =
-      (card R - card C) * ((card R - card C) ^ 2 - 1) := by
-  obtain h_le | h_le := le_total (card C) (card R)
-  · exact hm.three_mul_sum_sq_sub_of_le h_le
-  · have h_swap : 3 * (∑ c, T.swap.centeredParam l' c ^ 2 - ∑ r, T.centeredParam l r ^ 2) =
-        (card C - card R : ℤ) * ((card C - card R : ℤ) ^ 2 - 1) := by
-      simpa only [T.swap_swap] using hm.swap.three_mul_sum_sq_sub_of_le h_le
-    linear_combination -h_swap
-
-variable [DecidableEq C] {A : Type*} [Ring A] [Algebra ℂ A]
-
-/-- Normal ordering. Let `x`, `d` be arrays in a complex algebra with
-`d_rc x_rc' = x_rc' d_rc + δ_cc'`. With `n = card R` and `n' = card C`, the Casimir sum of the
-elements `∑ c, x_ac d_bc + (n'/2) δ_ab` is `D₄ + (n + n') D₂ + n n'² / 4`, where
-`D₄ = ∑ x_ac x_bc' d_bc d_ac'` and `D₂ = ∑ x_rc d_rc`. -/
-theorem sum_mul_eq_normal_order (x d : R → C → A)
-    (h_comm : ∀ (r : R) (c c' : C), d r c * x r c' = x r c' * d r c + if c = c' then 1 else 0) :
-    ∑ a : R, ∑ b : R, (∑ c : C, x a c * d b c + if a = b then (card C / 2 : ℂ) • 1 else 0) *
-        (∑ c : C, x b c * d a c + if b = a then (card C / 2 : ℂ) • 1 else 0) =
-      ∑ a : R, ∑ b : R, ∑ c : C, ∑ c' : C, x a c * x b c' * d b c * d a c' +
-        (card R + card C : ℂ) • ∑ r : R, ∑ c : C, x r c * d r c +
-          (card R * card C ^ 2 / 4 : ℂ) • (1 : A) := by
-  rw [TauCeti.sum_mul_eq_normal_order x d _ h_comm]
-  module
+variable [DecidableEq C]
 
 /-- The Casimir element with the centre `w` removed: it is formed with `E_ab - w δ_ab` in place of
 `E_ab`. -/
@@ -256,52 +174,16 @@ variable (T : FockDualPair ε ε' ι)
 It is the weight of the character of the determinant by which the action is twisted. -/
 noncomputable def center : ℂ := T.rowShift - card C / 2
 
-/-- The operator `x_rc`: for the variable `T.varEquiv (r, c)` of `MvPolynomial ι ℂ` attached to the
-entry `(r, c)`, multiplication by the variable where its sign `T.indexSign` is `+`, minus the
-derivative where it is `-`. -/
-noncomputable abbrev raise (r : R) (c : C) : Module.End ℂ (MvPolynomial ι ℂ) :=
-  raiseOp T.indexSign (T.varEquiv (r, c))
-
-/-- The operator `d_rc`: for the variable `T.varEquiv (r, c)` of `MvPolynomial ι ℂ` attached to the
-entry `(r, c)`, the derivative where the sign `T.indexSign` of the variable is `+`, multiplication
-by the variable where it is `-`. -/
-noncomputable abbrev lower (r : R) (c : C) : Module.End ℂ (MvPolynomial ι ℂ) :=
-  lowerOp T.indexSign (T.varEquiv (r, c))
-
-/-- The operator `D₄ = ∑ x_ac x_bc' d_bc d_ac'` of a Fock dual pair, over all rows `a`, `b` and
-columns `c`, `c'`. -/
-noncomputable def quarticOp : Module.End ℂ (MvPolynomial ι ℂ) :=
-  ∑ a : R, ∑ b : R, ∑ c : C, ∑ c' : C, T.raise a c * T.raise b c' * T.lower b c * T.lower a c'
-
-/-- The operator `D₂ = ∑ x_rc d_rc` of a Fock dual pair, over all rows `r` and columns `c`. -/
-noncomputable def quadraticOp : Module.End ℂ (MvPolynomial ι ℂ) :=
-  ∑ r : R, ∑ c : C, T.raise r c * T.lower r c
-
 omit [Fintype R] [Fintype C] in
-/-- The canonical commutation relation `d_rc x_r'c' = x_r'c' d_rc + δ_rr' δ_cc'` of the operators
-`T.lower` and `T.raise`. -/
-theorem lower_mul_raise (r r' : R) (c c' : C) : T.lower r c * T.raise r' c' =
-    T.raise r' c' * T.lower r c + if r = r' ∧ c = c' then 1 else 0 := by
+/-- The canonical commutation relation `d_rc x_r'c' = x_r'c' d_rc + δ_rr' δ_cc'` of the
+oscillator operators `lowerOp` and `raiseOp` at the variables of `T`. -/
+theorem lower_mul_raise (r r' : R) (c c' : C) :
+    lowerOp T.indexSign (T.varEquiv (r, c)) * raiseOp T.indexSign (T.varEquiv (r', c')) =
+      raiseOp T.indexSign (T.varEquiv (r', c')) * lowerOp T.indexSign (T.varEquiv (r, c)) +
+        if r = r' ∧ c = c' then 1 else 0 := by
   classical
   refine LinearMap.ext fun P ↦ ?_
   split_ifs with h <;> simp_all [lowerOp_raiseOp]
-
-omit [Fintype R] [DecidableEq R] [Fintype C] [DecidableEq C] in
-theorem lower_mul_lower (r r' : R) (c c' : C) :
-    T.lower r c * T.lower r' c' = T.lower r' c' * T.lower r c := by
-  classical
-  exact LinearMap.ext fun P ↦ lowerOp_comm T.indexSign _ _ P
-
-omit [DecidableEq R] [DecidableEq C] in
-/-- `D₄` summed first over the columns: since the `d_rc` commute, the last two factors may be
-exchanged. -/
-theorem sum_columns_eq_quarticOp :
-    ∑ c : C, ∑ c' : C, ∑ a : R, ∑ b : R,
-      T.raise a c * T.raise b c' * T.lower a c' * T.lower b c = T.quarticOp := by
-  rw [quarticOp]
-  refine sum_comm_cycle.trans (sum_congr rfl fun a _ ↦ sum_comm_cycle.trans
-    (sum_congr rfl fun b _ ↦ sum_congr rfl fun c _ ↦ sum_congr rfl fun c' _ ↦ ?_))
-  rw [mul_assoc, T.lower_mul_lower, ← mul_assoc]
 
 /-- For signs `δ` and a sign `s` (read in `ℂ`), the factor that is `1` if `δ a = δ b` and `s`
 otherwise, times the same factor for `(b, a)`, is `1`. So these factors drop out of a Casimir
@@ -310,83 +192,67 @@ theorem sign_mul_sign {n : Type*} (δ : n → ℤˣ) (s : ℤˣ) (a b : n) :
     (if δ a = δ b then 1 else s : ℂ) * (if δ b = δ a then 1 else s : ℂ) = 1 :=
   (ite_units_eq_mul_ite_units_eq s _ _ _).trans (ite_eq_left rfl)
 
-/-- The row action of the matrix unit `(a, b)` less `T.centre = T.rowShift - n'/2` on the diagonal
-is `∑ c, x_ac d_bc + (n'/2) δ_ab`, times the sign `T.globalSign` of the pair where the signs `ε a`,
-`ε b` differ; here `n' = card C`, `x = T.raise` and `d = T.lower`. -/
+section
+
+attribute [local instance 100] LieRing.ofAssociativeRing
+
+/-- The row action of the matrix unit `(a, b)` less `T.center = T.rowShift - n'/2` on the
+diagonal is `T.conjVar` of `TauCeti.fockRowHom` at `E a b`, times the sign `T.globalSign` of the
+pair where the signs `ε a`, `ε b` differ; here `n' = card C`. -/
 theorem oscRows_E_sub_center (a b : R) :
     (T.oscRows.E a b - if a = b then T.center • 1 else 0) =
       (if ε a = ε b then 1 else T.globalSign : ℂ) •
-      (∑ c : C, T.raise a c * T.lower b c + if a = b then (card C / 2 : ℂ) • 1 else 0) := by
-  have h_unit : T.oscRows.E a b = (if ε a = ε b then 1 else T.globalSign : ℂ) •
-      ∑ c, T.raise a c * T.lower b c + if a = b then (T.rowShift : ℂ) • 1 else 0 := by
-    simp [oscRows_E, oscRowsUnit, glOp, Int.cast_smul_eq_zsmul]
-  rw [h_unit]
-  obtain rfl | hab := eq_or_ne a b
-  · simp only [ite_true, center]
-    module
-  · simp [hab]
+        T.conjVar (TauCeti.fockRowHom ℂ T.rowBool (colBool ε') (Matrix.single a b 1)) := by
+  rw [oscRows_E, T.oscRowsUnit_eq_fockRowHom, center, add_sub_cancel_right]
 
-/-- The column action of the matrix unit `(a, b)` less `T.swap.centre = T.columnShift - n/2` on the
-diagonal is `-(∑ r, x_rb d_ra + (n/2) δ_ab)`, times the sign `T.globalSign` of the pair where the
-signs `ε' a`, `ε' b` differ; here `n = card R`, `x = T.raise`, `d = T.lower`, and `T.swap` is `T`
-with rows and columns exchanged. -/
+/-- The column action of the matrix unit `(a, b)` less `T.swap.center = T.columnShift - n/2` on
+the diagonal is `-T.conjVar` of `TauCeti.fockColHom` at `E b a`, times the sign `T.globalSign` of
+the pair where the signs `ε' a`, `ε' b` differ; here `n = card R`, and `T.swap` is `T` with rows
+and columns exchanged. -/
 theorem swap_oscRows_E_sub_center (a b : C) :
     (T.swap.oscRows.E a b - if a = b then T.swap.center • 1 else 0) =
       -(if ε' a = ε' b then 1 else T.globalSign : ℂ) •
-        (∑ r : R, T.raise r b * T.lower r a + if b = a then (card R / 2 : ℂ) • 1 else 0) := by
-  have h_unit : T.swap.oscRows.E a b = (if ε' a = ε' b then 1 else T.globalSign : ℂ) •
-      -∑ r, T.lower r a * T.raise r b + if a = b then (T.columnShift : ℂ) • 1 else 0 := by
-    simp [swap_oscRows_E, Int.cast_smul_eq_zsmul]
-  rw [h_unit, show T.swap.center = T.columnShift - card R / 2 from rfl]
-  simp only [lower_mul_raise, true_and, sum_add_distrib, sum_const, card_univ]
+        T.conjVar (TauCeti.fockColHom ℂ T.rowBool (colBool ε') (Matrix.single b a 1)) := by
+  rw [swap_oscRows_E, TauCeti.fockColHom_single, map_add, map_sum]
+  simp only [T.conjVar_oscRaise_mul_oscLower, glOp, apply_ite T.conjVar, map_smul, map_one,
+    map_zero, T.lower_mul_raise, true_and, sum_add_distrib, sum_const, card_univ]
   obtain rfl | hab := eq_or_ne a b
-  · simp only [ite_true, ← Nat.cast_smul_eq_nsmul ℂ]
+  · simp only [↓reduceIte, show T.swap.center = T.columnShift - card R / 2 from rfl,
+      ← Nat.cast_smul_eq_nsmul ℂ, neg_smul, one_smul]
+    rw [← zsmul_one, ← Int.cast_smul_eq_zsmul ℂ]
     module
   · simp [hab, hab.symm]
 
 /-- The Casimir element of the row action `T.oscRows` with the centre `T.center` removed is
-`D₄ + (n + n') D₂ + n n'² / 4`, where `D₄ = T.quarticOp`, `D₂ = T.quadraticOp`, `n = card R` and
-`n' = card C`. -/
+`T.conjVar` of the image of `TauCeti.glCasimir ℂ R` under `TauCeti.fockRowHom`, where `n = card R`
+and `n' = card C`. -/
 theorem centeredCasimir_oscRows : T.oscRows.centeredCasimir T.center =
-    T.quarticOp + (card R + card C : ℂ) • T.quadraticOp +
-      (card R * card C ^ 2 / 4 : ℂ) • 1 := by
-  have h_comm (r : R) (c c' : C) : T.lower r c * T.raise r c' =
-      T.raise r c' * T.lower r c + if c = c' then 1 else 0 := by simp [lower_mul_raise]
+    T.conjVar (UniversalEnvelopingAlgebra.lift ℂ
+      (TauCeti.fockRowHom ℂ T.rowBool (colBool ε')) (TauCeti.glCasimir ℂ R)) := by
   -- The sign factors cancel in the products.
-  have h_unsigned : T.oscRows.centeredCasimir T.center = ∑ a, ∑ b,
-      (∑ c, T.raise a c * T.lower b c + if a = b then (card C / 2 : ℂ) • 1 else 0) *
-        (∑ c, T.raise b c * T.lower a c + if b = a then (card C / 2 : ℂ) • 1 else 0) := by
-    simp only [GlModule.centeredCasimir, oscRows_E_sub_center, smul_mul_smul_comm, sign_mul_sign,
-      one_smul]
-  rw [h_unsigned, sum_mul_eq_normal_order T.raise T.lower h_comm, quarticOp, quadraticOp]
+  simp only [GlModule.centeredCasimir, oscRows_E_sub_center, smul_mul_smul_comm, sign_mul_sign,
+    one_smul, TauCeti.lift_glCasimir, map_sum, map_mul]
 
 /-- The Casimir element of the column action `T.swap.oscRows` with the centre `T.swap.center`
-removed is `D₄ + (n + n') D₂ + n² n' / 4`, where `D₄ = T.quarticOp`, `D₂ = T.quadraticOp`,
+removed is `T.conjVar` of the image of `TauCeti.glCasimir ℂ C` under `TauCeti.fockColHom`, where
 `n = card R` and `n' = card C`. -/
 theorem centeredCasimir_swap_oscRows : T.swap.oscRows.centeredCasimir T.swap.center =
-    T.quarticOp + (card R + card C : ℂ) • T.quadraticOp +
-      (card R ^ 2 * card C / 4 : ℂ) • 1 := by
-  -- Normal ordering with the roles of rows and columns exchanged gives the same `D₄` and `D₂`.
-  have h_comm (c : C) (r r' : R) : T.lower r c * T.raise r' c =
-      T.raise r' c * T.lower r c + if r = r' then 1 else 0 := by simp [lower_mul_raise]
-  have h_quadratic : ∑ c, ∑ r, T.raise r c * T.lower r c = T.quadraticOp := sum_comm
+    T.conjVar (UniversalEnvelopingAlgebra.lift ℂ
+      (TauCeti.fockColHom ℂ T.rowBool (colBool ε')) (TauCeti.glCasimir ℂ C)) := by
   -- The sign factors cancel in the products.
-  have h_unsigned : T.swap.oscRows.centeredCasimir T.swap.center = ∑ a, ∑ b,
-      (∑ r, T.raise r b * T.lower r a + if b = a then (card R / 2 : ℂ) • 1 else 0) *
-        (∑ r, T.raise r a * T.lower r b + if a = b then (card R / 2 : ℂ) • 1 else 0) := by
-    simp only [GlModule.centeredCasimir, swap_oscRows_E_sub_center, smul_mul_smul_comm,
-      neg_mul_neg, sign_mul_sign, one_smul]
-  rw [h_unsigned, sum_comm,
-    sum_mul_eq_normal_order (fun c r ↦ T.raise r c) (fun c r ↦ T.lower r c) h_comm,
-    T.sum_columns_eq_quarticOp, h_quadratic]
-  module
+  simp only [GlModule.centeredCasimir, swap_oscRows_E_sub_center, neg_smul, neg_mul_neg,
+    smul_mul_smul_comm, sign_mul_sign, one_smul, TauCeti.lift_glCasimir, map_sum, map_mul]
+  -- Reorder the double sum to match `TauCeti.lift_glCasimir` for `gl C`.
+  exact sum_comm
 
 /-- The centred Casimir element of the column action `T.swap.oscRows` is that of the row action
 `T.oscRows` plus the constant `n n' d₀ / 4`, where `n = card R`, `n' = card C` and `d₀ = n - n'`. -/
 theorem centeredCasimir_swap_oscRows_eq_add : T.swap.oscRows.centeredCasimir T.swap.center =
     T.oscRows.centeredCasimir T.center + (card R * card C * (card R - card C) / 4 : ℂ) • 1 := by
-  rw [centeredCasimir_swap_oscRows, centeredCasimir_oscRows]
-  module
+  rw [centeredCasimir_swap_oscRows, centeredCasimir_oscRows, TauCeti.lift_fockColHom_glCasimir,
+    map_add, map_smul, map_one]
+
+end
 
 omit [DecidableEq R] [DecidableEq C] in
 /-- The squares of the centred parameters `T.centeredParam l r = l r - 2γ + n'` (with
@@ -401,6 +267,81 @@ theorem sum_centeredParam_sq (l : HCParam ε) :
 
 end FockDualPair
 
+omit [DecidableEq R] [DecidableEq C] in
+/-- For matching parameters `l`, `l'` with `card C ≤ card R` and `d = card R - card C`, the
+centred row parameters `T.centeredParam l` are the disjoint union of the negated centred column
+parameters `-T.swap.centeredParam l'` and `doubledBlock d`. -/
+private theorem IsMatch.image_centeredParam_eq_union_doubledBlock {T : FockDualPair ε ε' ι}
+    {l : HCParam ε} {l' : HCParam ε'} (hm : IsMatch T l l') (h_le : card C ≤ card R) :
+    univ.image (T.centeredParam l) =
+        univ.image (fun c : C ↦ -T.swap.centeredParam l' c) ∪ doubledBlock (card R - card C) ∧
+      Disjoint (univ.image fun c : C ↦ -T.swap.centeredParam l' c)
+        (doubledBlock (card R - card C)) := by
+  let d : ℕ := card R - card C
+  have hd : card R = card C + d := (Nat.add_sub_of_le h_le).symm
+  have hd_int : (d : ℤ) = card R - card C := Nat.cast_sub h_le
+  let a (c : C) : ℤ := -T.swap.centeredParam l' c
+  let b (r : R) : ℤ := T.centeredParam l r
+  have ha : a.Injective :=
+    neg_injective.comp (T.swap.centeredParam_injective hm.hasGap_column.injective)
+  have hb : b.Injective := T.centeredParam_injective hm.hasGap_row.injective
+  have hpar (r : R) : Even (b r + d - 1) := by
+    obtain ⟨q, hq⟩ : Even (l r + card R - 1) := hm.hasGap_row.parity r
+    refine ⟨q - T.rowShift, ?_⟩
+    simp only [b, FockDualPair.centeredParam, hd_int]
+    omega
+  have h_mp (r : R) (c : C) : T.IsMatchedPair l l' r c ↔
+      b r = a c ∧ (d : ℤ) < ((T.globalSign * ε r) * ε' c : ℤˣ) * b r := by
+    simp only [FockDualPair.IsMatchedPair, b, a, FockDualPair.varSign, pairSign, ← hd_int,
+      abs_of_nonneg (Nat.cast_nonneg (α := ℤ) d)]
+  have hentries : univ.image b = univ.image a ∪ doubledBlock d :=
+    (entries_eq_of_exists_matched (s := ε') (t := fun r ↦ T.globalSign * ε r) hd hb hpar
+      (fun r ↦ by simpa only [h_mp, ← hd_int] using hm.left r)
+      (fun c ↦ by
+        have h_abs : 0 ≤ |T.swap.centeredParam l' c| := abs_nonneg _
+        simpa only [h_mp] using (hm.right c).resolve_right (by omega))).1
+  have hdisj : Disjoint (univ.image a) (doubledBlock d) := by
+    rw [← card_union_eq_card_add_card, ← hentries]
+    simp [card_image_of_injective, ha, hb, card_doubledBlock, hd]
+  exact ⟨hentries, hdisj⟩
+
+omit [DecidableEq R] [DecidableEq C] in
+/-- For matching parameters `l = 2λ`, `l' = 2λ'` with `card C ≤ card R`, the centred Casimir
+values `|u|² - |ρ|²` and `|u'|² - |ρ'|²` differ by `n n' (n - n') / 4`. Here `u = λ - T.center`,
+`u' = λ' - T.swap.center`, `n = card R` and `n' = card C`. -/
+private theorem IsMatch.centered_casimirValue_eq_of_le {T : FockDualPair ε ε' ι} {l : HCParam ε}
+    {l' : HCParam ε'} (hm : IsMatch T l l') (h_le : card C ≤ card R) :
+    (∑ r : R, (l r / 2 - T.center) ^ 2 - card R * (card R ^ 2 - 1) / 12 +
+        card R * card C * (card R - card C) / 4 : ℂ) =
+      (∑ c : C, (l' c / 2 - T.swap.center) ^ 2 - card C * (card C ^ 2 - 1) / 12 : ℂ) := by
+  -- The row centred parameters split disjointly into negated column parameters and `doubledBlock`.
+  obtain ⟨hentries, hdisj⟩ := hm.image_centeredParam_eq_union_doubledBlock h_le
+  have ha : Function.Injective (fun c : C ↦ -T.swap.centeredParam l' c) :=
+    neg_injective.comp (T.swap.centeredParam_injective hm.hasGap_column.injective)
+  have hb : Function.Injective (T.centeredParam l) :=
+    T.centeredParam_injective hm.hasGap_row.injective
+  -- Sum `(x / 2)²` over both sides; the unmatched block contributes `d (d² - 1) / 12`.
+  have h_sum : ∑ x ∈ univ.image (T.centeredParam l), ((x : ℂ) / 2) ^ 2 =
+      ∑ x ∈ univ.image (fun c : C ↦ -T.swap.centeredParam l' c) ∪
+        doubledBlock (card R - card C), ((x : ℂ) / 2) ^ 2 :=
+    congrArg (fun s : Finset ℤ ↦ ∑ x ∈ s, ((x : ℂ) / 2) ^ 2) hentries
+  rw [sum_union hdisj, sum_image hb.injOn, sum_image ha.injOn,
+    sum_doubledBlock_div_two_sq] at h_sum
+  -- Convert the sums of `(centeredParam / 2)²` to `|u|²` and `|u'|²` via `sum_centeredParam_sq`.
+  have h_row : ∑ r : R, ((T.centeredParam l r : ℂ) / 2) ^ 2 =
+      ∑ r : R, (l r / 2 - T.center) ^ 2 := by
+    simp only [div_pow, ← sum_div, T.sum_centeredParam_sq]
+    ring
+  have h_col : ∑ c : C, (((-T.swap.centeredParam l' c : ℤ) : ℂ) / 2) ^ 2 =
+      ∑ c : C, (l' c / 2 - T.swap.center) ^ 2 := by
+    simp only [Int.cast_neg, neg_div, neg_sq, div_pow, ← sum_div, T.swap.sum_centeredParam_sq]
+    ring
+  have hd_c : ((card R - card C : ℕ) : ℂ) = card R - card C := by
+    rw [Nat.cast_sub h_le]
+  rw [h_row, h_col, hd_c] at h_sum
+  linear_combination h_sum
+
+omit [DecidableEq R] [DecidableEq C] in
 /-- For matching parameters `l = 2λ`, `l' = 2λ'` of the pair `T` (both of large gap, with centred
 parameters that are opposite or small), `|u|² - |ρ|² + n n' d₀ / 4 = |u'|² - |ρ'|²`. Here
 `u = λ - T.center` and `u' = λ' - T.swap.center`, with the centres `T.rowShift - n'/2` and
@@ -411,13 +352,16 @@ theorem IsMatch.centered_casimirValue_eq {T : FockDualPair ε ε' ι} {l : HCPar
     (∑ r : R, (l r / 2 - T.center) ^ 2 - card R * (card R ^ 2 - 1) / 12 +
         card R * card C * (card R - card C) / 4 : ℂ) =
       (∑ c : C, (l' c / 2 - T.swap.center) ^ 2 - card C * (card C ^ 2 - 1) / 12 : ℂ) := by
-  have h_unmatched :
-      3 * (∑ r, (T.centeredParam l r : ℂ) ^ 2 - ∑ c, (T.swap.centeredParam l' c : ℂ) ^ 2) =
-        (card R - card C) * ((card R - card C) ^ 2 - 1) :=
-    mod_cast hm.three_mul_sum_sq_sub
-  -- What remains is `n³ - n'³ - d₀³ = 3 n n' d₀`.
-  rw [T.sum_centeredParam_sq, T.swap.sum_centeredParam_sq] at h_unmatched
-  linear_combination h_unmatched / 12
+  -- Reduce to `card C ≤ card R` by swap; what remains is `n³ - n'³ - d₀³ = 3 n n' d₀`.
+  obtain h_le | h_le := le_total (card C) (card R)
+  · exact hm.centered_casimirValue_eq_of_le h_le
+  · have h_swap :
+        (∑ c : C, (l' c / 2 - T.swap.center) ^ 2 - card C * (card C ^ 2 - 1) / 12 +
+            card C * card R * (card C - card R) / 4 : ℂ) =
+          (∑ r : R, (l r / 2 - T.center) ^ 2 - card R * (card R ^ 2 - 1) / 12 : ℂ) := by
+      simpa only [show T.swap.swap.center = T.center from rfl] using
+        hm.swap.centered_casimirValue_eq_of_le h_le
+    linear_combination -h_swap
 
 end Casimir
 

@@ -1,11 +1,10 @@
 module
 
-import TauCeti.Algebra.Lie.GeneralLinear.Oscillator.Basic
 import Mathlib.Algebra.Order.Star.Int
 public import Lib.DiscreteSeries.Rigidity.RepresentationsAndCasimirs
 public import Lib.GLn.SchurModule.Basic
 public import Lib.Weil.Fock.Basic
-import Lib.Cohomology.Etale.Basic
+public import TauCeti.Algebra.Lie.GeneralLinear.Oscillator.DualPair
 
 /-!
 # Fock space oscillator actions, joint harmonics and Fischer decomposition
@@ -185,15 +184,6 @@ section
 
 omit [Fintype ι]
 
-/-- The operators `glOp η i j = raiseOp η i * lowerOp η j` satisfy the commutation rule
-`[E i j, E k m] = δ_jk E i m - δ_im E k j` of the matrix units. Here `raiseOp η i` and `lowerOp η i`
-are `X i` and `∂ i` if the sign `η i` is `1`, and `-∂ i` and `X i` otherwise. -/
-theorem _root_.New.Fock.glOp_commutator [DecidableEq ι] (η : ι → ℤˣ) (i j k m : ι) :
-    glOp η i j * glOp η k m - glOp η k m * glOp η i j =
-      (if j = k then glOp η i m else 0) - if i = m then glOp η k j else 0 := by
-  simpa only [glOp, oscRaise_eq, oscLower_eq] using
-    TauCeti.oscRaise_mul_oscLower_commutator (K := ℂ) (p := fun a ↦ η a = 1) i j k m
-
 /-- Reversing all signs exchanges raising and lowering operators up to sign, so
 `glOp (-η) i j = raiseOp (-η) i * lowerOp (-η) j` is `∓ lowerOp η i * raiseOp η j`, with the minus
 sign when `η i = η j`. Here `raiseOp η i` and `lowerOp η i` are `X i` and `∂ i` if `η i = 1`, and
@@ -213,24 +203,6 @@ def oscRowsUnit (a b : R) : Module.End ℂ (MvPolynomial ι ℂ) :=
       ∑ c : C, glOp T.indexSign (T.varEquiv (a, c)) (T.varEquiv (b, c)) +
     if a = b then ↑T.rowShift else 0
 
-omit [Fintype R] in
-/-- The sums over the columns `x` of the operators `glOp` between the variables `(a, x)` and
-`(b, x)` satisfy the commutation rule of the matrix units `E a b` of `gl R`. Here `T.varEquiv` names
-the variables, `T.indexSign` gives their signs, and `glOp η i j` raises in `i` after lowering in
-`j`. -/
-theorem sum_glOp_commutator (a b c d : R) :
-    (∑ x : C, glOp T.indexSign (T.varEquiv (a, x)) (T.varEquiv (b, x))) *
-          ∑ x : C, glOp T.indexSign (T.varEquiv (c, x)) (T.varEquiv (d, x)) -
-        (∑ x : C, glOp T.indexSign (T.varEquiv (c, x)) (T.varEquiv (d, x))) *
-          ∑ x : C, glOp T.indexSign (T.varEquiv (a, x)) (T.varEquiv (b, x)) =
-      (if b = c then ∑ x : C, glOp T.indexSign (T.varEquiv (a, x)) (T.varEquiv (d, x)) else 0) -
-        if a = d then ∑ x : C, glOp T.indexSign (T.varEquiv (c, x)) (T.varEquiv (b, x)) else 0 := by
-  classical
-  rw [Fintype.sum_mul_sum, Fintype.sum_mul_sum, sum_comm]
-  simp only [← sum_sub_distrib, glOp_commutator]
-  -- Only the pairs of equal columns contribute.
-  simp [ite_and]
-
 end
 
 /-- For a sign `σ`, the factor that is `1` if `s = t` and `σ` if not is multiplicative along three
@@ -243,39 +215,119 @@ theorem _root_.New.ite_units_eq_mul_ite_units_eq (σ s t u : ℤˣ) :
     rcases Int.units_eq_one_or t with rfl | rfl <;> rcases Int.units_eq_one_or u with rfl | rfl <;>
     simp
 
-omit [Fintype R] [Fintype ι] in
-/-- The operators `oscRowsUnit a b`, by which the matrix units of `gl R` act on the rows, satisfy
-the commutation rule `[E a b, E c d] = δ_bc E a d - δ_ad E c b`. -/
-theorem oscRowsUnit_commutator (a b c d : R) :
-    T.oscRowsUnit a b * T.oscRowsUnit c d - T.oscRowsUnit c d * T.oscRowsUnit a b =
-      (if b = c then T.oscRowsUnit a d else 0) - if a = d then T.oscRowsUnit c b else 0 := by
-  -- The sums over the columns satisfy the rule, the signs multiply as the rule needs, and the
-  -- scalar terms are central.
-  let sign (p q : R) : ℂ := if ε p = ε q then 1 else T.globalSign
-  let rowSum (p q : R) : Module.End ℂ (MvPolynomial ι ℂ) :=
-    ∑ x : C, glOp T.indexSign (T.varEquiv (p, x)) (T.varEquiv (q, x))
-  have h_unit (p q : R) :
-      T.oscRowsUnit p q = sign p q • rowSum p q + (if p = q then (T.rowShift : ℂ) else 0) • 1 := by
-    simp [oscRowsUnit, sign, rowSum, Int.cast_smul_eq_zsmul]
-  have h_sign_self (p : R) : sign p p = 1 := ite_eq_left rfl
-  have h_sign (p q r : R) : sign p q * sign q r = sign p r :=
-    ite_units_eq_mul_ite_units_eq T.globalSign (ε p) (ε q) (ε r)
-  have h_central : T.oscRowsUnit a b * T.oscRowsUnit c d - T.oscRowsUnit c d * T.oscRowsUnit a b =
-      (sign a b * sign c d) • (rowSum a b * rowSum c d - rowSum c d * rowSum a b) := by
-    simp only [h_unit, add_mul, mul_add, smul_mul_assoc, mul_smul_comm, one_mul, mul_one]
-    module
-  rw [h_central, T.sum_glOp_commutator, h_unit, h_unit]
-  by_cases hbc : b = c <;> by_cases had : a = d <;>
-    simp [rowSum, hbc, had, h_sign, h_sign_self, smul_sub, eq_comm, mul_comm (sign d b)]
+section
 
-/-- The commutation rule `[x E a b, y E c d] = x y (δ_bc E a d - δ_ad E c b)` for multiples of two
-matrix units in `Matrix R R ℂ`. -/
-theorem _root_.New.single_mul_single_sub_single_mul_single (a b c d : R) (x y : ℂ) :
-    Matrix.single a b x * Matrix.single c d y - Matrix.single c d y * Matrix.single a b x =
-      (if b = c then Matrix.single a d (x * y) else 0) -
-        if a = d then Matrix.single c b (x * y) else 0 := by
-  by_cases hbc : b = c <;> by_cases had : a = d <;>
-    simp [hbc, had, Ne.symm, mul_comm y x]
+omit [Fintype ι]
+
+/-- Row sign predicate for `TauCeti.IsEvenPair`, absorbing `T.globalSign`. -/
+abbrev rowBool (r : R) : Bool := decide (T.globalSign * ε r = 1)
+
+/-- Column sign predicate for `TauCeti.IsEvenPair`. -/
+abbrev colBool (ε' : C → ℤˣ) (c : C) : Bool := decide (ε' c = 1)
+
+/-- Conjugation of polynomial endomorphisms along `T.varEquiv : R × C ≃ ι`. -/
+def conjVar : Module.End ℂ (MvPolynomial (R × C) ℂ) ≃ₐ[ℂ] Module.End ℂ (MvPolynomial ι ℂ) :=
+  let e := (MvPolynomial.renameEquiv ℂ T.varEquiv).toLinearEquiv
+  AlgEquiv.ofLinearEquiv (e.arrowCongr e) (LinearMap.ext fun _ ↦ by simp)
+    fun _ _ ↦ LinearMap.ext fun _ ↦ by simp
+
+omit [Fintype R] [DecidableEq R] [Fintype C] [DecidableEq C] in
+/-- Conjugation along `T.varEquiv` carries `TauCeti.oscRaise x * TauCeti.oscLower y` to
+`glOp T.indexSign (T.varEquiv x) (T.varEquiv y)`. -/
+theorem conjVar_oscRaise_mul_oscLower (x y : R × C) :
+    T.conjVar (TauCeti.oscRaise ℂ (TauCeti.IsEvenPair T.rowBool (colBool ε')) x *
+      TauCeti.oscLower ℂ (TauCeti.IsEvenPair T.rowBool (colBool ε')) y) =
+      glOp T.indexSign (T.varEquiv x) (T.varEquiv y) := by
+  have h (z : R × C) : (T.indexSign (T.varEquiv z) = 1) ↔
+      TauCeti.IsEvenPair T.rowBool (colBool ε') z := by
+    simp only [TauCeti.isEvenPair_iff, rowBool, colBool, Function.comp_apply,
+      Equiv.symm_apply_apply, pairSign, decide_eq_decide]
+    rcases Int.units_eq_one_or (ε' z.2) with hc | hc
+    · simp [hc]
+    · simp [hc, Int.units_ne_iff_eq_neg, neg_eq_iff_eq_neg]
+  refine LinearMap.ext fun P ↦ ?_
+  change rename T.varEquiv ((TauCeti.oscRaise ℂ _ x * TauCeti.oscLower ℂ _ y)
+    (rename T.varEquiv.symm P)) = _
+  rw [mul_apply_eq_comp,
+    TauCeti.rename_oscRaise (q := fun i ↦ T.indexSign i = 1) T.varEquiv.injective h,
+    TauCeti.rename_oscLower (q := fun i ↦ T.indexSign i = 1) T.varEquiv.injective h,
+    rename_rename, Equiv.self_comp_symm, rename_id_apply, oscRaise_eq, oscLower_eq, glOp,
+    mul_apply_eq_comp]
+
+/-- The row action matrix unit `T.oscRowsUnit a b` expressed in terms of `TauCeti.fockRowHom` via
+conjugation along `T.varEquiv`, the sign factor, and the diagonal shift `γ - card C / 2`. -/
+theorem oscRowsUnit_eq_fockRowHom (a b : R) :
+    T.oscRowsUnit a b =
+      (if ε a = ε b then 1 else T.globalSign : ℂ) •
+        T.conjVar (TauCeti.fockRowHom ℂ T.rowBool (colBool ε') (single a b 1)) +
+      if a = b then (T.rowShift - Fintype.card C / 2 : ℂ) • 1 else 0 := by
+  rw [TauCeti.fockRowHom_single, map_add, map_sum]
+  simp only [conjVar_oscRaise_mul_oscLower, apply_ite T.conjVar, map_smul, map_one, map_zero]
+  obtain rfl | hab := eq_or_ne a b
+  · simp only [↓reduceIte, oscRowsUnit, one_smul]
+    rw [← zsmul_one, ← Int.cast_smul_eq_zsmul ℂ]
+    module
+  · simp [oscRowsUnit, hab]
+
+/-- The diagonal sign matrix on `R` with entry `1` if `ε a = 1` and `T.globalSign` otherwise.
+Conjugation by it rescales off-block matrix units of `gl R` by `T.globalSign`. -/
+def rowSignDiag : Matrix R R ℂ :=
+  diagonal fun a ↦ (if ε a = 1 then 1 else T.globalSign : ℂ)
+
+omit [Fintype C] [DecidableEq C] in
+/-- The diagonal sign matrix `T.rowSignDiag` is an involution. -/
+theorem rowSignDiag_mul_self : T.rowSignDiag * T.rowSignDiag = 1 := by
+  rw [rowSignDiag, diagonal_mul_diagonal, ← diagonal_one]
+  congr 1
+  ext a
+  simpa [eq_comm (a := (1 : ℤˣ))] using
+    ite_units_eq_mul_ite_units_eq T.globalSign (ε a) 1 (ε a)
+
+omit [Fintype C] [DecidableEq C] in
+/-- Conjugating the matrix unit `E a b` by `T.rowSignDiag` multiplies it by `1` if `ε a = ε b`
+and by `T.globalSign` otherwise. -/
+theorem rowSignDiag_mul_single_mul_rowSignDiag (a b : R) :
+    T.rowSignDiag * single a b 1 * T.rowSignDiag =
+      (if ε a = ε b then 1 else T.globalSign : ℂ) • single a b 1 := by
+  ext i j
+  by_cases hij : a = i ∧ b = j
+  · obtain ⟨rfl, rfl⟩ := hij
+    simpa [rowSignDiag, eq_comm (a := (1 : ℤˣ))] using
+      ite_units_eq_mul_ite_units_eq T.globalSign (ε a) 1 (ε b)
+  · simp [rowSignDiag, hij]
+
+section
+
+attribute [local instance 100] LieRing.ofAssociativeRing
+
+/-- The oscillator Lie algebra homomorphism `gl R →ₗ⁅ℂ⁆ End ℂ (MvPolynomial ι ℂ)`, obtained from
+`TauCeti.fockRowHom` by conjugating with `T.rowSignDiag`, transferring along `T.conjVar`, and
+twisting by the trace with scalar `γ - card C / 2`. -/
+def oscRowsHom : Matrix R R ℂ →ₗ⁅ℂ⁆ Module.End ℂ (MvPolynomial ι ℂ) :=
+  let sHom : Matrix R R ℂ →ₐ[ℂ] Matrix R R ℂ :=
+    AlgHom.ofLinearMap (LinearMap.mulLeftRight ℂ (T.rowSignDiag, T.rowSignDiag))
+      (by simp [rowSignDiag_mul_self]) fun A B ↦ by
+        simp only [LinearMap.mulLeftRight_apply, mul_assoc]
+        rw [← mul_assoc T.rowSignDiag T.rowSignDiag, rowSignDiag_mul_self, one_mul]
+  TauCeti.glTraceTwistHom
+    ((T.conjVar.toAlgHom.toLieHom.comp (TauCeti.fockRowHom ℂ T.rowBool (colBool ε'))).comp
+      sHom.toLieHom)
+    (T.rowShift - Fintype.card C / 2)
+
+/-- The linear map underlying `T.oscRows` agrees with the Lie algebra homomorphism
+`T.oscRowsHom`. -/
+theorem liftLinear_oscRowsUnit_eq_oscRowsHom :
+    liftLinear ℂ (fun a b : R ↦ LinearMap.id.smulRight (T.oscRowsUnit a b)) =
+      T.oscRowsHom.toLinearMap := by
+  refine Matrix.ext_linearMap ℂ fun a b ↦ LinearMap.ext_ring ?_
+  simp only [LinearMap.comp_apply, singleLinearMap_apply, liftLinear_single,
+    LinearMap.smulRight_apply, LinearMap.id_apply, one_smul, LieHom.coe_toLinearMap,
+    oscRowsHom, TauCeti.glTraceTwistHom_apply, LieHom.comp_apply, AlgHom.toLieHom_apply,
+    AlgEquiv.coe_toAlgHom, AlgHom.ofLinearMap_apply, LinearMap.mulLeftRight_apply,
+    rowSignDiag_mul_single_mul_rowSignDiag, map_smul, T.oscRowsUnit_eq_fockRowHom]
+  obtain rfl | hab := eq_or_ne a b
+  · simp
+  · simp [hab]
 
 /-- The oscillator action of `gl R` on the rows of the variables `varEquiv (r, c)`: the linear
 map that sends the matrix unit `E a b` to `oscRowsUnit a b`. For `σ = -1` its noncompact part
@@ -283,25 +335,13 @@ changes sign. -/
 def oscRows : GlModule R (MvPolynomial ι ℂ) where
   ρ := liftLinear ℂ fun a b : R ↦ LinearMap.id.smulRight (T.oscRowsUnit a b)
   map_bracket X Y := by
-    -- Both sides are additive in `X` and in `Y`, so it suffices to treat multiples of matrix units.
-    induction X using Matrix.induction_on' with
-    | h_zero => simp
-    | h_add X X' hX hX' => simp only [add_mul, mul_add, map_add, add_sub_add_comm, hX, hX']
-    | h_std_basis a b x =>
-      induction Y using Matrix.induction_on' with
-      | h_zero => simp
-      | h_add Y Y' hY hY' => simp only [add_mul, mul_add, map_add, add_sub_add_comm, hY, hY']
-      | h_std_basis c d y =>
-        have h_commutator :
-            (x • T.oscRowsUnit a b) * (y • T.oscRowsUnit c d) -
-                (y • T.oscRowsUnit c d) * (x • T.oscRowsUnit a b) =
-              (if b = c then (x * y) • T.oscRowsUnit a d else 0) -
-                if a = d then (x * y) • T.oscRowsUnit c b else 0 := by
-          rw [smul_mul_smul_comm, smul_mul_smul_comm, mul_comm y x, ← smul_sub,
-            oscRowsUnit_commutator, smul_sub, smul_ite_zero, smul_ite_zero]
-        rw [single_mul_single_sub_single_mul_single, map_sub, apply_ite (liftLinear ℂ _),
-          apply_ite (liftLinear ℂ _)]
-        simpa using h_commutator.symm
+    -- `T.oscRows.ρ` agrees with the Lie algebra homomorphism `T.oscRowsHom`.
+    simpa only [liftLinear_oscRowsUnit_eq_oscRowsHom, LieHom.coe_toLinearMap,
+      ← LieRing.of_associative_ring_bracket] using T.oscRowsHom.map_lie X Y
+
+end
+
+end
 
 section
 
