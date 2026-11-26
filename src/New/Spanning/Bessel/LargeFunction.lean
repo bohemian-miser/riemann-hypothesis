@@ -3,7 +3,7 @@ module
 public import Mathlib.Analysis.CStarAlgebra.CStarMatrix
 import TauCeti.Topology.Algebra.Group.Units
 import TauCeti.Topology.Instances.Matrix
-public import New.Appendix.DiscreteSeries.PositionGroup
+public import New.Appendix.DiscreteSeries.Periods
 public import New.Spanning.Bessel.Average
 public import New.Spanning.Bessel.Basic
 import Lib.DiscreteSeries.Bessel.SchurBound
@@ -12,7 +12,6 @@ import Lib.DiscreteSeries.FlenstedJensen.PsiKTypes
 import Lib.DiscreteSeries.FlenstedJensen.SquareIntegrability
 import Lib.DiscreteSeries.Haar.TotalMass
 import Lib.Shimura.Uniformisation.HolomorphicFamilies
-import New.Appendix.DiscreteSeries.StationaryPosition
 
 /-!
 # Bessel systems of discrete series type and a Bessel function large at a point
@@ -33,7 +32,8 @@ coefficient over `R` converges absolutely (`integrable_besselIntegrand`). It is 
   `ε`.
 * `New.Filling.IsDiscreteSeriesBessel`: the Bessel system has type `(l, kw)`.
 * `New.DiscreteSeries.IsSteep.exists_stationary_point`: a point `x` of bounded length at which the
-  period over `R` is large. It carries the stationary position of `U(X₀)` to the standard frame.
+  period over `R` is large, built directly from a Vandermonde/Lagrange frame via Witt's theorem so
+  that `besselPairHom x` satisfies `IsLaplaceDatum`.
 
 Notions from other files:
 * `New.Shape.G₁`: the unitary group of the complex hermitian form made of ϱ hyperbolic planes, the
@@ -102,8 +102,12 @@ end BesselType
 /-!
 ## The stationary point
 
-The point `x` carries the stationary position of `H` in `G₁` to the standard frame, by Witt's
-theorem.
+Using Lagrange interpolation weights at `0` together with the shifted negative lowest-`K`-type
+weights `t i = l.lowestKType (e (.inr i)) - a`, we construct a Vandermonde/Lagrange family of
+columns in `ℂ^BesselIndex` whose signed Gram matrix matches that of `X₀` and the Bessel frame
+`e₁, …, e_ϱ, z` (together with its dual continuation). Witt's theorem carries these columns to the
+standard basis by an element `x ∈ G₁` of controlled `besselLength`, and `besselPairHom x` then
+satisfies `IsLaplaceDatum` directly, feeding into `IsLaplaceDatum.laplace_method`.
 -/
 
 namespace New
@@ -114,57 +118,6 @@ open Matrix Complex Norms.L2Operator ComplexConjugate Finset Fin RealPlace Filli
 namespace DiscreteSeries
 
 variable {𝔰 : Shape} {ε : 𝔰.BesselIndex → ℤˣ}
-
-private lemma conjTranspose_inclMatrix_mul {l m n : Type*} [Fintype n] [DecidableEq n]
-    (u : l → n) (M : Matrix n m ℂ) :
-    (inclMatrix ℂ u)ᴴ * M = M.submatrix u id := by
-  ext a j
-  simp only [Matrix.mul_apply, conjTranspose_apply, inclMatrix, submatrix_apply, id_eq,
-    Matrix.one_apply, apply_ite star, star_one, star_zero, ite_mul, one_mul, zero_mul,
-    sum_ite_eq', mem_univ, ↓reduceIte]
-
-private lemma isotropicCols_mul_apply {m : Type*} (N : Matrix (Fin 𝔰.ϱ) m ℂ)
-    (i : 𝔰.BesselIndex) (b : m) :
-    (𝔰.isotropicCols * N) i b = match i with
-      | Sum.inl a => N a b
-      | Sum.inr _ => 0 := by
-  rw [Matrix.mul_apply]
-  rcases i with a | r
-  · simp only [inclMatrix, submatrix_apply, id_eq, Matrix.one_apply, Sum.inl.injEq,
-      ite_mul, one_mul, zero_mul, sum_ite_eq, mem_univ, ↓reduceIte]
-  · exact sum_eq_zero fun k _ ↦ by
-      simp only [inclMatrix, submatrix_apply, id_eq, Matrix.one_apply, reduceCtorEq, ↓reduceIte,
-        zero_mul]
-
-private lemma embedH_mul_apply_inl (h : U (1 : Matrix 𝔰.κ 𝔰.κ ℂ))
-    (M : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) (a : Fin 𝔰.ϱ) (j : 𝔰.BesselIndex) :
-    ((embedH h : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) * M) (Sum.inl a) j = M (Sum.inl a) j := by
-  rw [Matrix.mul_apply, Fintype.sum_sum_type]
-  have h1 : ∑ k : Fin 𝔰.ϱ, (embedH h : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ)
-      (Sum.inl a) (Sum.inl k) * M (Sum.inl k) j = M (Sum.inl a) j := by
-    simp only [val_toBesselH_apply_coe, fromBlocks_apply₁₁, Matrix.one_apply, ite_mul, one_mul,
-      zero_mul, sum_ite_eq, mem_univ, ↓reduceIte]
-  have h2 : ∑ k : 𝔰.MiddleIndex ⊕ Fin 𝔰.ϱ, (embedH h : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ)
-      (Sum.inl a) (Sum.inr k) * M (Sum.inr k) j = 0 :=
-    sum_eq_zero fun k _ ↦ by
-      simp only [val_toBesselH_apply_coe, fromBlocks_apply₁₂, Matrix.zero_apply, zero_mul]
-  rw [h1, h2, add_zero]
-
-private lemma embedH_mul_apply_inr_of_apply_inr (h : U (1 : Matrix 𝔰.κ 𝔰.κ ℂ))
-    (M : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) (i : 𝔰.MiddleIndex ⊕ Fin 𝔰.ϱ) (j : 𝔰.BesselIndex)
-    (hM : ∀ k : 𝔰.MiddleIndex ⊕ Fin 𝔰.ϱ, M (Sum.inr k) j = if Sum.inr k = j then 1 else 0) :
-    ((embedH h : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) * M) (Sum.inr i) j =
-      (embedH h : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) (Sum.inr i) j := by
-  rw [Matrix.mul_apply, Fintype.sum_sum_type]
-  have h1 : ∑ a : Fin 𝔰.ϱ, (embedH h : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ)
-      (Sum.inr i) (Sum.inl a) * M (Sum.inl a) j = 0 :=
-    sum_eq_zero fun a _ ↦ by
-      simp only [val_toBesselH_apply_coe, fromBlocks_apply₂₁, Matrix.zero_apply, zero_mul]
-  rw [h1, zero_add]
-  simp_rw [hM]
-  rcases j with a | k
-  · exact sum_eq_zero fun r _ ↦ by simp only [reduceCtorEq, ↓reduceIte, mul_zero]
-  · simp only [Sum.inr.injEq, mul_ite, mul_one, mul_zero, sum_ite_eq', mem_univ, ↓reduceIte]
 
 private lemma continuousMul_G₁ : ContinuousMul 𝔰.G₁ := inferInstance
 
@@ -219,87 +172,40 @@ lemma lintegral_unfold_besselGraphMeasure {x : 𝔰.G₁} (f : 𝔰.G₁ → ENN
   simp_rw [h_const]
   rw [lintegral_const, measure_univ, mul_one]
 
-/-- For `s` in `besselGraph` (the group `R`), its first component `s.val.fst` lowers the flag of the
-frame `e₁, …, e_ϱ, z`: `(s.val.fst - 1) * frameCols = isotropicCols * N` for some strictly
-triangular `N`. Here `frameCols` has columns `e₁, …, e_ϱ, z` and `isotropicCols` has columns
-`e₁, …, e_ϱ`. The sum of the entries `N a a.succ` is `simpleRootSum s.val.fst`. -/
-lemma exists_sub_one_mul_frameCols_eq (s : 𝔰.besselGraph) :
-    ∃ N : Matrix (Fin 𝔰.ϱ) (Fin (𝔰.ϱ + 1)) ℂ,
-      (∀ (a : Fin 𝔰.ϱ) (b : Fin (𝔰.ϱ + 1)), b.val ≤ a.val → N a b = 0) ∧
-      ((s.val.fst : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1) * 𝔰.frameCols =
-        𝔰.isotropicCols * N ∧
-      ∑ a : Fin 𝔰.ϱ, N a a.succ = simpleRootSum s.val.fst := by
-  -- Each frame column of s - 1 is supported on rows of strictly lower level.
-  let M := (s.val.fst : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1
-  have h_zero (i : 𝔰.BesselIndex) (b : Fin (𝔰.ϱ + 1)) (hb : b.val ≤ BesselIndex.level i) :
-      M i (𝔰.besselFrame b) = 0 :=
-    sub_eq_zero.2 (mem_besselS_iff_frameImage.mp (besselGraph_fst_mem_besselS s) i b hb)
-  refine ⟨M.submatrix Sum.inl 𝔰.besselFrame, fun a b hab ↦ h_zero _ _ hab, ?_, ?_⟩
-  · ext i b
-    rw [mul_inclMatrix, submatrix_apply, id_eq, isotropicCols_mul_apply]
-    rcases i with a | r
-    · rfl
-    · exact h_zero _ _ (b.is_le.trans (le_level_inr r))
-  · refine sum_congr rfl fun a _ ↦ ?_
-    have h_ne : (Sum.inl a : 𝔰.BesselIndex) ≠ 𝔰.besselFrame a.succ := by
-      rw [← besselFrame_castSucc]
-      exact besselFrame_injective.ne castSucc_lt_succ.ne
-    simp only [submatrix_apply, M, Matrix.sub_apply, Matrix.one_apply_ne h_ne, sub_zero,
-      besselFrame_castSucc]
-
-/-- An element `s` of `besselGraph` (the group `R`) acts on `X₀`, the span of the columns of
-`definiteCols`, by its image `s.val.snd` in `H`, modulo the span of `e₁, …, e_ϱ` (the columns of
-`isotropicCols`). -/
-lemma exists_sub_one_mul_definiteCols_eq (s : 𝔰.besselGraph) :
-    ∃ C : Matrix (Fin 𝔰.ϱ) 𝔰.κ ℂ,
-      ((s.val.fst : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1) * 𝔰.definiteCols =
-        𝔰.definiteCols * ((s.val.snd : Matrix 𝔰.κ 𝔰.κ ℂ) - 1) + 𝔰.isotropicCols * C := by
-  -- Write `s = h u`; the matrix `C` is the block of `u` from `X₀` to `e₁, …, e_ϱ`.
-  obtain ⟨⟨⟨u, hu⟩, h⟩, rfl⟩ := 𝔰.besselGraphChart.surjective s
-  refine ⟨(u : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ).submatrix Sum.inl 𝔰.indexX₀, ?_⟩
-  ext i j
-  rw [mul_inclMatrix, submatrix_apply, id_eq, Matrix.sub_apply, Matrix.add_apply,
-    isotropicCols_mul_apply, Shape.besselGraphChart_apply_coe, Subgroup.coe_mul, Units.val_mul]
-  rcases i with a | r
-  · rw [embedH_mul_apply_inl]
-    have h_def : (𝔰.definiteCols * (h.val.val - 1) : Matrix 𝔰.BesselIndex 𝔰.κ ℂ) (Sum.inl a) j =
-        0 := by
-      rw [Matrix.mul_apply]
-      exact sum_eq_zero fun k _ ↦ by
-        simp only [inclMatrix, submatrix_apply, id_eq, Matrix.one_apply, reduceCtorEq, ↓reduceIte,
-          zero_mul]
-    rw [h_def, zero_add, Matrix.one_apply_ne (by simp), sub_zero]
-    rfl
-  · rw [embedH_mul_apply_inr_of_apply_inr h u.val.val r (𝔰.indexX₀ j)
-      (fun k ↦ apply_inr_of_mem_besselU hu k (𝔰.indexX₀ j) (by simp)), add_zero, Matrix.mul_apply]
-    rcases r with (c | ⟨⟩) | a
-    · simp only [val_toBesselH_apply_coe, fromBlocks_apply₂₂, fromBlocks_apply₁₁,
-        Matrix.one_apply, Sum.inr.injEq, Sum.inl.injEq, inclMatrix, submatrix_apply, id_eq,
-        ite_mul, one_mul, zero_mul, sum_ite_eq, mem_univ, ↓reduceIte, Matrix.sub_apply]
-    · simp only [val_toBesselH_apply_coe, fromBlocks_apply₂₂, fromBlocks_apply₁₁,
-        fromBlocks_apply₂₁, Matrix.zero_apply, Matrix.one_apply, Sum.inr.injEq, Sum.inl.injEq,
-        reduceCtorEq, ↓reduceIte, sub_zero, inclMatrix, submatrix_apply, id_eq, zero_mul,
-        sum_const_zero]
-    · simp only [val_toBesselH_apply_coe, fromBlocks_apply₂₂, fromBlocks_apply₂₁,
-        Matrix.zero_apply, Matrix.one_apply, Sum.inr.injEq, reduceCtorEq, ↓reduceIte, sub_zero,
-        inclMatrix, submatrix_apply, id_eq, zero_mul, sum_const_zero]
-
-/-- Let `g` in `G₁` lower the flag of the frame `e₁, …, e_ϱ, z`. That is, `g - 1` maps the frame
-into the span of `e₁, …, e_ϱ` by a strictly triangular matrix `N`. Then `g` is the first component
-`s.val.fst` of some `s` in `besselGraph` (the group `R`). -/
-lemma exists_besselGraph_fst_eq {g : 𝔰.G₁} {N : Matrix (Fin 𝔰.ϱ) (Fin (𝔰.ϱ + 1)) ℂ}
-    (hN_tri : ∀ (a : Fin 𝔰.ϱ) (b : Fin (𝔰.ϱ + 1)), b.val ≤ a.val → N a b = 0)
-    (hN : ((g : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1) * 𝔰.frameCols = 𝔰.isotropicCols * N) :
-    ∃ s : 𝔰.besselGraph, s.val.fst = g := by
-  have h_mem : g ∈ besselS := by
-    refine mem_besselS_iff_frameImage.2 fun i b hb ↦ sub_eq_zero.1 ?_
-    have h_entry : (𝔰.isotropicCols * N) i b = 0 := by
-      rcases i with a | i
-      · simpa [inclMatrix, Matrix.mul_apply, Matrix.one_apply] using hN_tri a b hb
-      · simp [inclMatrix, Matrix.mul_apply]
-    rwa [← hN, mul_inclMatrix] at h_entry
-  obtain ⟨u, hu, h, rfl⟩ := exists_besselU_mul_toBesselH h_mem isUnit_one
-  exact ⟨⟨(u * embedH h, h), by simpa [Shape.mem_besselGraph_iff_mul_inv_mem] using hu⟩, rfl⟩
+/-- For `s = (g, h)` in `besselGraph` (so `(embedH h)⁻¹ g ∈ besselU`) and any matrix `M` that is
+block upper triangular for `BesselIndex.level`, `tr (M (g - embedH h)) = 0`. Indeed
+`g - embedH h = embedH h * (u - 1)` with `u ∈ besselU`; `embedH h` preserves levels while `u - 1`
+strictly increases them. -/
+lemma besselGraph_trace_mul_sub_eq_zero (s : 𝔰.besselGraph)
+    {M : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ} (hM : M.BlockTriangular BesselIndex.level) :
+    (M * ((s.val.fst : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) -
+      (embedH s.val.snd : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ))).trace = 0 := by
+  let u : (𝔰.middleGram (1 : ℂ)).besselU := ⟨(embedH s.val.snd)⁻¹ * s.val.fst, s.property⟩
+  have hu_mul : (embedH s.val.snd : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) *
+      ((u.val : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1) =
+      (s.val.fst : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) -
+        (embedH s.val.snd : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) := by
+    have h_eq : embedH s.val.snd * u.val = s.val.fst := mul_inv_cancel_left _ _
+    rw [mul_sub_one, ← Units.val_mul, ← Subgroup.coe_mul, h_eq]
+  have h_embedH_tri :
+      (embedH s.val.snd : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ).BlockTriangular
+        BesselIndex.level := by
+    intro i j hij
+    rcases i with a | ((i₀ | ⟨⟩) | a) <;> rcases j with b | ((j₀ | ⟨⟩) | b) <;>
+      simp [BesselIndex.level, val_toBesselH_apply_coe, Matrix.one_apply] at hij ⊢ <;>
+      · rintro rfl; exact lt_irrefl _ hij
+  have hM' : (M * (embedH s.val.snd : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ)).BlockTriangular
+      BesselIndex.level := hM.mul h_embedH_tri
+  rw [← hu_mul, ← Matrix.mul_assoc, trace]
+  refine sum_eq_zero fun i _ ↦ ?_
+  rw [diag_apply, Matrix.mul_apply]
+  refine sum_eq_zero fun j _ ↦ ?_
+  rcases lt_or_ge (BesselIndex.level j) (BesselIndex.level i) with hij | hij
+  · rw [hM' hij, zero_mul]
+  · have hu_entry : (u.val : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) j i =
+        (1 : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) j i :=
+      mem_besselU.1 u.property j i hij
+    rw [Matrix.sub_apply, hu_entry, sub_self, mul_zero]
 
 variable [p : UnitarySignFrame 𝔰 ε]
 
@@ -341,8 +247,6 @@ lemma besselPairHom_snd_val (s : 𝔰.besselGraph) (x : 𝔰.G₁) :
 lemma subOnePair_besselPairHom_snd (s : 𝔰.besselGraph) (x : 𝔰.G₁) :
     (subOnePair (besselPairHom (ε := ε) x) s).snd = (s.val.snd : Matrix 𝔰.κ 𝔰.κ ℂ) - 1 := rfl
 
-variable {v : Matrix 𝔰.BesselIndex (Fin (𝔰.ϱ + 1)) ℂ} {i₀ : Matrix 𝔰.BesselIndex 𝔰.κ ℂ}
-
 /-- The unitary frame `p` takes a vector with entries of modulus at most `M` to one of length at
 most `√r M`, where `r` is the dimension. -/
 lemma norm_frame_mulVec_le {M : ℝ} (hM : 0 ≤ M) {w : 𝔰.BesselIndex → ℂ}
@@ -358,214 +262,587 @@ lemma norm_frame_mulVec_le {M : ℝ} (hM : 0 ≤ M) {w : 𝔰.BesselIndex → �
       ≤ √(𝔰.r * M ^ 2) := Real.sqrt_le_sqrt h_sum
     _ = √𝔰.r * M := by rw [Real.sqrt_mul (Nat.cast_nonneg _), Real.sqrt_sq hM]
 
-/-- Take a position (`IsPosition`) of `H = U(X₀)` in `U(ε)`: independent vectors `v₁, …, v_n` (the
-columns of `v`) whose products for the form `signMatrix ε` vanish except that of `v_n` with itself,
-and an isometry `i₀` of `X₀` into their orthogonal complement. Let `v_n` have norm `-1`. Let
-`w 0 = v₁, …, w (n - 1) = v_n` continue to a sequence such that `w 0, …, w (2 n - 2)` have entries
-of modulus at most `M ≥ 1`, and the product of `w a` and `w b` is `0` for `a + b < 2 n - 2` and `-1`
-for `a + b = 2 n - 2`. Then there is an `x` in `G₁` such that `x p`, where `p` is the frame of signs
-`ε`, takes `i₀` to the inclusion of `X₀` and `v₁, …, v_n` to `e₁, …, e_ϱ, z`, and such that
-`besselLength x`, the infimum of `‖s x‖ + 1` over `s` in the Bessel group, is at most `8 n √r M`. -/
-lemma IsPosition.exists_mul_eq_frameCols_and_besselLength_le (hP : IsPosition ε 1 𝔰.ϱ v i₀)
-    (h_norm : (vᴴ * signMatrix ε * v) (last 𝔰.ϱ) (last 𝔰.ϱ) = -1) {M : ℝ} (hM : 1 ≤ M)
-    {w : ℕ → 𝔰.BesselIndex → ℂ} (hw : ∀ a : Fin (𝔰.ϱ + 1), w a = v.col a)
-    (hw_le : ∀ a ≤ 2 * 𝔰.ϱ, ∀ i : 𝔰.BesselIndex, ‖w a i‖ ≤ M)
-    (hw_dual : ∀ a b : ℕ, a + b ≤ 2 * 𝔰.ϱ →
-      star (w a) ⬝ᵥ signMatrix ε *ᵥ w b = if a + b = 2 * 𝔰.ϱ then -1 else 0) :
+/-- **Direct Laplace datum for the Bessel subgroup.** Let `l` on `U(ε)` be steep with bound `B ≥ 1`
+for `e : X ⊕ Fin (2 ϱ + 2) ≃ BesselIndex`, and let `u` on `H = U(κ)` have lowest-`K`-type weight `a`
+at `τ (.inr ())` and `0` on `τ (.inl X)`. If `3 B + a ≤ b ^ 2` and `8 n r ≤ b`, there is `x ∈ G₁`
+with `besselLength x ≤ b ^ (5 n)` such that `besselPairHom x` satisfies `IsLaplaceDatum` directly
+with phase `s ↦ simpleRootSum s.1 - conj (simpleRootSum s.1)`. -/
+lemma IsSteep.exists_isLaplaceDatum_besselPairHom {X : Type} [Fintype X] [DecidableEq X]
+    {l : HCParam ε} {u : HCParam (1 : 𝔰.κ → ℤˣ)}
+    {e : X ⊕ Fin (2 * 𝔰.ϱ + 2) ≃ 𝔰.BesselIndex} {B b : ℝ} {a : ℕ}
+    (h_steep : IsSteep l B e) (τ : X ⊕ Unit ≃ 𝔰.κ)
+    (ha : ∀ i : 𝔰.κ, u.lowestKType i = if i = τ (Sum.inr ()) then (a : ℤ) else 0)
+    (hB : 1 ≤ B) (hb : 3 * B + a ≤ b ^ 2) (hb_rank : 8 * 𝔰.n * 𝔰.r ≤ b) :
     ∃ x : 𝔰.G₁,
-      (x.val * p.matrix).val * i₀ = 𝔰.definiteCols ∧
-      (x.val * p.matrix).val * v = 𝔰.frameCols ∧
-      besselLength x ≤ 8 * 𝔰.n * (√𝔰.r * M) := by
-  -- The columns of `i₀` and `v₁, …, v_n` have the Gram matrix of the basis of `X₀` and the frame.
-  have h_entry (a b : Fin (𝔰.ϱ + 1)) :
-      (vᴴ * signMatrix ε * v) a b = if a = last 𝔰.ϱ ∧ b = last 𝔰.ϱ then -1 else 0 := by
-    split_ifs with hab
-    · rw [hab.1, hab.2, h_norm]
-    · exact hP.gram_eq_zero a b (not_and_or.1 hab)
-  have h_frame : vᴴ * signMatrix ε * v = 𝔰.frameColsᴴ * 𝔰.J₁ * 𝔰.frameCols := by
-    rw [Matrix.mul_assoc 𝔰.frameColsᴴ, mul_inclMatrix, conjTranspose_inclMatrix_mul]
-    ext a b
-    rw [h_entry, submatrix_apply, submatrix_apply, id_eq]
-    refine Fin.lastCases ?_ (fun a ↦ ?_) a <;> refine Fin.lastCases ?_ (fun b ↦ ?_) b
-    · simp [Shape.besselFrame, Shape.J₁, splitGram, middleGram]
-    · simp [Shape.besselFrame, Shape.J₁, splitGram, middleGram]
-    · simp [Shape.besselFrame, Shape.J₁, splitGram, middleGram, (castSucc_lt_last a).ne]
-    · simp [Shape.besselFrame, Shape.J₁, splitGram, middleGram, (castSucc_lt_last a).ne]
-  have h_gram : (p.matrix.val * fromCols i₀ v)ᴴ * 𝔰.J₁ * (p.matrix.val * fromCols i₀ v) =
-      (fromCols 𝔰.definiteCols 𝔰.frameCols)ᴴ * 𝔰.J₁ * fromCols 𝔰.definiteCols 𝔰.frameCols := by
-    rw [gram_mul, p.gram_eq]
-    simp only [conjTranspose_fromCols_eq_fromRows_conjTranspose, fromRows_mul, mul_fromCols]
-    rw [hP.isometry, hP.orthogonal, hP.vec_orthogonal, h_frame, signMatrix_one]
-    refine congrArg₂ fromCols (congrArg₂ fromRows ?_ ?_) (congrArg₂ fromRows ?_ rfl)
-    · rw [Matrix.mul_assoc 𝔰.definiteColsᴴ, mul_inclMatrix, conjTranspose_inclMatrix_mul]
-      ext i j
-      simp [Shape.J₁, splitGram, middleGram, Matrix.one_apply]
-    · rw [Matrix.mul_assoc 𝔰.frameColsᴴ, mul_inclMatrix, conjTranspose_inclMatrix_mul]
-      ext a j
-      refine Fin.lastCases ?_ (fun c ↦ ?_) a <;>
-        simp [Shape.besselFrame, Shape.J₁, splitGram, middleGram]
-    · rw [Matrix.mul_assoc 𝔰.definiteColsᴴ, mul_inclMatrix, conjTranspose_inclMatrix_mul]
-      ext i b
-      refine Fin.lastCases ?_ (fun c ↦ ?_) b <;>
-        simp [Shape.besselFrame, Shape.J₁, splitGram, middleGram]
-  -- Both families are independent, so Witt's theorem gives `x`.
-  have h_indep : HasLeftInv (p.matrix.val * fromCols i₀ v) := by
-    obtain ⟨Z, hZ⟩ := hP.hasLeftInv
-    exact ⟨Z * p.matrix⁻¹.val, by
-      rw [Matrix.mul_assoc, ← Matrix.mul_assoc _ p.matrix.val, Units.inv_mul, Matrix.one_mul, hZ]⟩
-  have h_indep' : HasLeftInv (fromCols 𝔰.definiteCols 𝔰.frameCols) := by
-    refine ⟨(fromCols 𝔰.definiteCols 𝔰.frameCols)ᴴ, ?_⟩
-    rw [conjTranspose_fromCols_eq_fromRows_conjTranspose, fromRows_mul_fromCols,
-      conjTranspose_inclMatrix_mul, conjTranspose_inclMatrix_mul,
-      conjTranspose_inclMatrix_mul, conjTranspose_inclMatrix_mul, ← fromBlocks_one]
-    refine fromBlocks_inj.2 ⟨?_, ?_, ?_, ?_⟩
-    · ext i j
-      simp only [submatrix_apply, id_eq, inclMatrix, Matrix.one_apply, Sum.inr.injEq, Sum.inl.injEq]
-    · ext i b
-      refine Fin.lastCases ?_ (fun c ↦ ?_) b <;>
-        simp [Shape.besselFrame, inclMatrix]
-    · ext a j
-      refine Fin.lastCases ?_ (fun c ↦ ?_) a <;>
-        simp [Shape.besselFrame, inclMatrix]
-    · ext a b
-      simp only [submatrix_apply, id_eq, inclMatrix, Matrix.one_apply, besselFrame_injective.eq_iff]
-  obtain ⟨x, hx⟩ : ∃ x : 𝔰.G₁,
-      x.val.val * (p.matrix.val * fromCols i₀ v) = fromCols 𝔰.definiteCols 𝔰.frameCols :=
-    witt ⟨Complex.I, by simp⟩ isHermitian.eq IsHermitianInvolution.isUnit h_indep h_indep' h_gram
-  rw [← Matrix.mul_assoc, ← Units.val_mul, mul_fromCols, fromCols_ext_iff] at hx
-  obtain ⟨hx_isometry, hx_frame⟩ := hx
-  refine ⟨x, hx_isometry, hx_frame, ?_⟩
-  -- For `a ≤ 2 n - 2` the vectors `p (w a)` have length at most `√r M`, and their products for
-  -- `J₁` are those of the `w a` for `signMatrix ε`.
-  have h_vec (a : Fin (𝔰.ϱ + 1)) : frameVector x a = WithLp.toLp 2 (p.matrix.val *ᵥ w a) := by
-    have h_inv : x⁻¹.val.val * 𝔰.frameCols = p.matrix.val * v := by
-      rw [← hx_frame, Units.val_mul, ← Matrix.mul_assoc, ← Matrix.mul_assoc,
-        show x⁻¹.val.val * x.val.val = 1 from x.val.inv_mul, Matrix.one_mul]
-    ext i
-    rw [hw]
-    exact (congrFun₂ (mul_inclMatrix x⁻¹.val.val 𝔰.besselFrame) i a).symm.trans
-      (congrFun₂ h_inv i a)
-  have h_form (a b : ℕ) (hab : a + b ≤ 2 * 𝔰.ϱ) :
-      star (p.matrix.val *ᵥ w a) ⬝ᵥ 𝔰.J₁ *ᵥ (p.matrix.val *ᵥ w b) =
-        if a + b = 2 * 𝔰.ϱ then -1 else 0 := by
-    rw [← hw_dual a b hab, ← p.gram_eq, ← mulVec_mulVec, ← mulVec_mulVec,
-      dotProduct_mulVec (star (w a)), ← star_mulVec]
-  have h_rank : 1 ≤ √(𝔰.r : ℝ) := Real.one_le_sqrt.2 (Nat.one_le_cast.2 Fintype.card_pos)
-  exact_mod_cast besselLength_le_of_dual x (one_le_mul_of_one_le_of_one_le h_rank hM)
-    (fun a : ℕ ↦ WithLp.toLp 2 (p.matrix.val *ᵥ w a)) h_vec
-    (fun a ha ↦ norm_frame_mulVec_le (zero_le_one.trans hM) (hw_le a ha))
-    fun a b hab ↦ (dotProduct_comm _ _).trans (h_form a b hab)
-
-section Point
-
-variable {x : 𝔰.G₁}
-
-/-- If `x p` takes the columns of `v` to the frame, then its first ϱ columns `initCols v` are the
-images of `e₁, …, e_ϱ`, the columns of `isotropicCols`, under the inverse of `x p`. -/
-lemma initCols_eq_of_frame (h_frame : (x.val * p.matrix).val * v = 𝔰.frameCols) :
-    initCols v = (x.val * p.matrix)⁻¹.val * 𝔰.isotropicCols := by
-  have h_isotropic : (x.val * p.matrix).val * initCols v = 𝔰.isotropicCols := by
-    ext i a
-    calc ((x.val * p.matrix).val * initCols v) i a
-      _ = ((x.val * p.matrix).val * v) i a.castSucc := rfl
-      _ = 𝔰.frameCols i a.castSucc := congrFun₂ h_frame i a.castSucc
-      _ = 𝔰.isotropicCols i a := by simp [inclMatrix, Matrix.one_apply]
-  rw [← h_isotropic, ← Matrix.mul_assoc, Units.inv_mul, Matrix.one_mul]
-
-/-- At a point `x` such that `x p` sends the columns `v₁, …, v_{ϱ+1}` of `v` to the frame
-`frameCols`, `x⁻¹ s x - 1` lowers the flag of the `v_j` (`LowersFlag`: it maps the span of the first
-`j` into that of the first `j - 1`). The sum of the coefficients of `v_j` in the image of `v_{j+1}`
-is `simpleRootSum` of the `G₁` component of `s`. -/
-lemma lowersFlag_besselPairHom (s : 𝔰.besselGraph)
-    (h_frame : (x.val * p.matrix).val * v = 𝔰.frameCols) :
-    LowersFlag 𝔰.ϱ v (subOnePair (besselPairHom x) s).fst (simpleRootSum s.val.fst) := by
-  obtain ⟨N, hN, h_eq, h_sum⟩ := exists_sub_one_mul_frameCols_eq s
-  refine ⟨N, hN, ?_, h_sum⟩
-  rw [subOnePair_besselPairHom_fst, Matrix.mul_assoc, h_frame, Matrix.mul_assoc, h_eq,
-    initCols_eq_of_frame h_frame, Matrix.mul_assoc]
-
-/-- Take a point `x` such that `x p` takes `i₀` to `definiteCols` and takes the columns of `v` to
-`frameCols`. Then every `s` in `besselGraph` (the group `R`) satisfies `InducesOn` for the two
-components of `subOnePair (besselPairHom x) s`. That is, `x⁻¹ s x` acts by the image of `s` in `H`
-on the image of `i₀`, modulo the span of `v₁, …, v_ϱ`. -/
-lemma inducesOn_besselPairHom (s : 𝔰.besselGraph)
-    (h_isometry : (x.val * p.matrix).val * i₀ = 𝔰.definiteCols)
-    (h_frame : (x.val * p.matrix).val * v = 𝔰.frameCols) :
-    InducesOn 𝔰.ϱ v i₀ (subOnePair (besselPairHom x) s).fst
-      (subOnePair (besselPairHom (ε := ε) x) s).snd := by
-  have h_inv : (x.val * p.matrix)⁻¹.val * 𝔰.definiteCols = i₀ := by
-    rw [← h_isometry, ← Matrix.mul_assoc, Units.inv_mul, Matrix.one_mul]
-  obtain ⟨C, hC⟩ := exists_sub_one_mul_definiteCols_eq s
-  refine ⟨C, ?_⟩
-  rw [subOnePair_besselPairHom_fst, subOnePair_besselPairHom_snd, Matrix.mul_assoc, h_isometry,
-    Matrix.mul_assoc, hC, initCols_eq_of_frame h_frame, Matrix.mul_add, ← Matrix.mul_assoc, h_inv,
-    Matrix.mul_assoc]
-
-/-- Let `x` be in `G₁` and `p.matrix` the unitary matrix of `UnitarySignFrame`, with
-`p.matrixᴴ J₁ p.matrix = diag(ε)`. Suppose `x * p.matrix` takes the columns of `v` to `frameCols`,
-the frame `e₁, …, e_ϱ, z`. Let `g` be in `positionGroup ε v`: the `g` in `USign ε` such that `g - 1`
-maps the span of the first `j` columns of `v` into the span of the first `j - 1`, for the `j` up to
-a fixed bound. Then `g` is the first component `x⁻¹ s x` of `besselPairHom x s` for some `s` in
-`besselGraph` (the group `R`). -/
-lemma exists_besselPairHom_fst_eq (h_frame : (x.val * p.matrix).val * v = 𝔰.frameCols)
-    {g : USign ε} (hg : g ∈ positionGroup ε v) :
-    ∃ s : 𝔰.besselGraph, (besselPairHom x s).fst = g := by
-  -- Write `g` as `x⁻¹ g₁ x` in the frame of signs; then `g₁` lowers the flag of the frame.
-  obtain ⟨g₁, hg₁⟩ : ∃ g₁ : 𝔰.G₁, frameEquiv (x⁻¹ * g₁ * x) = g :=
-    ⟨x * frameEquiv.symm g * x⁻¹, by
-      rw [← mul_assoc, ← mul_assoc, inv_mul_cancel, one_mul, inv_mul_cancel_right,
-        frameEquiv.apply_symm_apply]⟩
-  have h_conj : (g₁ : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1 =
-      (x.val * p.matrix).val * ((g : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1) *
-        (x.val * p.matrix)⁻¹.val := by
-    rw [← hg₁]
-    change _ = (x.val * p.matrix).val *
-        (p.matrix⁻¹.val * (x⁻¹.val.val * g₁.val.val * x.val.val) * p.matrix.val - 1) *
-        (x.val * p.matrix)⁻¹.val
-    rw [Matrix.mul_sub, Matrix.sub_mul, Matrix.mul_one, Units.mul_inv]
-    have h_u : (x.val * p.matrix) * (p.matrix⁻¹ * (x⁻¹.val * g₁.val * x.val) * p.matrix) *
-        (x.val * p.matrix)⁻¹ = g₁.val := by
-      rw [_root_.mul_inv_rev, Subgroup.coe_inv]
-      simp only [mul_assoc, mul_inv_cancel_left, mul_inv_cancel, mul_one]
-    have h_l : (x.val * p.matrix).val *
-        (p.matrix⁻¹.val * (x⁻¹.val.val * g₁.val.val * x.val.val) * p.matrix.val) *
-        (x.val * p.matrix)⁻¹.val = g₁.val.val := by
-      simpa only [Units.val_mul] using congrArg Units.val h_u
-    rw [h_l]
-  obtain ⟨σ, N, hN_tri, hN, -⟩ := hg
-  have h_lowers : ((g₁ : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1) * 𝔰.frameCols =
-      𝔰.isotropicCols * N := by
-    rw [h_conj, ← h_frame, ← Matrix.mul_assoc, Units.inv_mul_cancel_right, Matrix.mul_assoc, hN,
-      initCols_eq_of_frame h_frame, Matrix.mul_assoc, ← Matrix.mul_assoc, Units.mul_inv,
-      Matrix.one_mul]
-  obtain ⟨s, hs⟩ : ∃ s : 𝔰.besselGraph, s.val.fst = g₁ := exists_besselGraph_fst_eq hN_tri h_lowers
-  exact ⟨s, by change frameEquiv (x⁻¹ * s.val.fst * x) = g; rw [hs, hg₁]⟩
-
-end Point
-
-/-- The bound `8 n √r M` of `IsPosition.exists_mul_eq_frameCols_and_besselLength_le` at
-`M = (3 B + a) ^ (2 n)` is at most `b ^ (5 n)` when `1 ≤ B`, `3 B + a ≤ b ^ 2` and `8 n r ≤ b`. -/
-lemma mul_sqrt_mul_pow_le_pow {B b : ℝ} {a : ℕ} (hB : 1 ≤ B) (hb : 3 * B + a ≤ b ^ 2)
-    (hb_rank : 8 * 𝔰.n * 𝔰.r ≤ b) :
-    8 * 𝔰.n * (√𝔰.r * (3 * B + a) ^ (2 * 𝔰.ϱ + 2)) ≤ b ^ (5 * 𝔰.n) := by
-  have hr : (1 : ℝ) ≤ 𝔰.r := Nat.one_le_cast.2 Fintype.card_pos
-  have hn : (1 : ℝ) ≤ 𝔰.n := Nat.one_le_cast.2 (Nat.le_add_left 1 𝔰.ϱ)
+      besselLength x ≤ b ^ (5 * 𝔰.n) ∧
+      IsLaplaceDatum l u (besselPairHom x) (τ ∘ Sum.inl) B e
+        (fun s : 𝔰.besselGraph ↦ simpleRootSum s.val.fst - conj (simpleRootSum s.val.fst)) := by
+  have hr_one : (1 : ℝ) ≤ 𝔰.r := Nat.one_le_cast.2 Fintype.card_pos
+  have hn_one : (1 : ℝ) ≤ 𝔰.n := Nat.one_le_cast.2 (Nat.le_add_left 1 𝔰.ϱ)
   have hb_one : 1 ≤ b := by nlinarith
-  have h_sqrt : √(𝔰.r : ℝ) ≤ 𝔰.r :=
-    Real.sqrt_le_iff.2 ⟨zero_le_one.trans hr, le_self_pow₀ hr two_ne_zero⟩
-  have h_pow : (3 * B + a) ^ (2 * 𝔰.ϱ + 2) ≤ (b ^ 2) ^ (2 * 𝔰.ϱ + 2) :=
-    pow_le_pow_left₀ (by linarith [a.cast_nonneg (α := ℝ)]) hb _
-  calc _ ≤ 8 * 𝔰.n * (𝔰.r * (b ^ 2) ^ (2 * 𝔰.ϱ + 2)) :=
-        mul_le_mul_of_nonneg_left
-          (mul_le_mul h_sqrt h_pow (pow_nonneg (by linarith [a.cast_nonneg (α := ℝ)]) _)
-            (zero_le_one.trans hr))
-          (by linarith)
-    _ = 8 * 𝔰.n * 𝔰.r * b ^ (4 * (𝔰.ϱ + 1)) := by
-        rw [← mul_assoc, ← pow_mul]; congr 2; omega
-    _ ≤ b * b ^ (4 * (𝔰.ϱ + 1)) :=
-        mul_le_mul_of_nonneg_right hb_rank (pow_nonneg (zero_le_one.trans hb_one) _)
-    _ ≤ b ^ (5 * 𝔰.n) :=
-        (pow_succ' b _).ge.trans (pow_le_pow_right₀ hb_one (by dsimp only [Shape.n]; omega))
+  -- Shifts `t i = μ_l (e (.inr i)) - a` are strictly decreasing and strictly negative, so
+  -- prepending `0` yields `2 ϱ + 3` strictly decreasing integer nodes.
+  let t (i : Fin (2 * 𝔰.ϱ + 2)) : ℤ := l.lowestKType (e (.inr i)) - a
+  let nodes : Fin (2 * 𝔰.ϱ + 3) → ℤ := Fin.cons 0 t
+  have h_nodes_anti : StrictAnti nodes := by
+    intro i j hij
+    refine Fin.cases (fun j hij ↦ ?_) (fun i' j hij ↦ ?_) i j hij
+    · refine Fin.cases (fun hij ↦ absurd hij (lt_irrefl 0)) (fun j' _ ↦ ?_) j hij
+      simp only [nodes, cons_zero, cons_succ, t]
+      have h_lt : ((l.lowestKType (e (.inr j')) - (a : ℤ) : ℤ) : ℝ) < (0 : ℤ) := by
+        push_cast
+        linarith [(h_steep.weight_mem j').2, (Nat.cast_nonneg a : (0 : ℝ) ≤ a)]
+      exact Int.cast_lt.1 h_lt
+    · refine Fin.cases (fun hij ↦ absurd hij (Fin.not_lt_zero _)) (fun j' hij ↦ ?_) j hij
+      simp only [nodes, cons_succ, t]
+      have h_lt := h_steep.weight_strictAnti (succ_lt_succ_iff.1 hij)
+      dsimp only at h_lt
+      omega
+  obtain ⟨c, hc, h_lagrange⟩ := exists_lagrange_weights h_nodes_anti
+  -- Build the Vandermonde/Lagrange columns `w n` (`n : ℕ`), scaled by `c 0` at `n = 0`.
+  let w (n : ℕ) (i : Fin (2 * 𝔰.ϱ + 2)) : ℝ :=
+    (if n = 0 then c 0 else 1) * (t i : ℝ) ^ n / c i.succ
+  have h_gram_w {n₁ n₂ : ℕ} (hn : n₁.pred + n₂.pred ≤ 2 * 𝔰.ϱ) :
+      ∑ i : Fin (2 * 𝔰.ϱ + 2), (-1 : ℝ) ^ i.val * (w n₁ i * w n₂ i) =
+        if n₁ + n₂ = 0 then 1 else if n₁ + n₂ = 2 * 𝔰.ϱ + 2 then -1 else 0 := by
+    have hn_sum : n₁ + n₂ ≤ 2 * 𝔰.ϱ + 2 := by
+      simp only [Nat.pred_eq_sub_one] at hn
+      omega
+    let P : Polynomial ℝ := Polynomial.X ^ (n₁ + n₂)
+    have hP_deg : P.degree < (2 * 𝔰.ϱ + 3 : ℕ) :=
+      (Polynomial.degree_X_pow (n₁ + n₂)).trans_lt (by norm_cast; omega)
+    have h_res := h_lagrange P hP_deg
+    rw [show 2 * 𝔰.ϱ + 3 - 1 = 2 * 𝔰.ϱ + 2 by omega, Polynomial.coeff_X_pow,
+      Fin.sum_univ_succ] at h_res
+    simp only [P, nodes, cons_zero, cons_succ, Int.cast_zero, Polynomial.eval_pow,
+      Polynomial.eval_X, val_zero, pow_zero, one_mul] at h_res
+    have h_tail : ∑ i : Fin (2 * 𝔰.ϱ + 2),
+        (-1 : ℝ) ^ i.succ.val * ((t i : ℝ) ^ (n₁ + n₂) / c i.succ ^ 2) =
+          -∑ i : Fin (2 * 𝔰.ϱ + 2),
+            (-1 : ℝ) ^ i.val * ((t i : ℝ) ^ (n₁ + n₂) / c i.succ ^ 2) := by
+      rw [← sum_neg_distrib]
+      refine sum_congr rfl fun i _ ↦ ?_
+      rw [val_succ, pow_succ]
+      ring
+    rw [h_tail] at h_res
+    set s₁ : ℝ := if n₁ = 0 then c 0 else 1
+    set s₂ : ℝ := if n₂ = 0 then c 0 else 1
+    have h_scaled := congrArg (s₁ * s₂ * ·) h_res
+    have h_sum_eq : s₁ * s₂ * ∑ i : Fin (2 * 𝔰.ϱ + 2),
+        (-1 : ℝ) ^ i.val * ((t i : ℝ) ^ (n₁ + n₂) / c i.succ ^ 2) =
+          ∑ i : Fin (2 * 𝔰.ϱ + 2), (-1 : ℝ) ^ i.val * (w n₁ i * w n₂ i) := by
+      rw [mul_sum]
+      refine sum_congr rfl fun i _ ↦ ?_
+      simp only [w, pow_add]
+      ring
+    by_cases h0 : n₁ + n₂ = 0
+    · obtain ⟨rfl, rfl⟩ : n₁ = 0 ∧ n₂ = 0 := Nat.add_eq_zero_iff.1 h0
+      have hc0_ne : c 0 ≠ 0 := by linarith [(hc 0).1]
+      have h_ne_top : (2 * 𝔰.ϱ + 2 : ℕ) ≠ 0 := by omega
+      simp only [s₁, s₂, ite_true, add_zero, h_ne_top, ite_false, pow_zero] at h_scaled h_sum_eq
+      rw [ite_eq_left rfl]
+      have h_c0 : c 0 * c 0 * (1 / c 0 ^ 2) = 1 := by field_simp [hc0_ne]
+      linarith [h_scaled, h_sum_eq, h_c0]
+    · rw [ite_eq_right h0]
+      rw [zero_pow h0, zero_div, zero_add] at h_scaled
+      rcases eq_or_ne (n₁ + n₂) (2 * 𝔰.ϱ + 2) with h_top | h_not_top
+      · have hn₁ : n₁ ≠ 0 := by simp only [Nat.pred_eq_sub_one] at hn; omega
+        have hn₂ : n₂ ≠ 0 := by simp only [Nat.pred_eq_sub_one] at hn; omega
+        simp only [s₁, s₂, hn₁, hn₂, ite_false, h_top, ite_true, one_mul] at h_scaled h_sum_eq ⊢
+        linarith [h_scaled, h_sum_eq]
+      · simp only [Ne.symm h_not_top, h_not_top, ite_false, mul_zero] at h_scaled ⊢
+        linarith [h_scaled, h_sum_eq]
+  -- Place `1` on `X` and `w` on `Fin (2 ϱ + 2)`, then map to `G₁` via the unitary sign frame `p`.
+  let C₀ : Matrix (X ⊕ Fin (2 * 𝔰.ϱ + 2)) (X ⊕ ℕ) ℂ :=
+    fromBlocks 1 0 0 (of fun (i : Fin (2 * 𝔰.ϱ + 2)) (n : ℕ) ↦ (w n i : ℂ))
+  let C : Matrix 𝔰.BesselIndex (X ⊕ ℕ) ℂ := C₀.submatrix e.symm id
+  let V : Matrix 𝔰.BesselIndex (X ⊕ ℕ) ℂ := p.matrix.val * C
+  have hV_gram {col₁ col₂ : X ⊕ ℕ}
+      (h_deg : col₁.elim (fun _ ↦ 0) Nat.pred + col₂.elim (fun _ ↦ 0) Nat.pred ≤ 2 * 𝔰.ϱ) :
+      (Vᴴ * 𝔰.J₁ * V) col₁ col₂ =
+        fromBlocks 1 0 0
+          (of fun n₁ n₂ : ℕ ↦
+            if n₁ + n₂ = 0 then (1 : ℂ) else if n₁ + n₂ = 2 * 𝔰.ϱ + 2 then -1 else 0)
+          col₁ col₂ := by
+    have h_eq : Vᴴ * 𝔰.J₁ * V = Cᴴ * signMatrix ε * C := by
+      simp only [V, conjTranspose_mul, Matrix.mul_assoc]
+      rw [← Matrix.mul_assoc p.matrix.valᴴ, ← Matrix.mul_assoc (p.matrix.valᴴ * 𝔰.J₁), p.gram_eq]
+    rw [h_eq, signMatrix, Matrix.mul_apply, ← e.sum_comp, Fintype.sum_sum_type]
+    rcases col₁ with x₁ | n₁ <;> rcases col₂ with x₂ | n₂
+    · simp [C, C₀, mul_diagonal, h_steep.sign_inl, Matrix.one_apply, eq_comm]
+    · simp [C, C₀, mul_diagonal]
+    · simp [C, C₀, mul_diagonal]
+    · have h_real := congrArg Complex.ofReal (h_gram_w (by simpa using h_deg))
+      simp only [ofReal_sum, ofReal_mul, ofReal_pow, ofReal_neg, ofReal_one,
+        apply_ite Complex.ofReal, ofReal_zero] at h_real
+      simp only [C, C₀, mul_diagonal, conjTranspose_apply, submatrix_apply, id_eq,
+        Equiv.symm_apply_apply, fromBlocks_apply₁₂, fromBlocks_apply₂₂, Matrix.zero_apply,
+        of_apply, star_zero, Complex.star_def, conj_ofReal, h_steep.sign_inr, Units.val_one,
+        Units.val_pow_eq_pow_val, Units.val_neg, Int.cast_pow, Int.cast_neg, Int.cast_one,
+        zero_mul, mul_zero, sum_const_zero, zero_add]
+      rw [← h_real]
+      exact sum_congr rfl fun i _ ↦ by ring
+  -- Select the `X₀` columns (`.inl x₀` and `.inr 0`) and the `ϱ + 1` frame columns
+  -- (`.inr (a + 1)`), and match them to the standard basis columns `Y` by Witt's theorem.
+  let f : (X ⊕ Unit) ⊕ Fin (𝔰.ϱ + 1) → X ⊕ ℕ :=
+    Sum.elim (Sum.map id fun _ ↦ 0) fun a ↦ Sum.inr (a.val + 1)
+  let f' : (X ⊕ Unit) ⊕ Fin (𝔰.ϱ + 1) → X ⊕ ℕ :=
+    Sum.elim (Sum.map id fun _ ↦ 0) fun a ↦ Sum.inr (2 * 𝔰.ϱ + 1 - a.val)
+  let Y : Matrix 𝔰.BesselIndex ((X ⊕ Unit) ⊕ Fin (𝔰.ϱ + 1)) ℂ :=
+    inclMatrix ℂ (Sum.elim (𝔰.indexX₀ ∘ τ) 𝔰.besselFrame)
+  have h_frame_ne_X₀ (u₀ : X ⊕ Unit) (a₀ : Fin (𝔰.ϱ + 1)) :
+      𝔰.indexX₀ (τ u₀) ≠ 𝔰.besselFrame a₀ := by
+    simp only [Shape.besselFrame, snoc, Shape.indexX₀, Shape.z]; split_ifs <;> simp
+  have h_frame_inj : Function.Injective 𝔰.besselFrame := fun a₁ a₂ h ↦ by
+    simp only [Shape.besselFrame, snoc, Shape.z] at h
+    split_ifs at h with h₁ h₂ <;> simp at h
+    · exact Fin.ext (by simpa [Fin.ext_iff] using h)
+    · exact Fin.ext (by omega)
+  have hJ_X₀_frame (u₀ : X ⊕ Unit) (a₀ : Fin (𝔰.ϱ + 1)) :
+      𝔰.J₁ (𝔰.indexX₀ (τ u₀)) (𝔰.besselFrame a₀) = 0 := by
+    simp only [Shape.besselFrame, snoc, Shape.indexX₀, Shape.z]
+    split_ifs <;> simp [splitGram, middleGram]
+  have hJ_frame_X₀ (a₀ : Fin (𝔰.ϱ + 1)) (u₀ : X ⊕ Unit) :
+      𝔰.J₁ (𝔰.besselFrame a₀) (𝔰.indexX₀ (τ u₀)) = 0 := by
+    simp only [Shape.besselFrame, snoc, Shape.indexX₀, Shape.z]
+    split_ifs <;> simp [splitGram, middleGram]
+  have hJ_frame_frame (a₁ a₂ : Fin (𝔰.ϱ + 1)) :
+      𝔰.J₁ (𝔰.besselFrame a₁) (𝔰.besselFrame a₂) =
+        if a₁ = last 𝔰.ϱ ∧ a₂ = last 𝔰.ϱ then -1 else 0 := by
+    have h_eq (a : Fin (𝔰.ϱ + 1)) : a = last 𝔰.ϱ ↔ ¬(a.val < 𝔰.ϱ) := by
+      simp only [Fin.ext_iff, val_last]; omega
+    simp only [Shape.besselFrame, snoc, Shape.z, h_eq]
+    split_ifs <;> simp_all [splitGram, middleGram]
+  have hV_inl (u₁ u₂ : X ⊕ Unit) :
+      (Vᴴ * 𝔰.J₁ * V) (f (.inl u₁)) (f (.inl u₂)) = if u₁ = u₂ then 1 else 0 := by
+    rcases u₁ with x₁ | ⟨⟩ <;> rcases u₂ with x₂ | ⟨⟩ <;>
+      rw [hV_gram (by simp [f])] <;> simp [f, Matrix.one_apply]
+  have h_indep_V : HasLeftInv (V.submatrix id f) := by
+    let lev : (X ⊕ Unit) ⊕ Fin (𝔰.ϱ + 1) → ℕ := Sum.elim (fun _ ↦ 0) fun b ↦ b.val + 1
+    let Dsgn : Matrix ((X ⊕ Unit) ⊕ Fin (𝔰.ϱ + 1)) ((X ⊕ Unit) ⊕ Fin (𝔰.ϱ + 1)) ℂ :=
+      diagonal (Sum.elim (1 : X ⊕ Unit → ℂ) (-1))
+    let Z : Matrix ((X ⊕ Unit) ⊕ Fin (𝔰.ϱ + 1)) ((X ⊕ Unit) ⊕ Fin (𝔰.ϱ + 1)) ℂ :=
+      Dsgn * ((V.submatrix id f')ᴴ * 𝔰.J₁ * V.submatrix id f)
+    have hZ_tri : ∀ row col : (X ⊕ Unit) ⊕ Fin (𝔰.ϱ + 1),
+        lev col ≤ lev row → Z row col = (1 : Matrix _ _ ℂ) row col := by
+      intro row col h_le
+      have h_prod : ((V.submatrix id f')ᴴ * 𝔰.J₁ * V.submatrix id f) row col =
+          (Vᴴ * 𝔰.J₁ * V) (f' row) (f col) := by simp [Matrix.mul_apply]
+      dsimp only [Z, Dsgn]
+      rw [diagonal_mul, h_prod]
+      rcases row with u₁ | a₁ <;> rcases col with u₂ | a₂
+      · simpa [f', f, Matrix.one_apply] using hV_inl u₁ u₂
+      · exfalso; simp only [lev, Sum.elim_inl, Sum.elim_inr] at h_le; omega
+      · rcases u₂ with x₂ | ⟨⟩ <;> rw [hV_gram (by simp [f', f])]
+        · simp [f', f]
+        · simp [f', f, show 2 * 𝔰.ϱ + 1 - a₁.val ≠ 0 by omega,
+            show 2 * 𝔰.ϱ + 1 - a₁.val ≠ 2 * 𝔰.ϱ + 2 by omega]
+      · simp only [lev, Sum.elim_inr] at h_le
+        rw [hV_gram (by simp [f', f]; omega)]
+        have h_ne0 : 2 * 𝔰.ϱ + 1 - a₁.val + (a₂.val + 1) ≠ 0 := by omega
+        have h_top_iff : 2 * 𝔰.ϱ + 1 - a₁.val + (a₂.val + 1) = 2 * 𝔰.ϱ + 2 ↔ a₁ = a₂ := by
+          rw [Fin.ext_iff]; omega
+        simp only [Sum.elim_inr, Pi.neg_apply, Pi.one_apply, f', f, fromBlocks_apply₂₂, of_apply,
+          h_ne0, ite_false, h_top_iff]
+        rcases eq_or_ne a₁ a₂ with rfl | hab <;> simp [*]
+    have hZ_unit : IsUnit Z.det := by rw [det_eq_one_of_unitriangular hZ_tri]; exact isUnit_one
+    exact ⟨Z⁻¹ * (Dsgn * ((V.submatrix id f')ᴴ * 𝔰.J₁)),
+      (by simp only [Z, Matrix.mul_assoc] : _ = Z⁻¹ * Z).trans (nonsing_inv_mul Z hZ_unit)⟩
+  have h_indep_Y : HasLeftInv Y := ⟨Yᴴ, by
+    ext (u₁ | a₁) (u₂ | a₂) <;>
+      simp [Y, inclMatrix, Matrix.mul_apply, Matrix.one_apply, h_frame_ne_X₀,
+        (h_frame_ne_X₀ _ _).symm, h_frame_inj.eq_iff, eq_comm]⟩
+  have h_gram_eq : (V.submatrix id f)ᴴ * 𝔰.J₁ * V.submatrix id f = Yᴴ * 𝔰.J₁ * Y := by
+    ext row col
+    have h_lhs : ((V.submatrix id f)ᴴ * 𝔰.J₁ * V.submatrix id f) row col =
+        (Vᴴ * 𝔰.J₁ * V) (f row) (f col) := by simp [Matrix.mul_apply]
+    have h_rhs : (Yᴴ * 𝔰.J₁ * Y) row col =
+        𝔰.J₁ ((Sum.elim (𝔰.indexX₀ ∘ τ) 𝔰.besselFrame) row)
+          ((Sum.elim (𝔰.indexX₀ ∘ τ) 𝔰.besselFrame) col) := by
+      rw [Matrix.mul_assoc, mul_inclMatrix, Matrix.mul_apply]
+      simp [Y, inclMatrix, Matrix.one_apply]
+    rw [h_lhs, h_rhs]
+    rcases row with u₁ | a₁ <;> rcases col with u₂ | a₂
+    · rw [hV_inl u₁ u₂]; simp [splitGram, middleGram, Matrix.one_apply]
+    · rcases u₁ with x₁ | ⟨⟩ <;> rw [hV_gram (by simp [f]; omega)]
+      · simp [f, hJ_X₀_frame]
+      · simp [f, hJ_X₀_frame, show a₂.val ≠ 2 * 𝔰.ϱ + 1 by omega]
+    · rcases u₂ with x₂ | ⟨⟩ <;> rw [hV_gram (by simp [f]; omega)]
+      · simp [f, hJ_frame_X₀]
+      · simp [f, hJ_frame_X₀, show a₁.val ≠ 2 * 𝔰.ϱ + 1 by omega]
+    · rw [hV_gram (by simp [f]; omega)]
+      have h_top_iff : a₁.val + 1 + (a₂.val + 1) = 2 * 𝔰.ϱ + 2 ↔
+          a₁ = last 𝔰.ϱ ∧ a₂ = last 𝔰.ϱ := by simp only [Fin.ext_iff, val_last]; omega
+      simp [f, h_top_iff, hJ_frame_frame]
+  obtain ⟨x, hx⟩ : ∃ x : 𝔰.G₁, x.val.val * V.submatrix id f = Y :=
+    witt ⟨Complex.I, by simp⟩ isHermitian.eq IsHermitianInvolution.isUnit h_indep_V h_indep_Y
+      h_gram_eq
+  let q : GL 𝔰.BesselIndex ℂ := x.val * p.matrix
+  have hq_Y : q.val * C.submatrix id f = Y := by
+    have h_sub : V.submatrix id f = p.matrix.val * C.submatrix id f := by
+      ext i j; simp [V, Matrix.mul_apply]
+    simpa [q, h_sub, Matrix.mul_assoc] using hx
+  have hq_gram : q.valᴴ * 𝔰.J₁ * q.val = signMatrix ε :=
+    gram_mul_of_gram_eq (mem_unitaryGroupOf_iff.1 x.property) p.gram_eq
+  -- Bound `besselLength x` using the dual continuation `V (.inr (k + 1))` (`k ≤ 2 ϱ`).
+  have hx_len : besselLength x ≤ b ^ (5 * 𝔰.n) := by
+    let seq (k : ℕ) : EuclideanSpace ℂ 𝔰.BesselIndex :=
+      WithLp.toLp 2 (p.matrix.val *ᵥ fun i : 𝔰.BesselIndex ↦ C i (.inr (k + 1)))
+    have h_frame_vec (k : Fin (𝔰.ϱ + 1)) : frameVector x k = seq k.val := by
+      have hx_inv : x⁻¹.val.val * x.val.val = 1 := x.val.inv_val
+      have h_inv : x⁻¹.val.val * Y = V.submatrix id f := by
+        rw [← hx, ← Matrix.mul_assoc, hx_inv, Matrix.one_mul]
+      ext i
+      have h_col := congrFun₂ h_inv i (.inr k)
+      have hY_col : (x⁻¹.val.val * Y) i (.inr k) = frameVector x k i := by
+        simpa [frameVector, Y] using congrFun₂ (mul_inclMatrix x⁻¹.val.val
+          (Sum.elim (𝔰.indexX₀ ∘ τ) 𝔰.besselFrame)) i (.inr k)
+      rw [← hY_col, h_col]
+      simp only [seq, V, f, submatrix_apply, id_eq, Sum.elim_inr, mulVec, dotProduct,
+        Matrix.mul_apply]
+    have h_entry_le (k : ℕ) (hk : k ≤ 2 * 𝔰.ϱ) (i : 𝔰.BesselIndex) :
+        ‖C i (.inr (k + 1))‖ ≤ (b ^ 2) ^ (2 * 𝔰.ϱ + 1) := by
+      obtain ⟨x₀ | i₀, rfl⟩ := e.surjective i
+      · simp [C, C₀, show (0 : ℝ) ≤ (b ^ 2) ^ (2 * 𝔰.ϱ + 1) by positivity]
+      · have ht_abs : |(t i₀ : ℝ)| ≤ b ^ 2 := by
+          simp only [t, Int.cast_sub, Int.cast_natCast]
+          exact (abs_le.2 ⟨by linarith [(h_steep.weight_mem i₀).1,
+            (Nat.cast_nonneg a : (0 : ℝ) ≤ a)],
+            by linarith [(h_steep.weight_mem i₀).2,
+              (Nat.cast_nonneg a : (0 : ℝ) ≤ a)]⟩).trans hb
+        have hc_ge : 1 ≤ c i₀.succ := (hc i₀.succ).1
+        have hw_abs : |w (k + 1) i₀| ≤ (b ^ 2) ^ (2 * 𝔰.ϱ + 1) := by
+          simp only [w, Nat.add_eq_zero_iff, one_ne_zero, and_false, ite_false, one_mul, abs_div,
+            abs_pow]
+          calc |(t i₀ : ℝ)| ^ (k + 1) / |c i₀.succ|
+              ≤ |(t i₀ : ℝ)| ^ (k + 1) :=
+                div_le_self (by positivity) (by rwa [abs_of_pos (by linarith)])
+            _ ≤ (b ^ 2) ^ (k + 1) := pow_le_pow_left₀ (abs_nonneg _) ht_abs _
+            _ ≤ (b ^ 2) ^ (2 * 𝔰.ϱ + 1) :=
+                pow_le_pow_right₀ (one_le_pow₀ hb_one) (by omega)
+        simpa [C, C₀] using hw_abs
+    have h_seq_norm (k : ℕ) (hk : k ≤ 2 * 𝔰.ϱ) :
+        ‖seq k‖ ≤ √𝔰.r * (b ^ 2) ^ (2 * 𝔰.ϱ + 1) :=
+      norm_frame_mulVec_le (by positivity) (h_entry_le k hk)
+    have h_seq_dual (k₁ k₂ : ℕ) (hk : k₁ + k₂ ≤ 2 * 𝔰.ϱ) :
+        inner ℂ (seq k₁) (Matrix.toEuclideanLin 𝔰.J₁ (seq k₂)) =
+          if k₁ + k₂ = 2 * 𝔰.ϱ then -1 else 0 := by
+      have h_entry := hV_gram (col₁ := .inr (k₁ + 1)) (col₂ := .inr (k₂ + 1))
+        (by simpa using hk)
+      have h_ne0 : k₁ + 1 + (k₂ + 1) ≠ 0 := by omega
+      have h_top : k₁ + 1 + (k₂ + 1) = 2 * 𝔰.ϱ + 2 ↔ k₁ + k₂ = 2 * 𝔰.ϱ := by omega
+      simp only [fromBlocks_apply₂₂, of_apply, h_ne0, ite_false, h_top] at h_entry
+      have h_col_eq (k : ℕ) : (seq k : 𝔰.BesselIndex → ℂ) = V.col (.inr (k + 1)) := by
+        ext i
+        simp only [seq, V, col_apply, mulVec, dotProduct, Matrix.mul_apply]
+      have h_inner_eq : inner ℂ (seq k₁) (Matrix.toEuclideanLin 𝔰.J₁ (seq k₂)) =
+          (Vᴴ * 𝔰.J₁ * V) (.inr (k₁ + 1)) (.inr (k₂ + 1)) := by
+        change (𝔰.J₁ *ᵥ seq k₂) ⬝ᵥ star (seq k₁ : 𝔰.BesselIndex → ℂ) = _
+        rw [dotProduct_comm, h_col_eq, h_col_eq]
+        exact (congrFun₂ (Matrix.mul_assoc Vᴴ 𝔰.J₁ V) (.inr (k₁ + 1)) (.inr (k₂ + 1))).symm
+      exact h_inner_eq.trans h_entry
+    have hM_one : 1 ≤ √(𝔰.r : ℝ) * (b ^ 2) ^ (2 * 𝔰.ϱ + 1) :=
+      one_le_mul_of_one_le_of_one_le (Real.one_le_sqrt.2 hr_one)
+        (one_le_pow₀ (one_le_pow₀ hb_one))
+    have h_bound := besselLength_le_of_dual (y := x) hM_one seq h_frame_vec h_seq_norm h_seq_dual
+    have h_sqrt_le : √(𝔰.r : ℝ) ≤ 𝔰.r :=
+      Real.sqrt_le_iff.2 ⟨by positivity, le_self_pow₀ hr_one two_ne_zero⟩
+    calc besselLength x
+        ≤ 8 * (𝔰.ϱ + 1 : ℝ) * (√𝔰.r * (b ^ 2) ^ (2 * 𝔰.ϱ + 1)) := h_bound
+      _ ≤ 8 * 𝔰.n * 𝔰.r * (b ^ 2) ^ (2 * 𝔰.ϱ + 1) := by
+          have hn_eq : (𝔰.ϱ + 1 : ℝ) = 𝔰.n := by norm_cast
+          rw [hn_eq, mul_assoc (8 * (𝔰.n : ℝ))]
+          gcongr
+      _ ≤ b * b ^ (4 * 𝔰.ϱ + 2) := by
+          rw [← pow_mul, show 2 * (2 * 𝔰.ϱ + 1) = 4 * 𝔰.ϱ + 2 by ring]
+          gcongr
+      _ ≤ b ^ (5 * 𝔰.n) := by
+          rw [← pow_succ']
+          exact pow_le_pow_right₀ hb_one (by have : 𝔰.n = 𝔰.ϱ + 1 := rfl; omega)
+  -- Verify `IsLaplaceDatum` for `besselPairHom x` via `D = q * diag(μ_l) * q⁻¹`.
+  let D : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ := q.val * intDiagonal l.lowestKType * q⁻¹.val
+  have hD_Y : D * Y = q.val * (intDiagonal l.lowestKType * C.submatrix id f) := by
+    simp only [D, ← hq_Y, Matrix.mul_assoc]
+    rw [← Matrix.mul_assoc q⁻¹.val q.val, Units.inv_mul, Matrix.one_mul]
+  have hY_col (col : (X ⊕ Unit) ⊕ Fin (𝔰.ϱ + 1)) (row : 𝔰.BesselIndex) :
+      (D * Y) row col = D row ((Sum.elim (𝔰.indexX₀ ∘ τ) 𝔰.besselFrame) col) := by
+    simpa [Y] using congrFun₂ (mul_inclMatrix D (Sum.elim (𝔰.indexX₀ ∘ τ) 𝔰.besselFrame)) row col
+  have hC_shift_inl_inl (x₀ : X) (i : 𝔰.BesselIndex) :
+      (intDiagonal l.lowestKType * C.submatrix id f) i (.inl (.inl x₀)) = 0 := by
+    obtain ⟨x₁ | i₀, rfl⟩ := e.surjective i <;>
+      simp [C, C₀, f, diagonal_mul, h_steep.weight_eq_zero]
+  have hC_shift_inl_inr (i : 𝔰.BesselIndex) :
+      (intDiagonal l.lowestKType * C.submatrix id f) i (.inl (.inr ())) =
+        (a : ℂ) * C.submatrix id f i (.inl (.inr ())) +
+          (c 0 : ℂ) * C.submatrix id f i (.inr 0) := by
+    obtain ⟨x₁ | i₀, rfl⟩ := e.surjective i
+    · simp [C, C₀, f, diagonal_mul, h_steep.weight_eq_zero]
+    · have ht_eq : (l.lowestKType (e (.inr i₀)) : ℂ) = (a : ℂ) + (t i₀ : ℂ) := by simp [t]
+      simp only [submatrix_apply, id_eq, diagonal_mul, intDiagonal, ht_eq, C, C₀,
+        Equiv.symm_apply_apply, f, Sum.elim_inl, Sum.map_inr, fromBlocks_apply₂₂, of_apply,
+        Sum.elim_inr, val_zero, zero_add, w, ite_true, pow_zero, mul_one, one_ne_zero, ite_false,
+        one_mul, pow_one]
+      push_cast
+      ring
+  have hC_shift_inr (b₀ : Fin 𝔰.ϱ) (i : 𝔰.BesselIndex) :
+      (intDiagonal l.lowestKType * C.submatrix id f) i (.inr b₀.castSucc) =
+        (a : ℂ) * C.submatrix id f i (.inr b₀.castSucc) +
+          C.submatrix id f i (.inr b₀.succ) := by
+    obtain ⟨x₁ | i₀, rfl⟩ := e.surjective i
+    · simp [C, C₀, f, diagonal_mul, h_steep.weight_eq_zero]
+    · have ht_eq : (l.lowestKType (e (.inr i₀)) : ℂ) = (a : ℂ) + (t i₀ : ℂ) := by simp [t]
+      have h_ne1 : b₀.val + 1 ≠ 0 := by omega
+      simp only [submatrix_apply, id_eq, diagonal_mul, intDiagonal, ht_eq, C, C₀,
+        Equiv.symm_apply_apply, f, Sum.elim_inr, val_castSucc, fromBlocks_apply₂₂, of_apply, w,
+        h_ne1, ite_false, one_mul, val_succ]
+      push_cast
+      ring
+  have hD_on_X (x₀ : X) (row : 𝔰.BesselIndex) : D row (𝔰.indexX₀ (τ (.inl x₀))) = 0 := by
+    have hcol : (D * Y) row (.inl (.inl x₀)) = D row (𝔰.indexX₀ (τ (.inl x₀))) :=
+      hY_col (.inl (.inl x₀)) row
+    rw [← hcol, hD_Y, Matrix.mul_apply]
+    simp [hC_shift_inl_inl]
+  have hD_on_unit (row : 𝔰.BesselIndex) :
+      D row (𝔰.indexX₀ (τ (.inr ()))) =
+        (if row = 𝔰.indexX₀ (τ (.inr ())) then (a : ℂ) else 0) +
+          if row = 𝔰.besselFrame 0 then (c 0 : ℂ) else 0 := by
+    have hcol : (D * Y) row (.inl (.inr ())) = D row (𝔰.indexX₀ (τ (.inr ()))) :=
+      hY_col (.inl (.inr ())) row
+    rw [← hcol, hD_Y]
+    have h_col : (q.val * (intDiagonal l.lowestKType * C.submatrix id f)) row (.inl (.inr ())) =
+        (a : ℂ) * Y row (.inl (.inr ())) + (c 0 : ℂ) * Y row (.inr 0) := by
+      rw [← hq_Y, Matrix.mul_apply, Matrix.mul_apply, Matrix.mul_apply, mul_sum, mul_sum,
+        ← sum_add_distrib]
+      exact sum_congr rfl fun i _ ↦ by rw [hC_shift_inl_inr i]; ring
+    rw [h_col]
+    congr 1
+    · by_cases h1 : row = 𝔰.indexX₀ (τ (.inr ())) <;> simp [Y, inclMatrix, Matrix.one_apply, h1]
+    · by_cases h2 : row = 𝔰.besselFrame 0 <;> simp [Y, inclMatrix, Matrix.one_apply, h2]
+  have hD_on_iso (b₀ : Fin 𝔰.ϱ) (row : 𝔰.BesselIndex) :
+      D row (.inl b₀) =
+        (if row = .inl b₀ then (a : ℂ) else 0) +
+          if row = 𝔰.besselFrame b₀.succ then 1 else 0 := by
+    have h_frame_cast : 𝔰.besselFrame b₀.castSucc = .inl b₀ := by simp [Shape.besselFrame, snoc]
+    have hcol : (D * Y) row (.inr b₀.castSucc) = D row (𝔰.besselFrame b₀.castSucc) :=
+      hY_col (.inr b₀.castSucc) row
+    rw [← h_frame_cast, ← hcol, hD_Y]
+    have h_col : (q.val * (intDiagonal l.lowestKType * C.submatrix id f)) row (.inr b₀.castSucc) =
+        (a : ℂ) * Y row (.inr b₀.castSucc) + Y row (.inr b₀.succ) := by
+      rw [← hq_Y, Matrix.mul_apply, Matrix.mul_apply, Matrix.mul_apply, mul_sum,
+        ← sum_add_distrib]
+      exact sum_congr rfl fun i _ ↦ by rw [hC_shift_inr b₀ i]; ring
+    rw [h_col, h_frame_cast]
+    congr 1
+    by_cases h1 : row = .inl b₀ <;> simp [Y, inclMatrix, Matrix.one_apply, h_frame_cast, h1]
+  have hD_adj : 𝔰.J₁ * D = Dᴴ * 𝔰.J₁ := by
+    have hq_inv_gram : q⁻¹.valᴴ * signMatrix ε * q⁻¹.val = 𝔰.J₁ := gram_inv_of_gram_eq hq_gram
+    have h_comm : signMatrix ε * intDiagonal l.lowestKType =
+        (intDiagonal l.lowestKType)ᴴ * signMatrix ε := by
+      simp [signMatrix, diagonal_conjTranspose, mul_comm]
+    calc 𝔰.J₁ * D
+        = (q⁻¹.valᴴ * signMatrix ε * q⁻¹.val) * (q.val * intDiagonal l.lowestKType * q⁻¹.val) := by
+          rw [hq_inv_gram]
+      _ = q⁻¹.valᴴ * (signMatrix ε * intDiagonal l.lowestKType) * q⁻¹.val := by
+          simp only [Matrix.mul_assoc]
+          rw [← Matrix.mul_assoc q⁻¹.val q.val, Units.inv_mul, Matrix.one_mul]
+      _ = q⁻¹.valᴴ * (intDiagonal l.lowestKType)ᴴ * (q.valᴴ * 𝔰.J₁ * q.val) * q⁻¹.val := by
+          rw [h_comm, hq_gram]
+          simp only [Matrix.mul_assoc]
+      _ = Dᴴ * 𝔰.J₁ := by
+          simp only [D, conjTranspose_mul, Matrix.mul_assoc]
+          rw [Units.mul_inv, Matrix.mul_one]
+  have hD_eStar (b₀ : Fin 𝔰.ϱ) (col : 𝔰.BesselIndex) :
+      D (eStar b₀) col =
+        (if col = eStar b₀ then (a : ℂ) else 0) + 𝔰.J₁ (𝔰.besselFrame b₀.succ) col := by
+    have h_lhs : (𝔰.J₁ * D) (.inl b₀) col = D (eStar b₀) col := by
+      rw [Matrix.mul_apply, sum_eq_single (eStar b₀)]
+      · simp
+      · intro k _ hk
+        rcases k with b₁ | (m₁ | b₁) <;> simp [eStar] at hk ⊢
+        omega
+      · exact fun h_abs ↦ absurd (mem_univ _) h_abs
+    rw [← h_lhs, hD_adj, Matrix.mul_apply]
+    simp only [conjTranspose_apply, hD_on_iso b₀, star_add, apply_ite star, star_natCast,
+      star_zero, star_one, add_mul, sum_add_distrib]
+    congr 1
+    · rw [sum_eq_single (.inl b₀)]
+      · rcases col with b₁ | (m₁ | b₁) <;> simp [eStar, eq_comm]
+      · exact fun k _ hk ↦ by simp [hk]
+      · exact fun h_abs ↦ absurd (mem_univ _) h_abs
+    · rw [sum_eq_single (𝔰.besselFrame b₀.succ)]
+      · simp
+      · exact fun k _ hk ↦ by simp [hk]
+      · exact fun h_abs ↦ absurd (mem_univ _) h_abs
+  -- Subtracting `besselCharMatrix` removes all sub-level entries of `D`.
+  have hD_char_tri :
+      (D - besselCharMatrix (𝔰.middleGram (1 : ℂ))).BlockTriangular BesselIndex.level := by
+    intro row col h_lt
+    have h_ne : row ≠ col := ne_of_apply_ne BesselIndex.level h_lt.ne'
+    rcases col with b₀ | (m₀ | b₀)
+    · rw [Matrix.sub_apply, hD_on_iso b₀ row, ite_eq_right h_ne]
+      have h_gram_zero (b' : Fin 𝔰.ϱ) :
+          (𝔰.middleGram (1 : ℂ)).splitGram (𝔰.besselFrame b'.succ) (.inl b₀) = 0 := by
+        simp only [Shape.besselFrame, snoc, Shape.z]
+        split_ifs <;> simp [splitGram, Floors.hyperbolicGram]
+      simp only [besselCharMatrix, of_apply, sum_add_distrib, h_gram_zero, ite_self, sum_const_zero,
+        add_zero]
+      simp [eq_comm]
+    · rcases row with b₁ | (m₁ | b₁) <;>
+        try (simp only [BesselIndex.level, Sum.elim_inl, Sum.elim_inr] at h_lt; omega)
+      change (D - besselCharMatrix (𝔰.middleGram (1 : ℂ))) (eStar b₁) (.inr (.inl m₀)) = 0
+      rw [Matrix.sub_apply, hD_eStar b₁]
+      simp [besselCharMatrix, eStar]
+    · rcases row with b₁ | (m₁ | b₁) <;>
+        try (simp only [BesselIndex.level, Sum.elim_inl, Sum.elim_inr] at h_lt; omega)
+      change (D - besselCharMatrix (𝔰.middleGram (1 : ℂ))) (eStar b₁) (eStar b₀) = 0
+      rw [Matrix.sub_apply, hD_eStar b₁, ite_eq_right h_ne.symm]
+      simp [besselCharMatrix, eStar]
+  have h_embedH_sub_one (k : U (1 : Matrix 𝔰.κ 𝔰.κ ℂ)) :
+      (embedH k : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1 =
+        inclMatrix ℂ 𝔰.indexX₀ * ((k : Matrix 𝔰.κ 𝔰.κ ℂ) - 1) * (inclMatrix ℂ 𝔰.indexX₀)ᴴ := by
+    ext (b₁ | ((k₁ | ⟨⟩) | b₁)) (b₂ | ((k₂ | ⟨⟩) | b₂)) <;>
+      simp [val_toBesselH_apply_coe, inclMatrix, Matrix.mul_apply, Matrix.one_apply]
+  refine ⟨x, hx_len,
+    { toIsSteep := h_steep
+      phase_eq := fun s ↦ ?_
+      trace_eq := fun s ↦ ?_
+      phase_mul := fun s₁ s₂ ↦ ?_
+      re_phase_eq_zero := fun s ↦ by simp
+      sign_weight_right := fun x₀ ↦ ⟨rfl, by simp [ha]⟩
+      weight_nonneg_and_le := fun i _ ↦ ⟨by simp [ha]; split_ifs <;> positivity,
+        fun h_impossible ↦ absurd rfl h_impossible⟩
+      exists_diagonal := fun u₀ hu₀ ↦ ?_ }⟩
+  · -- Phase identity: `tr (D (g - 1)) - tr (μ_u (h - 1)) = tr (besselCharMatrix (g - embedH h))`.
+    have h_tr_fst : (intDiagonal l.lowestKType * (subOnePair (besselPairHom x) s).fst).trace =
+        (D * ((s.val.fst : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1)).trace := by
+      rw [subOnePair_besselPairHom_fst]
+      change (intDiagonal l.lowestKType *
+        (q⁻¹.val * ((s.val.fst : Matrix _ _ ℂ) - 1) * q.val)).trace = _
+      rw [← Matrix.mul_assoc (intDiagonal l.lowestKType), trace_mul_cycle,
+        ← Matrix.mul_assoc (q.val * intDiagonal l.lowestKType)]
+    have h_D_indexX₀ : (inclMatrix ℂ 𝔰.indexX₀)ᴴ * D * inclMatrix ℂ 𝔰.indexX₀ =
+        intDiagonal u.lowestKType := by
+      have h_ne_frame (k₀ : 𝔰.κ) : 𝔰.indexX₀ k₀ ≠ 𝔰.besselFrame 0 := by
+        simpa using h_frame_ne_X₀ (τ.symm k₀) 0
+      ext k₁ k₂
+      have h_entry : ((inclMatrix ℂ 𝔰.indexX₀)ᴴ * D * inclMatrix ℂ 𝔰.indexX₀) k₁ k₂ =
+          D (𝔰.indexX₀ k₁) (𝔰.indexX₀ k₂) := by
+        rw [Matrix.mul_assoc, mul_inclMatrix, Matrix.mul_apply]
+        simp [inclMatrix, Matrix.one_apply]
+      rw [h_entry]
+      obtain ⟨x₁ | ⟨⟩, rfl⟩ := τ.surjective k₁ <;> obtain ⟨x₂ | ⟨⟩, rfl⟩ := τ.surjective k₂ <;>
+        simp [hD_on_X, hD_on_unit, ha, h_ne_frame, diagonal_apply]
+    have h_tr_embedH :
+        (D * ((embedH s.val.snd : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1)).trace =
+          (intDiagonal u.lowestKType * ((s.val.snd : Matrix 𝔰.κ 𝔰.κ ℂ) - 1)).trace := by
+      rw [h_embedH_sub_one, ← Matrix.mul_assoc D, trace_mul_cycle D,
+        ← Matrix.mul_assoc ((inclMatrix ℂ 𝔰.indexX₀)ᴴ * D), h_D_indexX₀]
+    have h_char_diff :
+        (besselCharMatrix (𝔰.middleGram (1 : ℂ)) *
+          ((s.val.fst : Matrix _ _ ℂ) - (embedH s.val.snd : Matrix _ _ ℂ))).trace =
+          simpleRootSum s.val.fst - conj (simpleRootSum s.val.fst) := by
+      rw [Matrix.mul_sub, trace_sub, trace_besselCharMatrix_mul s.val.fst,
+        trace_besselCharMatrix_mul (embedH s.val.snd),
+        Filling.simpleRootSum_inv s.val.fst (besselGraph_fst_mem_besselS s),
+        simpleRootSum_eq_zero_of_mem_besselH (toBesselH_mem s.val.snd),
+        Filling.simpleRootSum_inv (embedH s.val.snd) (𝔰.embedH_mem_besselS s.val.snd),
+        simpleRootSum_eq_zero_of_mem_besselH (toBesselH_mem s.val.snd)]
+      simp [sub_eq_add_neg]
+    have h_zero := besselGraph_trace_mul_sub_eq_zero s hD_char_tri
+    have h_sub_id : ((s.val.fst : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1) -
+        ((embedH s.val.snd : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1) =
+        (s.val.fst : Matrix _ _ ℂ) - (embedH s.val.snd : Matrix _ _ ℂ) := by abel
+    rw [HCParam.phase, h_tr_fst, subOnePair_besselPairHom_snd, ← h_tr_embedH, ← trace_sub,
+      ← Matrix.mul_sub, h_sub_id]
+    rw [Matrix.sub_mul, trace_sub, sub_eq_zero] at h_zero
+    rw [h_zero, h_char_diff]
+  · -- Trace equality: apply `besselGraph_trace_mul_sub_eq_zero` to `M = 1`.
+    rw [subOnePair_besselPairHom_fst, subOnePair_besselPairHom_snd]
+    change (q⁻¹.val * ((s.val.fst : Matrix _ _ ℂ) - 1) * q.val).trace = _
+    rw [trace_mul_cycle, Units.mul_inv, Matrix.one_mul]
+    have h_zero := besselGraph_trace_mul_sub_eq_zero s blockTriangular_one
+    rw [Matrix.one_mul] at h_zero
+    have h_inc_iso : (inclMatrix ℂ 𝔰.indexX₀)ᴴ * inclMatrix ℂ 𝔰.indexX₀ = 1 := by
+      ext k₁ k₂; simp [inclMatrix, Matrix.mul_apply, Matrix.one_apply, eq_comm]
+    have h_embed : ((embedH s.val.snd : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1).trace =
+        ((s.val.snd : Matrix 𝔰.κ 𝔰.κ ℂ) - 1).trace := by
+      rw [h_embedH_sub_one, trace_mul_cycle, h_inc_iso, Matrix.one_mul]
+    rw [← h_embed, ← sub_eq_zero, ← trace_sub]
+    simpa [sub_sub_sub_cancel_right] using h_zero
+  · -- Additivity of `simpleRootSum - conj simpleRootSum` on `besselGraph`.
+    have h_mul := simpleRootSum_mul (besselGraph_fst_mem_besselS s₁)
+      (besselGraph_fst_mem_besselS s₂)
+    change simpleRootSum (s₁.val.fst * s₂.val.fst) -
+      conj (simpleRootSum (s₁.val.fst * s₂.val.fst)) = _
+    rw [h_mul, map_add]
+    ring
+  · -- Diagonal copy of `U(X)`.
+    obtain ⟨k₀, hk₀⟩ := exists_unitary_sub_one_eq_inclMatrix (ε := (1 : 𝔰.κ → ℤˣ)) τ
+      (fun _ ↦ rfl) (mem_unitaryGroup_iff'.1 hu₀)
+    have h1 : signMatrix (1 : 𝔰.κ → ℤˣ) = (1 : Matrix 𝔰.κ 𝔰.κ ℂ) := by simp [signMatrix]
+    let k : U (1 : Matrix 𝔰.κ 𝔰.κ ℂ) := ⟨k₀.val, h1 ▸ k₀.property⟩
+    let s₀ : 𝔰.besselGraph := 𝔰.besselGraphChart (1, k)
+    have hs₀_fst : s₀.val.fst = embedH k := by simp [s₀]
+    have hs₀_snd : (s₀.val.snd : Matrix 𝔰.κ 𝔰.κ ℂ) = (k₀ : Matrix 𝔰.κ 𝔰.κ ℂ) := rfl
+    refine ⟨s₀, ?_⟩
+    rw [Prod.ext_iff, subOnePair_besselPairHom_fst, subOnePair_besselPairHom_snd, hs₀_snd, hk₀]
+    refine ⟨?_, rfl⟩
+    change q⁻¹.val * ((s₀.val.fst : Matrix _ _ ℂ) - 1) * q.val = _
+    rw [hs₀_fst, h_embedH_sub_one k]
+    have hk_val : (k : Matrix 𝔰.κ 𝔰.κ ℂ) - 1 =
+        inclMatrix ℂ (τ ∘ Sum.inl) * (u₀ - 1) * (inclMatrix ℂ (τ ∘ Sum.inl))ᴴ := hk₀
+    have h_comp_inc : inclMatrix ℂ 𝔰.indexX₀ * inclMatrix ℂ (τ ∘ Sum.inl) =
+        inclMatrix ℂ (𝔰.indexX₀ ∘ τ ∘ Sum.inl) := by
+      ext row x₀; simp [inclMatrix, Matrix.mul_apply, Matrix.one_apply]
+    have h_embed_inc : inclMatrix ℂ 𝔰.indexX₀ * ((k : Matrix 𝔰.κ 𝔰.κ ℂ) - 1) *
+        (inclMatrix ℂ 𝔰.indexX₀)ᴴ =
+          inclMatrix ℂ (𝔰.indexX₀ ∘ τ ∘ Sum.inl) * (u₀ - 1) *
+            (inclMatrix ℂ (𝔰.indexX₀ ∘ τ ∘ Sum.inl))ᴴ := by
+      rw [hk_val, ← Matrix.mul_assoc (inclMatrix ℂ 𝔰.indexX₀),
+        ← Matrix.mul_assoc (inclMatrix ℂ 𝔰.indexX₀), h_comp_inc, Matrix.mul_assoc,
+        ← conjTranspose_mul, h_comp_inc, Matrix.mul_assoc]
+    have hq_inc : q.val * inclMatrix ℂ (e ∘ Sum.inl) =
+        inclMatrix ℂ (𝔰.indexX₀ ∘ τ ∘ Sum.inl) := by
+      ext row x₀
+      have h_col := congrFun₂ hq_Y row (.inl (.inl x₀))
+      have hC_col (i : 𝔰.BesselIndex) :
+          C.submatrix id f i (.inl (.inl x₀)) = inclMatrix ℂ (e ∘ Sum.inl) i x₀ := by
+        obtain ⟨x₁ | i₁, rfl⟩ := e.surjective i <;>
+          simp [C, C₀, f, inclMatrix, Matrix.one_apply]
+      rw [Matrix.mul_apply]
+      simp_rw [← hC_col]
+      rw [← Matrix.mul_apply, h_col]
+      by_cases h1 : row = 𝔰.indexX₀ (τ (.inl x₀)) <;>
+        simp [Y, inclMatrix, Matrix.one_apply, h1]
+    have hq_inv_inc : q⁻¹.val * inclMatrix ℂ (𝔰.indexX₀ ∘ τ ∘ Sum.inl) =
+        inclMatrix ℂ (e ∘ Sum.inl) := by
+      rw [← hq_inc, ← Matrix.mul_assoc, Units.inv_mul, Matrix.one_mul]
+    have h_inc_q : (inclMatrix ℂ (𝔰.indexX₀ ∘ τ ∘ Sum.inl))ᴴ * q.val =
+        (inclMatrix ℂ (e ∘ Sum.inl))ᴴ := by
+      have hJ_inc : (inclMatrix ℂ (𝔰.indexX₀ ∘ τ ∘ Sum.inl))ᴴ * 𝔰.J₁ =
+          (inclMatrix ℂ (𝔰.indexX₀ ∘ τ ∘ Sum.inl))ᴴ := by
+        ext x₀ (b₂ | ((k₂ | ⟨⟩) | b₂)) <;>
+          simp [inclMatrix, splitGram, middleGram, Matrix.mul_apply, Matrix.one_apply, eq_comm]
+      have hsgn_inc : (inclMatrix ℂ (e ∘ Sum.inl))ᴴ * signMatrix ε =
+          (inclMatrix ℂ (e ∘ Sum.inl))ᴴ := by
+        ext x₀ col
+        rw [signMatrix, mul_diagonal]
+        rcases eq_or_ne col (e (.inl x₀)) with rfl | hne
+        · simp [inclMatrix, h_steep.sign_inl]
+        · simp [inclMatrix, hne]
+      calc (inclMatrix ℂ (𝔰.indexX₀ ∘ τ ∘ Sum.inl))ᴴ * q.val
+          = (q.val * inclMatrix ℂ (e ∘ Sum.inl))ᴴ * 𝔰.J₁ * q.val := by rw [← hJ_inc, ← hq_inc]
+        _ = (inclMatrix ℂ (e ∘ Sum.inl))ᴴ * (q.valᴴ * 𝔰.J₁ * q.val) := by simp [Matrix.mul_assoc]
+        _ = (inclMatrix ℂ (e ∘ Sum.inl))ᴴ := by rw [hq_gram, hsgn_inc]
+    calc q⁻¹.val * (inclMatrix ℂ 𝔰.indexX₀ * ((k : Matrix 𝔰.κ 𝔰.κ ℂ) - 1) *
+            (inclMatrix ℂ 𝔰.indexX₀)ᴴ) * q.val
+        = q⁻¹.val * (inclMatrix ℂ (𝔰.indexX₀ ∘ τ ∘ Sum.inl) * (u₀ - 1) *
+            (inclMatrix ℂ (𝔰.indexX₀ ∘ τ ∘ Sum.inl))ᴴ) * q.val := by rw [h_embed_inc]
+      _ = (q⁻¹.val * inclMatrix ℂ (𝔰.indexX₀ ∘ τ ∘ Sum.inl)) * (u₀ - 1) *
+            ((inclMatrix ℂ (𝔰.indexX₀ ∘ τ ∘ Sum.inl))ᴴ * q.val) := by
+          simp only [Matrix.mul_assoc]
+      _ = inclMatrix ℂ (e ∘ Sum.inl) * (u₀ - 1) * (inclMatrix ℂ (e ∘ Sum.inl))ᴴ := by
+          rw [hq_inv_inc, h_inc_q]
 
 /-- Split the coordinates of `G₁` into `X` and `2 n` more (by `e`), and those of `H` into `X` and
 one more (by `τ`). Let the parameter `l` of `U(ε)` be steep with bound `B ≥ 1` (its lowest `K`-type
@@ -605,55 +882,34 @@ theorem IsSteep.exists_stationary_point {X : Type} [Fintype X] {l : HCParam ε}
   have : IsFiniteMeasureOnCompacts 𝔰.besselGraphMeasure :=
     𝔰.besselGraphMeasure_finiteOnCompacts
   have : Nonempty 𝔰.κ := ⟨τ (Sum.inr ())⟩
-  -- The stationary position with `n` vectors, where the weight of `u` lies in `[0, a]`; there are
-  -- `2 n` coordinates of `G₁` and one coordinate of `H` outside `X`.
-  let e' : X ⊕ Fin 1 ≃ 𝔰.κ := ((Equiv.refl X).sumCongr finOneEquiv).trans τ
-  have hX_sign (y : X) : (1 : 𝔰.κ → ℤˣ) (e' (Sum.inl y)) = 1 := Pi.one_apply _
-  have hX_zero (y : X) : u.lowestKType (e' (Sum.inl y)) = 0 := by
-    simp only [e', ha, Equiv.trans_apply, Equiv.sumCongr_apply, Equiv.refl_apply, Sum.map_inl,
-      EmbeddingLike.apply_eq_iff_eq, reduceCtorEq, ↓reduceIte]
-  obtain ⟨v, i₀, hP, h_norm, -, -, h_pow_le⟩ :=
-    h_steep.exists_isStationary (k := u) (e' := e') (d := 𝔰.ϱ) (B' := a) hB (by omega) hX_sign
-      hX_zero (fun j ↦ by simp only [Fin.eq_zero j, Fin.val_zero, pow_zero, Pi.one_apply])
-      (Subsingleton.strictMono _) a.cast_nonneg
-      (fun j ↦ by
-        simp only [e', ha, Equiv.trans_apply, Equiv.sumCongr_apply, Sum.map_inr,
-          Subsingleton.elim (finOneEquiv j) (), ↓reduceIte, Int.cast_natCast, Set.mem_Icc,
-          a.cast_nonneg, le_rfl, and_self])
-  -- The point: with `μ` the weight of the lowest `K`-type of `l` as a diagonal matrix, the vectors
-  -- `μ ^ c v₁` continue `v₁, …, v_n`.
-  have h_one_le : 1 ≤ 3 * B + a := by linarith [a.cast_nonneg (α := ℝ)]
-  rw [pow_one] at h_norm
-  obtain ⟨x, h_isometry, h_frame, h_len⟩ : ∃ x : 𝔰.G₁,
-      (x.val * p.matrix).val * i₀ = 𝔰.definiteCols ∧ (x.val * p.matrix).val * v = 𝔰.frameCols ∧
-        besselLength x ≤ 8 * 𝔰.n * (√𝔰.r * (3 * B + a) ^ (2 * 𝔰.ϱ + 2)) :=
-    hP.exists_mul_eq_frameCols_and_besselLength_le h_norm (one_le_pow₀ h_one_le)
-      hP.pow_mulVec_col_zero h_pow_le fun c c' hc ↦ by rw [hP.gram_pow_mulVec hc, h_norm]
-  refine ⟨x, h_len.trans (mul_sqrt_mul_pow_le_pow hB hb hb_rank), ?_⟩
-  -- The group of the position is `x⁻¹ R x`. The period over it bounds the volume of the set where
-  -- both components have norm at most `β + 1`.
-  let Large : Set 𝔰.besselGraph := {s : 𝔰.besselGraph |
-    ‖((besselPairHom (ε := ε) x s).fst : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ)‖ ≤ β + 1 ∧
-      ‖((besselPairHom (ε := ε) x s).snd : Matrix 𝔰.κ 𝔰.κ ℂ)‖ ≤ β + 1}
-  have h_period : 𝔰.besselGraphMeasure Large ≤ ENNReal.ofReal (β ^ (20 * (𝔰.r + 𝔰.k) ^ 2) *
-      ‖∫ s : 𝔰.besselGraph, l.laplaceIntegrand u (besselPairHom x)
-        (fun s' : 𝔰.besselGraph ↦ simpleRootSum s'.val.fst - conj (simpleRootSum s'.val.fst)) s
-        ∂𝔰.besselGraphMeasure‖) :=
-    hP.period_lower_bound_of_surjective h_steep hB hX_sign hX_zero
-      (fun i ↦ by rw [ha]; split_ifs; exacts [Int.natCast_nonneg a, le_rfl])
-      (fun _ _ h ↦ (h rfl).elim) hl hu hL hK hβ h_rank h_excess 𝔰.besselGraphMeasure
-      (isProperMap_besselPairHom_fst x) (fun _ ↦ exists_besselPairHom_fst_eq h_frame)
-      (lowersFlag_besselPairHom · h_frame) (inducesOn_besselPairHom · h_isometry h_frame)
-  -- This set contains the unit ball, as `H` is compact.
+  -- Build the stationary point `x` directly from the Lagrange/Vandermonde frame on the `2 n`
+  -- coordinates of `G₁` and one coordinate of `H` outside `X`, with `besselLength x ≤ b ^ (5 n)`
+  -- and `besselPairHom x` satisfying `IsLaplaceDatum` for the Bessel character phase.
+  obtain ⟨x, hx_len, h_datum⟩ :=
+    h_steep.exists_isLaplaceDatum_besselPairHom τ ha hB hb hb_rank
+  -- The first component `s ↦ x⁻¹ s x` of `besselPairHom x` is proper and the second component
+  -- `s ↦ h` is continuous, so `IsLaplaceDatum.laplace_method` bounds the volume of the set where
+  -- both components have norm at most `β + 1` by `β ^ (20 (r + k)²) * ‖period‖`.
+  have hj_cont : Continuous fun s : 𝔰.besselGraph ↦ (besselPairHom (ε := ε) x s).snd := by
+    simp only [continuous_U_iff_matrix, besselPairHom_snd_val]
+    exact Units.continuous_val.comp (continuous_subtypeVal.comp
+      (continuous_snd.comp continuous_subtypeVal))
+  obtain ⟨-, h_period⟩ := h_datum.laplace_method 𝔰.besselGraphMeasure
+    (isProperMap_besselPairHom_fst x) hj_cont hl hu hB hL hK hβ h_rank h_excess
+  -- The unit ball `{‖x⁻¹ s x - 1‖ ≤ 1}` lies in `{‖x⁻¹ s x‖ ≤ β + 1 ∧ ‖h‖ ≤ β + 1}`, as `H` is
+  -- compact (`‖h‖ = 1`).
   have hβ_one : 1 ≤ β := le_trans (by norm_num) hβ
   have h_ball : {s : 𝔰.besselGraph | ‖(subOnePair (besselPairHom (ε := ε) x) s).fst‖ ≤ 1} ⊆
-      Large := by
+      {s : 𝔰.besselGraph |
+        ‖((besselPairHom (ε := ε) x s).fst : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ)‖ ≤ β + 1 ∧
+          ‖((besselPairHom (ε := ε) x s).snd : Matrix 𝔰.κ 𝔰.κ ℂ)‖ ≤ β + 1} := by
     refine fun s hs ↦ ⟨(norm_le_insert' _ 1).trans (add_le_add (norm_one.trans_le hβ_one) hs), ?_⟩
     rw [besselPairHom_snd_val, CStarRing.norm_of_mem_unitary (U_one_mem_unitaryGroup s.val.snd)]
     linarith
-  exact ENNReal.toReal_le_of_le_ofReal
-    (mul_nonneg (pow_nonneg (zero_le_one.trans hβ_one) _) (norm_nonneg _))
-    ((measure_mono h_ball).trans h_period)
+  exact ⟨x, hx_len,
+    ENNReal.toReal_le_of_le_ofReal
+      (mul_nonneg (pow_nonneg (zero_le_one.trans hβ_one) _) (norm_nonneg _))
+      ((measure_mono h_ball).trans h_period)⟩
 
 end DiscreteSeries
 

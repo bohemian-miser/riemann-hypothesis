@@ -2,12 +2,14 @@ module
 
 import Mathlib.Algebra.Order.Star.Real
 import Mathlib.Analysis.Complex.ExponentialBounds
+public import Mathlib.LinearAlgebra.Lagrange
 import Mathlib.Topology.Algebra.Group.Matrix
 public import New.Appendix.DiscreteSeries.Localization
 public import Lib.Adelic.Unitary.ComponentsAndBlockSums
 import Lib.DiscreteSeries.FlenstedJensen.PsiKTypes
 import Lib.DiscreteSeries.FlenstedJensen.SquareIntegrability
 import Lib.DiscreteSeries.Haar.TotalMass
+public import Lib.General.LinearAlgebra.BlockEmbeddings
 import New.Appendix.DiscreteSeries.GaussianShape
 
 /-!
@@ -23,8 +25,16 @@ the dimensions and the entries of the parameters.
 * The values of `θ` lie in a cone about the positive real axis, up to an exponentially small error
   (`IsLaplaceDatum.norm_laplaceIntegrand_le_mul_re_add`). With the decay of the coefficients, `θ` is
   integrable and the volume of a large ball is at most a power of `β` times `‖∫ θ‖`
-  (`IsLaplaceDatum.laplace_method`). The file `PositionGroup` applies this to the group of a
-  stationary position.
+  (`IsLaplaceDatum.laplace_method`).
+* `exists_lagrange_weights`: Lagrange interpolation weights `c k ≥ 1` for strictly decreasing
+  integer nodes, used both here for codimension-1 restriction and in
+  `New.Spanning.Bessel.LargeFunction` for the Bessel period.
+* `IsSteep.exists_isLaplaceDatum_restriction` and
+  `IsSteep.exists_volume_le_mul_norm_integral_dsCoeff`:
+  for steep parameters `l` on `U(ε)` and `-l'` on `U(ε ⊕ 1)` (with `M` even), an explicit signed
+  Cauchy matrix `ω ∈ U(ε ⊕ 1)` built from Lagrange weights makes `j g = (g, ω⁻¹ (g ⊕ 1) ω)` satisfy
+  `IsLaplaceDatum` directly with zero phase, bounding the restriction pairing from below via
+  `IsLaplaceDatum.laplace_method`.
 
 Notions from other files:
 * `USign ε` is the unitary group `U(ε)` of the diagonal form with signs `ε`, and
@@ -550,3 +560,506 @@ theorem IsLaplaceDatum.laplace_method [TopologicalSpace S] [BorelSpace S]
 end New.DiscreteSeries
 
 end LaplaceMethod
+
+/-!
+## Lagrange interpolation weights and codimension-one restriction
+
+For strictly decreasing integer nodes `x 0 > x 1 > … > x (N - 1)`, the derivative of the nodal
+polynomial `∏ j, (X - x j)` at `x k` has sign `(-1) ^ k` and modulus at least `1`. Writing its
+modulus as `c k ^ 2` with `c k ≥ 1` turns Lagrange's residue formula for the coefficient of
+`X ^ (N - 1)` into an alternating sum of values divided by `c k ^ 2`.
+
+Applied to the `(M + 1) + M` non-zero lowest-`K`-type weights of two steep parameters `l` on `U(ε)`
+and `-l'` on `U(ε ⊕ 1)` (with `M` even), those weights assemble directly into a signed Cauchy
+matrix `ω ∈ U(ε ⊕ 1)` of controlled norm such that `(intDiagonal l.lowestKType ⊕ 0) * ω` and
+`ω * intDiagonal l'.lowestKType` differ on the first `n` rows only by a multiple of the last row of
+`ω`. Hence `j g = (g, ω⁻¹ (g ⊕ 1) ω)` satisfies `IsLaplaceDatum` directly with phase `0`, without
+passing through any auxiliary flag-lowering subgroup.
+-/
+
+section RestrictionPeriod
+
+open Polynomial Finset Lagrange Matrix Complex MeasureTheory ComplexConjugate New.HCParam
+
+namespace New.DiscreteSeries
+
+/-- **Lagrange interpolation weights for decreasing integer nodes.** Given strictly decreasing
+integers `x 0 > x 1 > … > x (N - 1)`, there are real weights `c k ≥ 1` with
+`c k ^ 2 = (-1) ^ k * ∏_{j ≠ k} (x k - x j)` such that every real polynomial `P` of degree below
+`N` has `(N - 1)`-st coefficient `∑ k, (-1) ^ k * (P.eval (x k) / c k ^ 2)`. -/
+lemma exists_lagrange_weights {N : ℕ} {x : Fin N → ℤ} (hx : StrictAnti x) :
+    ∃ c : Fin N → ℝ,
+      (∀ k : Fin N, 1 ≤ c k ∧ c k ^ 2 = (-1) ^ k.val * ∏ j ∈ univ.erase k, (x k - x j : ℝ)) ∧
+      ∀ P : ℝ[X], P.degree < N →
+        P.coeff (N - 1) = ∑ k : Fin N, (-1) ^ k.val * (P.eval (x k : ℝ) / c k ^ 2) := by
+  have h_prod_int (k : Fin N) : 1 ≤ (-1 : ℤ) ^ k.val * ∏ j ∈ univ.erase k, (x k - x j) := by
+    -- Factors with `j > k` are positive (`x k - x j ≥ 1`), and the `k` factors with `j < k`
+    -- contribute `(-1) ^ k` times positive differences `x j - x k ≥ 1`.
+    have h_split : (-1 : ℤ) ^ k.val * ∏ j ∈ univ.erase k, (x k - x j) =
+        (∏ j ∈ Ioi k, (x k - x j)) * ∏ j ∈ Iio k, (x j - x k) := by
+      rw [← compl_singleton, ← Ioi_disjUnion_Iio, prod_disjUnion (disjoint_Ioi_Iio k),
+        ← Fin.card_Iio, mul_left_comm, ← prod_neg]
+      simp_rw [neg_sub]
+    rw [h_split]
+    exact one_le_mul_of_one_le_of_one_le
+      (one_le_prod₀ fun j hj ↦ Int.sub_pos.2 (hx (mem_Ioi.1 hj)))
+      (one_le_prod₀ fun j hj ↦ Int.sub_pos.2 (hx (mem_Iio.1 hj)))
+  have h_prod (k : Fin N) : 1 ≤ (-1 : ℝ) ^ k.val * ∏ j ∈ univ.erase k, (x k - x j : ℝ) := by
+    exact_mod_cast h_prod_int k
+  let c (k : Fin N) : ℝ := √((-1 : ℝ) ^ k.val * ∏ j ∈ univ.erase k, (x k - x j : ℝ))
+  have hc (k : Fin N) : 1 ≤ c k ∧ c k ^ 2 = (-1) ^ k.val * ∏ j ∈ univ.erase k, (x k - x j : ℝ) :=
+    ⟨Real.one_le_sqrt.2 (h_prod k), Real.sq_sqrt (zero_le_one.trans (h_prod k))⟩
+  refine ⟨c, hc, fun P hP ↦ ?_⟩
+  have h_inj : Set.InjOn (fun k : Fin N ↦ (x k : ℝ)) (univ : Finset (Fin N)) :=
+    (Int.cast_injective.comp hx.injective).injOn
+  have h_eq := coeff_eq_sum h_inj (by simpa only [Finset.card_fin] using hP)
+  rw [Finset.card_fin] at h_eq
+  rw [h_eq]
+  refine sum_congr rfl fun k _ ↦ ?_
+  rw [(hc k).2, ← mul_div_assoc, mul_div_mul_left _ _ (pow_ne_zero _ (by norm_num))]
+
+/-- If `x : Fin N → ℤ` is strictly decreasing with `|x i - x j| ≤ D` (`1 ≤ D`) and `c y ^ 2` equals
+`|∏_{z ≠ y} (x y - x z)|`, then for any injective index map `g : ι → Fin N` and `s : Finset ι`,
+`((∏ j ∈ s, (x y - x (g j))) / c y) ^ 2 ≤ D ^ #s`. Either `y` occurs in `g '' s` and the product
+vanishes, or `s.map ⟨g, hg⟩ ⊆ univ.erase y` and all remaining integer differences in `c y ^ 2` have
+modulus at least `1`. -/
+lemma sq_prod_sub_div_le_pow {N : ℕ} {ι : Type*} [DecidableEq ι] {x : Fin N → ℤ} {c : Fin N → ℝ}
+    {D : ℝ} (hx : StrictAnti x) (hD_one : 1 ≤ D) (hD : ∀ i j : Fin N, |(x i - x j : ℝ)| ≤ D)
+    (hc : ∀ y : Fin N, 1 ≤ c y ∧ c y ^ 2 = (-1) ^ y.val * ∏ z ∈ univ.erase y, (x y - x z : ℝ))
+    {g : ι → Fin N} (hg : Function.Injective g) (s : Finset ι) (y : Fin N) :
+    ((∏ j ∈ s, (x y - x (g j) : ℝ)) / c y) ^ 2 ≤ D ^ #s := by
+  by_cases hy : ∃ j ∈ s, g j = y
+  · obtain ⟨j, hj, rfl⟩ := hy
+    rw [prod_eq_zero hj (sub_self _), zero_div, sq, mul_zero]
+    positivity
+  · push Not at hy
+    have h_sub : s.map ⟨g, hg⟩ ⊆ univ.erase y := fun z hz ↦ by
+      obtain ⟨j, hj, rfl⟩ := mem_map.1 hz
+      exact mem_erase.2 ⟨hy j hj, mem_univ _⟩
+    have h_one_le (z : Fin N) (hz : z ∈ univ.erase y) : 1 ≤ |(x y - x z : ℝ)| := by
+      have hne : y ≠ z := (mem_erase.1 hz).1.symm
+      exact_mod_cast Int.one_le_abs (sub_ne_zero.2 (hx.injective.ne hne))
+    have hc_abs : c y ^ 2 = ∏ z ∈ univ.erase y, |(x y - x z : ℝ)| :=
+      calc c y ^ 2 = |c y ^ 2| := (abs_of_nonneg (sq_nonneg _)).symm
+        _ = |(-1 : ℝ) ^ y.val * ∏ z ∈ univ.erase y, (x y - x z : ℝ)| := by rw [(hc y).2]
+        _ = ∏ z ∈ univ.erase y, |(x y - x z : ℝ)| := by simp [abs_mul, abs_prod]
+    have h_le_cy : ∏ j ∈ s, |(x y - x (g j) : ℝ)| ≤ c y ^ 2 := by
+      rw [hc_abs, ← prod_sdiff h_sub, prod_map s ⟨g, hg⟩ fun z ↦ |(x y - x z : ℝ)|]
+      exact le_mul_of_one_le_left (prod_nonneg fun _ _ ↦ abs_nonneg _)
+        (one_le_prod₀ fun z hz ↦ h_one_le z (sdiff_subset hz))
+    have h_le_D : ∏ j ∈ s, |(x y - x (g j) : ℝ)| ≤ D ^ #s :=
+      (prod_le_prod₀ (fun _ _ ↦ abs_nonneg _) fun j _ ↦ hD y (g j)).trans_eq (prod_const D)
+    have hc_pos : 0 < c y ^ 2 := by linarith [(hc y).1, sq_nonneg (c y - 1)]
+    rw [div_pow, ← sq_abs (∏ j ∈ s, _), abs_prod, div_le_iff₀ hc_pos]
+    calc (∏ j ∈ s, |(x y - x (g j) : ℝ)|) ^ 2
+        = (∏ j ∈ s, |(x y - x (g j) : ℝ)|) * ∏ j ∈ s, |(x y - x (g j) : ℝ)| := sq _
+      _ ≤ D ^ #s * c y ^ 2 := mul_le_mul h_le_D h_le_cy (prod_nonneg fun _ _ ↦ abs_nonneg _)
+          (pow_nonneg (zero_le_one.trans hD_one) _)
+
+/-- **Direct Laplace datum for codimension-one restriction.** Let `l` on `U(ε)` and `-l'` on
+`U(ε ⊕ 1)` satisfy `IsSteep` with respect to `B ≥ 1` and coordinate splittings `e : X ⊕ Fin M ≃ n`
+and `e' : X ⊕ Fin (M + 1) ≃ n ⊕ Unit`, where `M` is even and `l'` has distinct entries (`HasGap`).
+Then there is a signed Cauchy matrix `ω ∈ U(ε ⊕ 1)` with entries bounded in norm by
+`(6 B) ^ (M + 1)` such that `j g = (g, ω⁻¹ (g ⊕ 1) ω)` satisfies
+`IsLaplaceDatum l l' j (e' ∘ Sum.inl) B e 0` with zero phase. -/
+lemma IsSteep.exists_isLaplaceDatum_restriction {n X : Type} [Fintype n] [DecidableEq n]
+    [Fintype X] [DecidableEq X] {ε : n → ℤˣ} {B : ℝ} {h M : ℕ} {l : HCParam ε}
+    {l' : HCParam (Sum.elim ε (1 : Unit → ℤˣ))} {e : X ⊕ Fin M ≃ n}
+    {e' : X ⊕ Fin (M + 1) ≃ n ⊕ Unit} (hM : Even M) (h_steep : IsSteep l B e)
+    (h_steep' : IsSteep (-l') B e') (hl'_gap : l'.HasGap h) (hB : 1 ≤ B) :
+    ∃ ω : USign (Sum.elim ε (1 : Unit → ℤˣ)),
+      let j : USign ε →* USign ε × USign (Sum.elim ε (1 : Unit → ℤˣ)) :=
+        (MonoidHom.id (USign ε)).prod ((MulAut.conj ω).symm.toMonoidHom.comp (U.inl ε 1))
+      (∀ i j : n ⊕ Unit, ‖(ω : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ) i j‖ ≤ (6 * B) ^ (M + 1)) ∧
+      IsLaplaceDatum l l' j (e' ∘ Sum.inl) B e 0 ∧
+      ∀ g : USign ε, (subOnePair j g).2 =
+        (↑ω⁻¹ : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ) *
+          fromBlocks ((g : Matrix n n ℂ) - 1) 0 0 0 * (ω : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ) := by
+  have h_ktype' : (-l').lowestKType = -l'.lowestKType := lowestKType_neg hl'_gap
+  -- Concatenate the `M + 1` positive weights of `l'` (in decreasing order) with the `M` negative
+  -- weights of `l`.
+  let x : Fin ((M + 1) + M) → ℤ :=
+    Fin.append (fun a : Fin (M + 1) ↦ l'.lowestKType (e' (.inr a.rev)))
+      (fun k : Fin M ↦ l.lowestKType (e (.inr k)))
+  have hx_pos (a : Fin (M + 1)) : (l'.lowestKType (e' (.inr a)) : ℝ) ∈ Set.Icc B (3 * B) := by
+    have h_mem := h_steep'.weight_mem a
+    rw [h_ktype', Pi.neg_apply, Int.cast_neg] at h_mem
+    exact ⟨by linarith [h_mem.2], by linarith [h_mem.1]⟩
+  have hx_anti_left : StrictAnti fun a : Fin (M + 1) ↦ l'.lowestKType (e' (.inr a.rev)) := by
+    intro a₁ a₂ ha
+    have h_lt : (-l').lowestKType (e' (.inr a₁.rev)) < (-l').lowestKType (e' (.inr a₂.rev)) :=
+      h_steep'.weight_strictAnti (Fin.rev_lt_rev.2 ha)
+    rw [h_ktype', Pi.neg_apply, Pi.neg_apply] at h_lt
+    linarith
+  have hx : StrictAnti x := by
+    rw [StrictAnti, Fin.forall_fin_add]
+    refine ⟨fun a₁ ↦ ?_, fun k₁ ↦ ?_⟩
+    · rw [Fin.forall_fin_add]
+      refine ⟨fun a₂ hij ↦ ?_, fun k₂ _ ↦ ?_⟩
+      · simp only [x, Fin.append_left]
+        exact hx_anti_left (Fin.lt_def.2 (by simpa only [Fin.lt_def, Fin.val_castAdd] using hij))
+      · simp only [x, Fin.append_left, Fin.append_right]
+        exact_mod_cast (by linarith [(h_steep.weight_mem k₂).2, (hx_pos a₁.rev).1] :
+          (l.lowestKType (e (.inr k₂)) : ℝ) < l'.lowestKType (e' (.inr a₁.rev)))
+    · rw [Fin.forall_fin_add]
+      refine ⟨fun a₂ hij ↦ ?_, fun k₂ hij ↦ ?_⟩
+      · exfalso
+        simp only [Fin.lt_def, Fin.val_natAdd, Fin.val_castAdd] at hij
+        omega
+      · simp only [x, Fin.append_right]
+        exact h_steep.weight_strictAnti
+          (Fin.lt_def.2 (by simp only [Fin.lt_def, Fin.val_natAdd] at hij; omega))
+  have hx_abs : ∀ y : Fin ((M + 1) + M), |(x y : ℝ)| ≤ 3 * B := by
+    rw [Fin.forall_fin_add]
+    exact ⟨fun a ↦ by
+      simp only [x, Fin.append_left]
+      exact abs_le.2 ⟨by linarith [(hx_pos a.rev).1], (hx_pos a.rev).2⟩, fun k ↦ by
+      simp only [x, Fin.append_right]
+      exact abs_le.2
+        ⟨by linarith [(h_steep.weight_mem k).1], by linarith [(h_steep.weight_mem k).2]⟩⟩
+  have hx_diff (y z : Fin ((M + 1) + M)) : |(x y - x z : ℝ)| ≤ 6 * B :=
+    (abs_sub _ _).trans (by linarith [hx_abs y, hx_abs z])
+  obtain ⟨c, hc, h_lagrange⟩ := exists_lagrange_weights hx
+  -- Build the Cauchy entries `R` and the bottom row `d` from the Lagrange weights `c`.
+  let d (a : Fin (M + 1)) : ℝ :=
+    (-1) ^ a.val * ((∏ k : Fin M, (x (Fin.castAdd M a) - x (Fin.natAdd (M + 1) k) : ℝ)) /
+      c (Fin.castAdd M a))
+  let R (y : Fin ((M + 1) + M)) (a : Fin (M + 1)) : ℝ :=
+    d a * ((∏ b ∈ univ.erase a, (x y - x (Fin.castAdd M b) : ℝ)) / c y)
+  have hR_cast (a b : Fin (M + 1)) : R (Fin.castAdd M b) a = if a = b then 1 else 0 := by
+    rcases eq_or_ne a b with rfl | hab
+    · rw [ite_eq_left rfl]
+      have h_split : ∏ z ∈ univ.erase (Fin.castAdd M a), (x (Fin.castAdd M a) - x z : ℝ) =
+          (∏ b' ∈ univ.erase a, (x (Fin.castAdd M a) - x (Fin.castAdd M b') : ℝ)) *
+            ∏ k : Fin M, (x (Fin.castAdd M a) - x (Fin.natAdd (M + 1) k) : ℝ) := by
+        simp only [← filter_ne', prod_filter]
+        rw [Fin.prod_univ_add]
+        congr 1
+        · exact prod_congr rfl fun b' _ ↦ by simp
+        · exact prod_congr rfl fun k _ ↦ by
+            simp [show Fin.natAdd (M + 1) k ≠ Fin.castAdd M a by
+              simp only [ne_eq, Fin.ext_iff, Fin.val_natAdd, Fin.val_castAdd]; omega]
+      have hc_sq : c (Fin.castAdd M a) ^ 2 =
+          (-1) ^ a.val * ∏ z ∈ univ.erase (Fin.castAdd M a), (x (Fin.castAdd M a) - x z : ℝ) := by
+        simpa [Fin.val_castAdd] using (hc (Fin.castAdd M a)).2
+      rw [show R (Fin.castAdd M a) a = ((-1) ^ a.val *
+            ((∏ b' ∈ univ.erase a, (x (Fin.castAdd M a) - x (Fin.castAdd M b') : ℝ)) *
+              ∏ k : Fin M, (x (Fin.castAdd M a) - x (Fin.natAdd (M + 1) k) : ℝ))) /
+            c (Fin.castAdd M a) ^ 2 by simp only [R, d]; ring,
+        ← h_split, ← hc_sq, div_self (pow_ne_zero 2 (by linarith [(hc (Fin.castAdd M a)).1]))]
+    · simp only [ite_eq_right hab, R]
+      rw [prod_eq_zero (mem_erase.2 ⟨hab.symm, mem_univ b⟩) (sub_self _), zero_div, mul_zero]
+  -- By Lagrange's formula on a monic product of degree `2 M = (M + 1) + M - 1`, the columns of `R`
+  -- satisfy the signed orthogonality relation; since `M` is even, the signs match `ε ⊕ 1`.
+  have hR_gram (b₁ b₂ : Fin (M + 1)) :
+      (∑ k : Fin M, (-1 : ℝ) ^ k.val * (R (Fin.natAdd (M + 1) k) b₁ *
+        R (Fin.natAdd (M + 1) k) b₂)) + d b₁ * d b₂ =
+        if b₁ = b₂ then (-1) ^ b₁.val else 0 := by
+    let P₁ : ℝ[X] := nodal (univ.erase b₁) fun b : Fin (M + 1) ↦ (x (Fin.castAdd M b) : ℝ)
+    let P₂ : ℝ[X] := nodal (univ.erase b₂) fun b : Fin (M + 1) ↦ (x (Fin.castAdd M b) : ℝ)
+    have hP_deg : (P₁ * P₂).natDegree = 2 * M := by
+      rw [nodal_monic.natDegree_mul nodal_monic, natDegree_nodal, natDegree_nodal,
+        card_erase_of_mem (mem_univ b₁), card_erase_of_mem (mem_univ b₂), Finset.card_fin,
+        add_tsub_cancel_right, two_mul]
+    have h_coeff : (P₁ * P₂).coeff ((M + 1) + M - 1) = 1 := by
+      rw [show (M + 1) + M - 1 = (P₁ * P₂).natDegree by omega,
+        (nodal_monic.mul nodal_monic).coeff_natDegree]
+    have h_res := congrArg (d b₁ * d b₂ * ·) (h_coeff.symm.trans (h_lagrange (P₁ * P₂)
+      (degree_le_natDegree.trans_lt (by rw [hP_deg]; norm_cast; omega))))
+    rw [mul_one, mul_sum, sum_congr rfl fun y _ ↦ (by
+        simp only [P₁, P₂, eval_mul, eval_nodal, R]; ring :
+          d b₁ * d b₂ * ((-1) ^ y.val * ((P₁ * P₂).eval (x y : ℝ) / c y ^ 2)) =
+            (-1) ^ y.val * (R y b₁ * R y b₂)), Fin.sum_univ_add] at h_res
+    have h_first : ∑ b : Fin (M + 1), (-1 : ℝ) ^ (Fin.castAdd M b).val *
+        (R (Fin.castAdd M b) b₁ * R (Fin.castAdd M b) b₂) =
+          if b₁ = b₂ then (-1) ^ b₁.val else 0 := by
+      simp only [Fin.val_castAdd, hR_cast]
+      rcases eq_or_ne b₁ b₂ with rfl | hb
+      · simp
+      · simp only [hb, ↓reduceIte]
+        exact sum_eq_zero fun b _ ↦ by rcases eq_or_ne b₁ b with rfl | h₁ <;> simp [*, hb.symm]
+    have h_second : ∑ k : Fin M, (-1 : ℝ) ^ (Fin.natAdd (M + 1) k).val *
+        (R (Fin.natAdd (M + 1) k) b₁ * R (Fin.natAdd (M + 1) k) b₂) =
+          -∑ k : Fin M, (-1 : ℝ) ^ k.val *
+            (R (Fin.natAdd (M + 1) k) b₁ * R (Fin.natAdd (M + 1) k) b₂) := by
+      rw [← sum_neg_distrib]
+      exact sum_congr rfl fun k _ ↦ by
+        rw [Fin.val_natAdd, pow_add, pow_add, hM.neg_one_pow]; ring
+    linarith [h_res, h_first, h_second]
+  -- Assemble `ω` on `n ⊕ Unit` by placing `1` on `X`, the Cauchy block `R` on
+  -- `Fin M × Fin (M + 1)`, and `d` in the extra row `Unit`.
+  let f : (X ⊕ Fin M) ⊕ Unit ≃ n ⊕ Unit := e.sumCongr (Equiv.refl Unit)
+  let W₀ : Matrix ((X ⊕ Fin M) ⊕ Unit) (X ⊕ Fin (M + 1)) ℂ :=
+    fromRows
+      (fromBlocks 1 0 0 (of fun (k : Fin M) (a : Fin (M + 1)) ↦
+        (R (Fin.natAdd (M + 1) k) a.rev : ℂ)))
+      (of fun (_ : Unit) (col : X ⊕ Fin (M + 1)) ↦
+        col.elim 0 fun a : Fin (M + 1) ↦ (d a.rev : ℂ))
+  let W : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ := Matrix.reindex f e' W₀
+  have hW_gram : Wᴴ * signMatrix (Sum.elim ε (1 : Unit → ℤˣ)) * W =
+      signMatrix (Sum.elim ε (1 : Unit → ℤˣ)) := by
+    ext i₁ i₂
+    obtain ⟨x₁ | a₁, rfl⟩ := e'.surjective i₁ <;> obtain ⟨x₂ | a₂, rfl⟩ := e'.surjective i₂ <;>
+      rw [signMatrix, Matrix.mul_apply, ← f.sum_comp, Fintype.sum_sum_type, Fintype.sum_sum_type]
+    · simp [W, W₀, f, mul_diagonal, diagonal_apply, h_steep.sign_inl, h_steep'.sign_inl,
+        Matrix.one_apply, eq_comm]
+    · simp [W, W₀, f, mul_diagonal]
+    · simp [W, W₀, f, mul_diagonal]
+    · rw [Fintype.sum_unique (ι := Unit)]
+      have h_rev_sign : (-1 : ℝ) ^ a₁.rev.val = (-1 : ℝ) ^ a₁.val :=
+        mul_right_cancel₀ (pow_ne_zero a₁.val (by norm_num : (-1 : ℝ) ≠ 0)) (by
+          rw [← pow_add, Fin.rev_add_cast, hM.neg_one_pow, ← pow_add, ← two_mul, pow_mul,
+            neg_one_sq, one_pow])
+      have h_col := congrArg Complex.ofReal (hR_gram a₁.rev a₂.rev)
+      simp only [Fin.rev_inj, h_rev_sign, ofReal_add, ofReal_sum, ofReal_mul, ofReal_pow,
+        ofReal_neg, ofReal_one, apply_ite Complex.ofReal, ofReal_zero] at h_col
+      simp only [mul_diagonal, conjTranspose_apply, W, reindex_apply, submatrix_apply,
+        Equiv.symm_apply_apply]
+      simp only [W₀, f, Equiv.sumCongr_apply, Equiv.refl_apply, Sum.map_inl, Sum.map_inr,
+        Sum.elim_inl, Sum.elim_inr, h_steep.sign_inr, Pi.one_apply, Units.val_one,
+        Units.val_pow_eq_pow_val, Units.val_neg, Int.cast_one, Int.cast_pow, Int.cast_neg,
+        fromRows_apply_inl, fromRows_apply_inr, fromBlocks_apply₁₂, fromBlocks_apply₂₂,
+        Matrix.zero_apply, of_apply, star_zero, Complex.star_def, conj_ofReal, zero_mul, mul_zero,
+        sum_const_zero, zero_add, diagonal_apply, e'.injective.eq_iff, Sum.inr.injEq,
+        h_steep'.sign_inr]
+      rw [← h_col]
+      exact congrArg₂ (· + ·) (sum_congr rfl fun k _ ↦ by ring) (by ring)
+  let ω : USign (Sum.elim ε (1 : Unit → ℤˣ)) := U.of IsHermitianInvolution.isUnit W hW_gram
+  have hω_val : (ω : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ) = W := rfl
+  have h_inv_W : (↑ω⁻¹ : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ) * W = 1 := ω.val.inv_val
+  have hW_inv : W * (↑ω⁻¹ : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ) = 1 := ω.val.val_inv
+  -- Bound the entries of `ω` by `(6 B) ^ (M + 1)` using `sq_prod_sub_div_le_pow`.
+  have h6B : 1 ≤ 6 * B := by linarith
+  have hd_sq (a : Fin (M + 1)) : d a ^ 2 ≤ (6 * B) ^ M := by
+    have h_sq := sq_prod_sub_div_le_pow hx h6B hx_diff hc (Fin.natAdd_injective M (M + 1))
+      univ (Fin.castAdd M a)
+    have h_sign : ((-1 : ℝ) ^ a.val) ^ 2 = 1 := by rw [← pow_mul, mul_comm]; simp
+    simpa [d, mul_pow, h_sign, Finset.card_fin] using h_sq
+  have hd_le (a : Fin (M + 1)) : |d a| ≤ (6 * B) ^ (M + 1) :=
+    abs_le_of_sq_le_sq ((hd_sq a).trans ((pow_le_pow_right₀ h6B (Nat.le_succ M)).trans
+      (le_self_pow₀ (one_le_pow₀ h6B) two_ne_zero))) (by positivity)
+  have hR_le (k : Fin M) (a : Fin (M + 1)) : |R (Fin.natAdd (M + 1) k) a| ≤ (6 * B) ^ (M + 1) := by
+    have h_fac := sq_prod_sub_div_le_pow hx h6B hx_diff hc (Fin.castAdd_injective (M + 1) M)
+      (univ.erase a) (Fin.natAdd (M + 1) k)
+    rw [card_erase_of_mem (mem_univ a), Finset.card_fin, add_tsub_cancel_right] at h_fac
+    refine abs_le_of_sq_le_sq ?_ (by positivity)
+    rw [show R (Fin.natAdd (M + 1) k) a ^ 2 = d a ^ 2 * _ ^ 2 from mul_pow _ _ 2]
+    exact (mul_le_mul (hd_sq a) h_fac (sq_nonneg _) (by positivity)).trans
+      ((sq ((6 * B) ^ M)).symm.trans_le (pow_le_pow_left₀ (by positivity)
+        (pow_le_pow_right₀ h6B (Nat.le_succ M)) 2))
+  have hW_entry (i j : n ⊕ Unit) : ‖W i j‖ ≤ (6 * B) ^ (M + 1) := by
+    obtain ⟨(x₁ | k₁) | ⟨⟩, rfl⟩ := f.surjective i <;> obtain ⟨x₂ | a₂, rfl⟩ := e'.surjective j <;>
+      simp only [W, W₀, reindex_apply, submatrix_apply, Equiv.symm_apply_apply, fromRows_apply_inl,
+        fromRows_apply_inr, fromBlocks_apply₁₁, fromBlocks_apply₁₂, fromBlocks_apply₂₁,
+        fromBlocks_apply₂₂, Matrix.one_apply, Matrix.zero_apply, of_apply, Sum.elim_inl,
+        Sum.elim_inr, Pi.zero_apply]
+    · split_ifs <;> simp [one_le_pow₀ h6B, pow_nonneg (zero_le_one.trans h6B)]
+    · simp [pow_nonneg (zero_le_one.trans h6B)]
+    · simp [pow_nonneg (zero_le_one.trans h6B)]
+    · simpa using hR_le k₁ a₂.rev
+    · simp [pow_nonneg (zero_le_one.trans h6B)]
+    · simpa using hd_le a₂.rev
+  let j : USign ε →* USign ε × USign (Sum.elim ε (1 : Unit → ℤˣ)) :=
+    (MonoidHom.id (USign ε)).prod ((MulAut.conj ω).symm.toMonoidHom.comp (U.inl ε 1))
+  have hj_snd (g : USign ε) : (subOnePair j g).2 =
+      (↑ω⁻¹ : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ) *
+        fromBlocks ((g : Matrix n n ℂ) - 1) 0 0 0 * W := by
+    have h_inl : (U.inl ε (1 : Unit → ℤˣ) g : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ) - 1 =
+        fromBlocks ((g : Matrix n n ℂ) - 1) 0 0 0 := by
+      ext (a | a) (b | b) <;> simp [Matrix.one_apply]
+    calc ((ω⁻¹ * U.inl ε 1 g * ω : USign (Sum.elim ε 1)) : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ) - 1
+        = (↑ω⁻¹ : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ) *
+            (U.inl ε (1 : Unit → ℤˣ) g : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ) * W -
+            (↑ω⁻¹ : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ) * W := by
+          rw [h_inv_W]; rfl
+      _ = (↑ω⁻¹ : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ) *
+            ((U.inl ε (1 : Unit → ℤˣ) g : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ) - 1) * W := by
+          rw [Matrix.mul_sub, Matrix.sub_mul, Matrix.mul_one]
+      _ = _ := by rw [h_inl]
+  -- On the first `n` rows, `W * diag(μ_{l'})` equals `diag(μ_l) * W` plus a rank-one term along
+  -- the bottom row of `W`. Multiplying by `ω⁻¹` on the right shows that the upper-left `n × n`
+  -- block of `W * diag(μ_{l'}) * ω⁻¹` is `diag(μ_l)`, so the two phases cancel identically.
+  have hl'_zero (x₀ : X) : l'.lowestKType (e' (.inl x₀)) = 0 := by
+    have hz := h_steep'.weight_eq_zero x₀
+    rw [h_ktype', Pi.neg_apply, neg_eq_zero] at hz
+    exact hz
+  let v (i : n) : ℂ :=
+    (e.symm i).elim 0 fun k : Fin M ↦
+      -(((∏ b : Fin (M + 1), (x (Fin.natAdd (M + 1) k) - x (Fin.castAdd M b) : ℝ)) /
+        c (Fin.natAdd (M + 1) k) : ℝ) : ℂ)
+  have h_comm_top : (W * intDiagonal l'.lowestKType).submatrix Sum.inl id =
+      fromCols (intDiagonal l.lowestKType) (replicateCol Unit v) * W := by
+    ext i col
+    rw [submatrix_apply, id_eq, mul_diagonal, Matrix.mul_apply, Fintype.sum_sum_type,
+      sum_eq_single i
+        (fun i' _ hi' ↦ by simp [fromCols_apply_inl, diagonal_apply_ne' _ hi'])
+        (fun h_abs ↦ absurd (mem_univ _) h_abs),
+      Fintype.sum_unique]
+    obtain ⟨x₁ | k₁, rfl⟩ := e.surjective i <;> obtain ⟨x₂ | a₂, rfl⟩ := e'.surjective col
+    · simp [W, W₀, f, v, h_steep.weight_eq_zero, hl'_zero]
+    · simp [W, W₀, f, v, h_steep.weight_eq_zero]
+    · simp [W, W₀, f, v, hl'_zero]
+    · have h_prod_era : (x (Fin.natAdd (M + 1) k₁) - x (Fin.castAdd M a₂.rev) : ℝ) *
+          ∏ b ∈ univ.erase a₂.rev, (x (Fin.natAdd (M + 1) k₁) - x (Fin.castAdd M b) : ℝ) =
+            ∏ b : Fin (M + 1), (x (Fin.natAdd (M + 1) k₁) - x (Fin.castAdd M b) : ℝ) :=
+        mul_prod_erase univ (fun b : Fin (M + 1) ↦
+          (x (Fin.natAdd (M + 1) k₁) - x (Fin.castAdd M b) : ℝ)) (mem_univ a₂.rev)
+      have h_cauchy : R (Fin.natAdd (M + 1) k₁) a₂.rev * (x (Fin.castAdd M a₂.rev) : ℝ) =
+          (x (Fin.natAdd (M + 1) k₁) : ℝ) * R (Fin.natAdd (M + 1) k₁) a₂.rev -
+            ((∏ b : Fin (M + 1), (x (Fin.natAdd (M + 1) k₁) - x (Fin.castAdd M b) : ℝ)) /
+              c (Fin.natAdd (M + 1) k₁)) * d a₂.rev := by
+        simp only [R, ← h_prod_era]
+        ring
+      have h_lhs : W (Sum.inl (e (.inr k₁))) (e' (.inr a₂)) =
+          (R (Fin.natAdd (M + 1) k₁) a₂.rev : ℂ) := by simp [W, W₀, f]
+      have h_bot : W (Sum.inr ()) (e' (.inr a₂)) = (d a₂.rev : ℂ) := by simp [W, W₀, f]
+      rw [h_lhs, h_bot, show l'.lowestKType (e' (.inr a₂)) = x (Fin.castAdd M a₂.rev) by simp [x],
+        fromCols_apply_inl, intDiagonal, diagonal_apply_eq,
+        show l.lowestKType (e (.inr k₁)) = x (Fin.natAdd (M + 1) k₁) by simp [x],
+        fromCols_apply_inr, replicateCol_apply]
+      simpa [v, sub_eq_add_neg] using congrArg Complex.ofReal h_cauchy
+  have h_upper_block :
+      (W * intDiagonal l'.lowestKType * (↑ω⁻¹ : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ)).submatrix
+        Sum.inl Sum.inl = intDiagonal l.lowestKType := by
+    have h_rows :
+        (W * intDiagonal l'.lowestKType * (↑ω⁻¹ : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ)).submatrix
+          Sum.inl id = fromCols (intDiagonal l.lowestKType) (replicateCol Unit v) :=
+      calc (W * intDiagonal l'.lowestKType * (↑ω⁻¹ : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ)).submatrix
+            Sum.inl id
+          = (W * intDiagonal l'.lowestKType).submatrix Sum.inl id *
+              (↑ω⁻¹ : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ) := rfl
+        _ = fromCols (intDiagonal l.lowestKType) (replicateCol Unit v) *
+              (W * (↑ω⁻¹ : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ)) := by rw [h_comm_top, Matrix.mul_assoc]
+        _ = fromCols (intDiagonal l.lowestKType) (replicateCol Unit v) := by
+            rw [hW_inv, Matrix.mul_one]
+    ext i₁ i₂
+    exact congrFun₂ h_rows i₁ (Sum.inl i₂)
+  refine ⟨ω, hW_entry,
+    { toIsSteep := h_steep
+      phase_eq := fun g ↦ ?_
+      trace_eq := fun g ↦ ?_
+      phase_mul := fun _ _ ↦ by simp
+      re_phase_eq_zero := fun _ ↦ by simp
+      sign_weight_right := fun x₀ ↦ ⟨h_steep'.sign_inl x₀, hl'_zero x₀⟩
+      weight_nonneg_and_le := fun i _ ↦ ?_
+      exists_diagonal := fun u hu ↦ ?_ }, hj_snd⟩
+  · have h_tr : (intDiagonal l'.lowestKType * (subOnePair j g).2).trace =
+        (intDiagonal l.lowestKType * ((g : Matrix n n ℂ) - 1)).trace :=
+      calc (intDiagonal l'.lowestKType * (subOnePair j g).2).trace
+          = ((W * intDiagonal l'.lowestKType * (↑ω⁻¹ : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ)) *
+              fromBlocks ((g : Matrix n n ℂ) - 1) 0 0 0).trace := by
+            rw [hj_snd, ← Matrix.mul_assoc (intDiagonal l'.lowestKType),
+              trace_mul_cycle (intDiagonal l'.lowestKType),
+              ← Matrix.mul_assoc (W * intDiagonal l'.lowestKType)]
+        _ = ((W * intDiagonal l'.lowestKType * (↑ω⁻¹ : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ)).submatrix
+              Sum.inl Sum.inl * ((g : Matrix n n ℂ) - 1)).trace := by
+            simp [trace, Matrix.mul_apply, Fintype.sum_sum_type]
+        _ = (intDiagonal l.lowestKType * ((g : Matrix n n ℂ) - 1)).trace := by
+            rw [h_upper_block]
+    rw [phase, h_tr]
+    simp
+  · rw [hj_snd, trace_mul_cycle, hW_inv, Matrix.one_mul]
+    simp [trace, Fintype.sum_sum_type]
+  · obtain ⟨x₀ | a₀, rfl⟩ := e'.surjective i
+    · simp [hl'_zero x₀, show (0 : ℝ) ≤ 3 * B by positivity]
+    · exact ⟨by exact_mod_cast (zero_le_one.trans hB).trans (hx_pos a₀).1, fun _ ↦ (hx_pos a₀).2⟩
+  · obtain ⟨g, hg⟩ := exists_unitary_sub_one_eq_inclMatrix e h_steep.sign_inl
+      (mem_unitaryGroup_iff'.1 hu)
+    refine ⟨g, Prod.ext hg ?_⟩
+    let I₁ : Matrix (n ⊕ Unit) X ℂ := inclMatrix ℂ (Sum.inl ∘ e ∘ Sum.inl)
+    let I₂ : Matrix (n ⊕ Unit) X ℂ := inclMatrix ℂ (e' ∘ Sum.inl)
+    let Winv : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ := (↑ω⁻¹ : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ)
+    have h_from : fromBlocks ((g : Matrix n n ℂ) - 1) (0 : Matrix n Unit ℂ)
+        (0 : Matrix Unit n ℂ) 0 = I₁ * (u - 1) * I₁ᴴ := by
+      rw [hg]
+      ext (i₁ | _) (i₂ | _) <;> simp [I₁, inclMatrix, Matrix.mul_apply, Matrix.one_apply]
+    have hW_inc : W * I₂ = I₁ := by
+      rw [mul_inclMatrix]
+      ext i x₀
+      obtain ⟨(x₁ | k₁) | ⟨⟩, rfl⟩ := f.surjective i <;>
+        simp [I₁, W, W₀, f, inclMatrix, Matrix.one_apply]
+    have h_inv_inc : Winv * I₁ = I₂ := by
+      rw [← hW_inc, ← Matrix.mul_assoc, h_inv_W, Matrix.one_mul]
+    have h_inc_W : I₁ᴴ * W = I₂ᴴ := by
+      ext x₀ col
+      rw [Matrix.mul_apply]
+      obtain ⟨x₂ | a₂, rfl⟩ := e'.surjective col <;>
+        simp [I₁, I₂, W, W₀, f, inclMatrix, Matrix.one_apply, eq_comm]
+    calc (subOnePair j g).2
+        = Winv * (I₁ * (u - 1) * I₁ᴴ) * W := by rw [hj_snd, h_from]
+      _ = (Winv * I₁) * (u - 1) * (I₁ᴴ * W) := by simp only [Matrix.mul_assoc]
+      _ = I₂ * (u - 1) * I₂ᴴ := by rw [h_inv_inc, h_inc_W]
+
+open Norms.L2Operator in
+/-- **Restriction.** Let the parameter `l = 2 λ` of `U(ε)` be steep for `(X, M, B)` with `M` even
+and `B ≥ 1`, and let `l' = 2 λ'` be a parameter of `U(ε ⊕ 1)` with `-l'` steep for `(X, M + 1, B)`.
+With `n = card n`, let `HasLargeGap h` hold for both: the entries of `l` (resp. `l'`) are distinct
+and of the parity of `n - 1` (resp. `n`), and two entries of `λ` (resp. `λ'`) at coordinates of
+opposite sign differ by at least `500 n³ + h` (resp. `500 (n + 1)³ + h`). Let the entries of `l`,
+`l'` be bounded by `L`, let `β ≥ 10¹²` bound `2 n + 1 + L` and `(n + 1)⁴ (6 B) ^ (2 M + 2)`, and let
+`h ≥ 10³⁰ ((2 n + 1)² log β)³`.
+
+Then there is `ω` in `U(ε ⊕ 1)` with `‖ω‖² ≤ β` such that `β ^ (20 (2 n + 1)²)` times the modulus
+of the integral over `U(ε)` of `l.dsCoeff g * conj (l'.dsCoeff (ω⁻¹ (g ⊕ 1) ω))` is at least the
+volume of `{g | ‖g - 1‖ ≤ 1}`. -/
+theorem IsSteep.exists_volume_le_mul_norm_integral_dsCoeff {n X : Type} [Fintype n] [DecidableEq n]
+    [Fintype X] [Nonempty n] {ε : n → ℤˣ} {B β : ℝ} {l : HCParam ε}
+    {l' : HCParam (Sum.elim ε (1 : Unit → ℤˣ))} {M L h : ℕ} {e : X ⊕ Fin M ≃ n}
+    {e' : X ⊕ Fin (M + 1) ≃ n ⊕ Unit} (hM : Even M)
+    (h_steep : IsSteep l B e) (h_steep' : IsSteep (-l') B e') (hB : 1 ≤ B)
+    (hl : l.HasLargeGap h) (hl' : l'.HasLargeGap h)
+    (hL : ∀ a : n, |l a| ≤ L) (hL' : ∀ a : n ⊕ Unit, |l' a| ≤ L) (hβ : 10 ^ 12 ≤ β)
+    (hn : Fintype.card (n ⊕ Unit) + Fintype.card n + L ≤ β)
+    (h_size : Fintype.card (n ⊕ Unit) ^ 4 * (6 * B) ^ (2 * M + 2) ≤ β)
+    (hh : 10 ^ 30 * ((Fintype.card (n ⊕ Unit) + Fintype.card n) ^ 2 * β.log) ^ 3 ≤ h) :
+    ∃ y : USign (Sum.elim ε (1 : Unit → ℤˣ)),
+      ‖(y : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ)‖ ^ 2 ≤ β ∧
+      volume.real {g : USign ε | ‖(g : Matrix n n ℂ) - 1‖ ≤ 1} ≤
+        β ^ (20 * (Fintype.card (n ⊕ Unit) + Fintype.card n) ^ 2) *
+          ‖∫ g : USign ε, l.dsCoeff g *
+            conj (l'.dsCoeff (y⁻¹ * U.inl ε 1 g * y : USign (Sum.elim ε 1)))‖ := by
+  classical
+  obtain ⟨ω, hω_entry, h_datum, hj_snd⟩ :=
+    h_steep.exists_isLaplaceDatum_restriction hM h_steep' hl' hB
+  have hω_le : ‖(ω : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ)‖ ≤
+      Fintype.card (n ⊕ Unit) ^ 2 * (6 * B) ^ (M + 1) := by
+    rw [sq]
+    exact l2_opNorm_le_of_apply hω_entry
+  let j : USign ε →* USign ε × USign (Sum.elim ε (1 : Unit → ℤˣ)) :=
+    (MonoidHom.id (USign ε)).prod ((MulAut.conj ω).symm.toMonoidHom.comp (U.inl ε 1))
+  have hω_sq : ‖(ω : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ)‖ ^ 2 ≤ β :=
+    calc ‖(ω : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ)‖ ^ 2
+        ≤ (Fintype.card (n ⊕ Unit) ^ 2 * (6 * B) ^ (M + 1)) ^ 2 :=
+          pow_le_pow_left₀ (norm_nonneg _) hω_le 2
+      _ = Fintype.card (n ⊕ Unit) ^ 4 * (6 * B) ^ (2 * M + 2) := by ring
+      _ ≤ β := h_size
+  have hj_cont : Continuous fun g : USign ε ↦ (j g).2 :=
+    ((Homeomorph.smul (ConjAct.toConjAct ω⁻¹)).continuous).comp isProperMap_inl.continuous
+  have hn' : Fintype.card n + Fintype.card (n ⊕ Unit) + L ≤ β := by linarith
+  have hh' : 10 ^ 30 * ((Fintype.card n + Fintype.card (n ⊕ Unit)) ^ 2 * β.log) ^ 3 ≤ h := by
+    rw [← Nat.cast_add, Nat.add_comm, Nat.cast_add]
+    exact hh
+  obtain ⟨-, h_vol⟩ := h_datum.laplace_method volume isProperMap_id hj_cont hl hl' hB hL hL'
+    hβ hn' hh'
+  -- The unit ball `{‖g - 1‖ ≤ 1}` in `U(ε)` maps into the set where both components have norm
+  -- at most `β + 1`, since `‖ω⁻¹ (g ⊕ 1) ω‖ ≤ 1 + ‖ω‖² ≤ β + 1`.
+  have h_ball : {g : USign ε | ‖(g : Matrix n n ℂ) - 1‖ ≤ 1} ⊆
+      {g : USign ε | ‖((j g).1 : Matrix n n ℂ)‖ ≤ β + 1 ∧
+        ‖((j g).2 : Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ)‖ ≤ β + 1} := fun g hg ↦ by
+    have hβ_one : 1 ≤ β := le_trans (by norm_num) hβ
+    have hg_norm : ‖(g : Matrix n n ℂ) - 1‖ ≤ 1 := hg
+    refine ⟨(norm_le_norm_add_norm_sub' (g : Matrix n n ℂ) 1).trans (by rw [norm_one]; linarith),
+      ?_⟩
+    rw [eq_add_of_sub_eq' (hj_snd g)]
+    have hY : ‖(fromBlocks ((g : Matrix n n ℂ) - 1) 0 0 0 :
+        Matrix (n ⊕ Unit) (n ⊕ Unit) ℂ)‖ ≤ 1 := by
+      rwa [norm_fromBlocks_zero_zero, norm_zero, max_eq_left (norm_nonneg _)]
+    grw [norm_add_le, norm_one, norm_mul₃_le, U.norm_inv ω, hY, mul_one, ← sq]
+    linarith [hω_sq]
+  refine ⟨ω, hω_sq, ENNReal.toReal_le_of_le_ofReal (by positivity) ?_⟩
+  rw [Nat.add_comm (Fintype.card (n ⊕ Unit))]
+  simpa [laplaceIntegrand, j] using (measure_mono h_ball).trans h_vol
+
+end New.DiscreteSeries
+
+end RestrictionPeriod

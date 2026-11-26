@@ -175,7 +175,7 @@ The heads of these files give an overview of a theory: `Lib/ClassField/Global/Ar
 - `New/Spanning/Bessel/Average` (89): The group of the Bessel period at a real place
 - `New/Spanning/Bessel/OpenCellBound` (459): Bounds near a point of Ω and the open cell bound for a Bessel system
 - `New/Spanning/Bessel/OpenCellPairing` (170): One pairing on the open cell, at all places together
-- `New/Spanning/Bessel/LargeFunction` (501): Bessel systems of discrete series type and a Bessel function large at a point
+- `New/Spanning/Bessel/LargeFunction` (1147): Bessel systems of discrete series type and a Bessel function large at a point
 - `New/Spanning/Bessel/CutTailBound` (308): The Bessel function at a real place: decay and cut
 - `New/Spanning/Bessel/SchurBound` (208): Schur's bound for a Bessel function and its derivatives
 - `New/Spanning/Bessel/FillingData` (370): Filling data from admissible data, with Bessel systems at the real places
@@ -435,12 +435,9 @@ The heads of these files give an overview of a theory: `Lib/ClassField/Global/Ar
 - `New/Appendix/DiscreteSeries/SteepParameters` (49): Steep parameters and the setting of Laplace's method
 - `New/Appendix/DiscreteSeries/Localization` (497): Localizing products of discrete series coefficients near the compact subgroups
 - `New/Appendix/DiscreteSeries/MinorSecondOrder` (410): One minor of a product of three exponentials, to second order
-- `New/Appendix/DiscreteSeries/Positions` (306): Positions of a smaller unitary group, and the two traces
-- `New/Appendix/DiscreteSeries/StationaryPosition` (501): The stationary position
 - `New/Appendix/DiscreteSeries/OneMinor` (429): One minor near the identity
 - `New/Appendix/DiscreteSeries/GaussianShape` (271): The Gaussian shape of the coefficient
-- `New/Appendix/DiscreteSeries/Periods` (366): Lower bounds for periods by Laplace's method
-- `New/Appendix/DiscreteSeries/PositionGroup` (499): The group of a position
+- `New/Appendix/DiscreteSeries/Periods` (810): Lower bounds for periods by Laplace's method
 
 ### The last file
 
@@ -854,7 +851,6 @@ The heads of these files give an overview of a theory: `Lib/ClassField/Global/Ar
 - `Lib/General/Algebra/CartanMap` (423): Higman's criterion, dévissage and multiplicative functions on finite modules (Cartan map)
 - `Lib/General/Algebra/LongExactSequences` (328): Long exact sequences, four and five lemmas, and Ext with disjoint unions and products
 - `Lib/General/Algebra/MultivariatePolynomials` (286): Multivariate polynomials: cost of vanishing, homogenization, Nullstellensatz, Hensel
-- `Lib/General/Algebra/ResidueSums` (58): Sums of residues at simple real poles
 - `Lib/General/Algebra/CohomologyBaseChange` (158): Flat base change in functor cohomology, and the base change adjunction for algebras
 - `Lib/General/Algebra/IntegralPowerSeries` (169): Integral power series over ℂ_p: jets, the chain rule and the exponential
 - `Lib/General/Algebra/PerfectAlgebras` (350): Perfect algebras, étale algebras over perfect rings, and constant Laurent polynomials

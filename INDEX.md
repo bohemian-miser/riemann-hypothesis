@@ -4,7 +4,7 @@
 
 This sorting is a working classification. `REFERENCES.md` lists the citations and says which were compared with their sources.
 
-`Lib` has 495 files and 177,492 lines of code. `New`, `Main` and `Statements` have 308 files and 122,410 lines. The tables below are read from the heads of the files. The head of the file in the column "file" has the full note.
+`Lib` has 494 files and 177,435 lines of code. `New`, `Main` and `Statements` have 305 files and 121,828 lines. The tables below are read from the heads of the files. The head of the file in the column "file" has the full note.
 
 ## The last step
 
@@ -99,7 +99,6 @@ The prime number theorem in this table is known (Montgomery and Vaughan, Multipl
 | Volume of ℂ^κ disintegrates along y ↦ y*y into measures on spheres (polar coordinates) | `Lib/DiscreteSeries/Bruhat/SphereFibres` |  |  |
 | First properties of c_λ on U(p,q) and its K-types via Flensted-Jensen's integral | `Lib/DiscreteSeries/FlenstedJensen/PsiKTypes` |  | M. Flensted-Jensen, Discrete series for semisimple symmetric spaces, Ann. of Math. 111 (1980) 253-311; B. Sun, Matrix coefficients of cohomologically induced representations, Compositio Math. 143 (2007), Thm 1.1 (arXiv math/0403440); A. Knapp, Representation Theory of Semisimple Groups (1986), ch. IX |
 | Integral GL(n+1)→GL(n) branching map with norm bound, unique up to scalar among unitarily equivariant maps | `Lib/GLn/Branching/IntegralMap` | `Lib/GLn/Branching/NormBound` | Goodman, Wallach 2009, Theorem 8.1.1; Zhelobenko, Compact Lie Groups and their Representations, 1973, ch. X; Molev, Gelfand-Tsetlin bases for classical Lie algebras, arXiv math/0211289 |
-| Sums of residues of rational functions at simple real poles, via Lagrange interpolation | `Lib/General/Algebra/ResidueSums` |  |  |
 | Twisted conjugacy in I₁ t I₁ for GL_n over a local field | `Lib/LocalGL/Iwahori/ParahoricStructure` |  | Görtz–Haines–Kottwitz–Reuman, Compositio 146 (2010), Thm 1.1.5 (conjugacy in I t I) |
 | Frobenius' dimension formula (basis-free) and irreducibility of the theta group | `Lib/Shimura/ComplexTheta/DimensionFormula` | `Lib/Shimura/ComplexTheta/AppellHumbertData`, `Lib/Shimura/ThetaNormality/NormalGeneration` | G. Frobenius, Über die Grundlagen der Theorie der Jacobischen Functionen, Crelle 97 (1884); Birkenhake–Lange, Complex Abelian Varieties, 3.2.7, 4.1.5, 6.4; survey of proofs in D. Bump, A. Pekker, Proc. AMS 130 (2002) 3473–3481 |
 | Rallis inner product formula by doubling in Weil's range, for rapidly decreasing forms | `Lib/SiegelWeil/RallisInner/Doubling` |  | S. Rallis, L-functions and the oscillator representation, LNM 1245 (1987); J.-S. Li, Crelle 428 (1992); the unitary unfolding is written out in Y. Liu (2011) Prop 2.3 and Eischen–Harris–Li–Skinner 4.1.4 |

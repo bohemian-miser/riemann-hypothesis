@@ -8,7 +8,7 @@ public import New.Determinant.AuxiliaryForms.PathData
 public import Lib.Adelic.AutomorphicForms.Cuspidality
 import Lib.Adelic.TraceFormula.OrbitalUnfolding
 import Lib.DiscreteSeries.FlenstedJensen.PsiKTypes
-import New.Appendix.DiscreteSeries.PositionGroup
+import New.Appendix.DiscreteSeries.Periods
 import New.OneLift.ComparisonOperator.ExchangeData
 import New.UpperBound.Objects.RowChain
 
