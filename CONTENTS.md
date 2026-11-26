@@ -90,6 +90,7 @@ The heads of these files give an overview of a theory: `Lib/ClassField/Global/Ar
 - `New/UpperBound/Objects/InsertBlock` (194): Inserting a block into a parameter
 - `New/UpperBound/Objects/LiftLawsModuloN` (570): Direct and mirror data modulo `N`, and the operator `Up`
 - `New/UpperBound/Objects/AuxiliaryPair` (633): Descent pairs: descent data for theta lifts to definite unitary groups
+- `New/UpperBound/Objects/ParahoricReflections` (234): Parahoric block actions and hyperplane reflection sums
 - `New/UpperBound/Objects/LabelsAndIndexTypes` (202): Good labels, index types of hermitian spaces, the group 𝖦 and idempotent e₀
 - `New/UpperBound/Objects/Weights` (384): Harish-Chandra parameters, weights and lift diagrams of the definite spaces
 - `New/UpperBound/Objects/LiftChains` (361): Chains of theta lifts, jointly invariant combinations, and free levels
@@ -338,9 +339,9 @@ The heads of these files give an overview of a theory: `Lib/ClassField/Global/Ar
 
 **Periods of false lifts**
 
-- `New/OneLift/FalseLifts/BottomOfTower` (1002): The bottom of the tower: from the block datum to all data
+- `New/OneLift/FalseLifts/BottomOfTower` (769): The bottom of the tower: from the block datum to all data
 - `New/OneLift/FalseLifts/HyperbolicPlaneStep` (323): Vanishing of theta descents from W to W plus hyperbolic planes
-- `New/OneLift/FalseLifts/PeriodsOfFalseLifts` (508): The tower of descents and the periods of false lifts
+- `New/OneLift/FalseLifts/PeriodsOfFalseLifts` (464): The tower of descents and the periods of false lifts
 
 **Hecke L-values as squared norms, and their valuations**
 
