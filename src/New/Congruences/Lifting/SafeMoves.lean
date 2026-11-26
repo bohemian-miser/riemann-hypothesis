@@ -64,29 +64,11 @@ variable {p : ℕ} [ThePrime p] [Γ : GroupOverGp p] {k : KummerChart Γ} {O : k
 
 namespace PairingSide
 
-variable {S S' : PairingSide O} {c : S.paramLattice} {i : k.Letter}
-
-section Points
-
-variable {c' : S'.paramLattice} {l κ s e e' : ℕ} {o o' o₁ o₂ o₃ : ℕ → ℤ → ℤ}
+variable {S S' : PairingSide O} {c : S.paramLattice} {c' : S'.paramLattice} {i : k.Letter}
+  {l κ e e' : ℕ} {o o' o₁ o₂ : ℕ → ℤ → ℤ}
   {x w : S.extensionLattice.Ambient} {y : S'.extensionLattice.Ambient} {P : S.SidePairing S'}
 
 /-! ### Safe pairs and the walk -/
-
-/-- The constant `1` of the Tate dual side of `P` at the letter `i` acts on `S.Ambient` as the
-projector to the letter `i`, and the pairing of `n` with `w ⊗ y` by `P.extensionForm`, reduced
-modulo `p ^ P.exponent` through `P.toZp`, is the pairing of the product of the projection of `n` and
-`w` with `y`. -/
-lemma wittPairing_constantAt_and_extensionForm (i : k.Letter) :
-    letI B := JumpLattice.wittPairing (C := S.kerLattice) (.lsmul O S.Carrier)
-    (∀ w : S.Ambient, B (P.tateDualSide.constantAt i 1) w = S.letterProj i w) ∧
-    ∀ (n : P.tateDualSide.extensionLattice.Ambient) (w : S.Ambient) (y : S'.Ambient),
-      DiagTensor.map (mkQ (Ideal.span {(p : ℤ_[p]) ^ P.exponent}) ∘ₗ P.toZp)
-          (JumpLattice.wittPairing (C := tateLattice O) P.extensionForm n
-            (JumpLattice.wittPairing (C := S.tensorLattice S')
-              (TensorProduct.mk O S.Carrier S'.Carrier) w y)) =
-        P.wittPairing (B (P.tateDualSide.projTrivial.wittMap n) w) y :=
-  ⟨wittPairing_constantAt_one i, map_wittPairing_extensionForm⟩
 
 /-- If the orders `o` are antitone in the jump at every level, so is `shiftedOrders l n o`, which is
 `n` at the levels below `l` and `o` shifted up by `l` levels from there on. -/
@@ -112,9 +94,9 @@ lemma z_smul_map_mem_smallPart {ξ : (tateLattice O).Ambient}
       P.exponent := by
   let red := k.z.val • (DiagTensor.map (mkQ (Ideal.span {(p : ℤ_[p]) ^ P.exponent}) ∘ₗ P.toZp) :
     (tateLattice O).Ambient →ₗ[WittCFlat] DiagTensor (.of (charRep _ χ))).restrictScalars Ainf
-  refine (span_le (p := (smallPart P.exponent).comap red)).2 (Set.forall_mem_range.2 fun t ↦ ?_) hξ
-  refine ⟨_, smul_of_tower_mem _ (P.toZp t) (z_mem_wittOfMaxIdeal (k := k)), ?_⟩
-  simp [red, mul_smul, ← map_smul, smul_def', smul_comm]
+  refine (span_le (p := (smallPart P.exponent).comap red)).2 (Set.forall_mem_range.2 fun t ↦
+    ⟨_, smul_of_tower_mem _ (P.toZp t) (z_mem_wittOfMaxIdeal (k := k)), by
+      simp [red, mul_smul, ← map_smul, smul_def', smul_comm]⟩) hξ
 
 /-- Let `ν` be a point of the Tate dual side `P.tateDualSide` of the pairing `P` over `p ^ κ` at the
 letter `i.stepBack l`, `l` steps before `i`, with orders `νOrders`, antitone in the jump, and any
@@ -125,8 +107,7 @@ depth (`pointsOver`). Let `w` and `y` be vectors of the two extensions that lie 
 safe for `κ`: `p ^ κ` times the pairing of their components in `Y`, `Y'` lies in the image of
 `W(𝔪^♭)`, the Witt vectors of the maximal ideal of the tilt. Here `z τ = k.zTauUnit`, for the
 coordinate `z` of the chart and `τ = [ε^{1/p}] - 1`. -/
-lemma SidePairing.isSafe_of_orders {l κ : ℕ} {wOrders yOrders νOrders νDepth : ℕ → ℤ → ℤ}
-    {w : S.extensionLattice.Ambient} {y : S'.extensionLattice.Ambient} {P : S.SidePairing S'}
+lemma SidePairing.isSafe_of_orders {wOrders yOrders νOrders νDepth : ℕ → ℤ → ℤ}
     {ν : P.tateDualSide.extensionLattice.Ambient}
     (hν : ν ∈ P.tateDualSide.pointsOver 1 (i.stepBack l) κ νOrders νDepth)
     (h_anti : ∀ a : ℕ, Antitone (νOrders a))
@@ -141,35 +122,31 @@ lemma SidePairing.isSafe_of_orders {l κ : ℕ} {wOrders yOrders νOrders νDept
   obtain ⟨w, w_exp, rfl, -⟩ := exists_inclKer_eq_of_kerWithOrders hw
   obtain ⟨y, y_exp, rfl, -⟩ := exists_inclKer_eq_of_kerWithOrders hy
   obtain ⟨-, ν_over, ν_exp, -⟩ := phi_pow_smul_mem_pointsOver hν
-  let wy : (S.tensorLattice S').Ambient := JumpLattice.wittPairing (C := S.tensorLattice S')
+  let wy := JumpLattice.wittPairing (C := S.tensorLattice S')
     (TensorProduct.mk O S.Carrier S'.Carrier) w y
   -- orders add under pairing, and the orders of `φ ^ l • ν` decrease in the jump
   have wy_exp : wy ∈ (S.tensorLattice S').withOrders i
-      fun a v ↦ 1 - shiftedOrders l 0 νOrders a (-v - 1) := by
-    refine wittPairing_mem_withOrders (fun g s t ↦ by simp) w_exp y_exp
-      fun a u hu u' hu' v _ h_le ↦ ?_
-    have h_jump : -v - 1 ≤ -u - u' - 1 := by omega
-    linarith only [h_pos a u hu u' hu', antitone_shiftedOrders h_anti l 0 a h_jump]
-  let ξ : (tateLattice O).Ambient :=
-    JumpLattice.wittPairing (C := tateLattice O) P.extensionForm (φ ^ l • ν) wy
-  have ξ_std : ξ ∈ (tateLattice O).withOrders i (stdOrders 0) := by
-    refine wittPairing_mem_withOrders (fun g s t ↦ P.extensionForm_equivariant g s t) ν_exp
-      wy_exp fun a u _ u' _ v hv h_le ↦ ?_
-    obtain rfl : v = -1 := by simpa using hv
-    have h_std : stdOrders 0 a (-1) = 1 := by simp [stdOrders]
-    have h_jump : u ≤ -u' - 1 := by omega
-    linarith [antitone_shiftedOrders h_anti l 0 a h_jump]
-  have τξ_int : tau ^ 1 • ξ ∈ (tateLattice O).ainfLattice :=
-    (tateLattice O).tau_pow_smul_mem_ainfLattice_of_eq_chi_pow_smul 1 ξ_std (by simp)
-  obtain ⟨⟨-, w_mem_letter⟩, -⟩ := w_exp
-  have w_letter : S.letterProj i w = w := mem_letterPart_iff_letterProj.1 w_mem_letter
+      fun a v ↦ 1 - shiftedOrders l 0 νOrders a (-v - 1) :=
+    wittPairing_mem_withOrders (fun _ _ _ ↦ by simp) w_exp y_exp fun a u hu u' hu' v _ h_le ↦ by
+      linarith only [h_pos a u hu u' hu',
+        antitone_shiftedOrders h_anti l 0 a (by omega : -v - 1 ≤ -u - u' - 1)]
+  let ξ := JumpLattice.wittPairing (C := tateLattice O) P.extensionForm (φ ^ l • ν) wy
+  have ξ_std : ξ ∈ (tateLattice O).withOrders i (stdOrders 0) :=
+    wittPairing_mem_withOrders (fun g s t ↦ P.extensionForm_equivariant g s t) ν_exp wy_exp
+      fun a u _ u' _ v hv _ ↦ by
+        obtain rfl : v = -1 := by simpa using hv
+        linarith [antitone_shiftedOrders h_anti l 0 a (by omega : u ≤ -u' - 1),
+          show stdOrders 0 a (-1) = 1 by simp [stdOrders]]
   have h_ξ : DiagTensor.map (mkQ (Ideal.span {(p : ℤ_[p]) ^ P.exponent}) ∘ₗ P.toZp) ξ =
       p ^ κ • P.wittPairing w y := by
-    simp [ξ, wy, w_letter, wittPairing_constantAt_and_extensionForm i, ν_over, -nsmul_eq_mul]
+    simp [ξ, wy, mem_letterPart_iff_letterProj.1 w_exp.1.2,
+      wittPairing_constantAt_one (P := P) i, map_wittPairing_extensionForm (P := P), ν_over,
+      -nsmul_eq_mul]
   -- multiplied by `tau` and `k.z`, whose product is `k.zTau`, this value becomes small
   have h_small : k.zTau • p ^ κ • P.wittPairing w y ∈ smallPart P.exponent := by
     simpa [zTau, mul_comm tau, mul_smul, map_smul_of_tower, h_ξ, -nsmul_eq_mul] using
-      z_smul_map_mem_smallPart (P := P) τξ_int
+      z_smul_map_mem_smallPart (P := P)
+        ((tateLattice O).tau_pow_smul_mem_ainfLattice_of_eq_chi_pow_smul 1 ξ_std (by simp))
   -- both claims say that `z τ p ^ κ` times the pairing of `w` and `y` is small
   simpa [IsSafe, zTauUnit_smul, smul_comm _ k.zTau, -nsmul_eq_mul] using h_small
 
@@ -180,20 +157,16 @@ with any orders, fixed by `Γ'` modulo orders `yDepth`. If at all jumps `u`, `u'
 `φ ^ l • ν` at `-u - u' - 1` plus `wOrders a u + yDepth a u'` is positive, the move by `w` is safe
 with `y` at rest: for all `g` in `Γ'`, `p ^ κ` times the pairing of `w` with `g • y - y` lies in the
 image of `W(𝔪^♭)`. -/
-lemma SidePairing.isSafeMoveFst_of_orders {c' : S'.paramLattice} {l κ e' : ℕ}
-    {wOrders yDepth yOrders νOrders νDepth : ℕ → ℤ → ℤ}
-    {w : S.extensionLattice.Ambient} {y : S'.extensionLattice.Ambient} {P : S.SidePairing S'}
+lemma SidePairing.isSafeMoveFst_of_orders {wOrders yDepth yOrders νOrders νDepth : ℕ → ℤ → ℤ}
     {ν : P.tateDualSide.extensionLattice.Ambient}
     (hν : ν ∈ P.tateDualSide.pointsOver 1 (i.stepBack l) κ νOrders νDepth)
     (h_anti : ∀ a : ℕ, Antitone (νOrders a))
     (hw : w ∈ S.kerWithOrders i wOrders) (hy : y ∈ S'.pointsOver c' i e' yOrders yDepth)
     (h_pos : ∀ a : ℕ, ∀ u ∈ S.jumpSet (i.stepBack a), ∀ u' ∈ S'.jumpSet (i.stepBack a),
       0 < shiftedOrders l 0 νOrders a (-u - u' - 1) + wOrders a u + yDepth a u') :
-    P.IsSafeMoveFst κ w y := by
-  intro g
-  have safe : P.IsSafe κ w (k.zTauUnit • k.zTauUnit⁻¹ • (g • y - y)) :=
-    (P.isSafe_of_orders hν h_anti hw (zTauUnit_inv_smul_sub_mem_kerWithOrders hy g) h_pos).right
-  rwa [smul_inv_smul] at safe
+    P.IsSafeMoveFst κ w y := fun g ↦ by
+  simpa using (P.isSafe_of_orders hν h_anti hw
+    (zTauUnit_inv_smul_sub_mem_kerWithOrders hy g) h_pos).2
 
 /-- Let `ν` be a point of the Tate dual side `Hom(Y ⊗ Y', O(1))` of the pairing `P`, over `p ^ κ` at
 the letter `l` steps before `i`, with orders `νOrders`, antitone in the jump. Let `x` be a point of
@@ -202,30 +175,20 @@ the first side over `p ^ e c` at `i`, with any orders, fixed by `Γ'` modulo ord
 `-u - u' - 1` plus `xDepth a u + yOrders a u'` is positive, the move by `y` is safe with `x` at
 rest: for all `g` in `Γ'`, `p ^ κ` times the pairing of `g • x - x` with `g • y` lies in the image
 of `W(𝔪^♭)`. -/
-lemma SidePairing.isSafeMoveSnd_of_orders {l κ e : ℕ}
-    {xDepth yOrders xOrders νOrders νDepth : ℕ → ℤ → ℤ}
-    {x : S.extensionLattice.Ambient} {y : S'.extensionLattice.Ambient} {P : S.SidePairing S'}
+lemma SidePairing.isSafeMoveSnd_of_orders {xDepth yOrders xOrders νOrders νDepth : ℕ → ℤ → ℤ}
     {ν : P.tateDualSide.extensionLattice.Ambient}
     (hν : ν ∈ P.tateDualSide.pointsOver 1 (i.stepBack l) κ νOrders νDepth)
     (h_anti : ∀ a : ℕ, Antitone (νOrders a))
     (hx : x ∈ S.pointsOver c i e xOrders xDepth) (hy : y ∈ S'.kerWithOrders i yOrders)
     (h_pos : ∀ a : ℕ, ∀ u ∈ S.jumpSet (i.stepBack a), ∀ u' ∈ S'.jumpSet (i.stepBack a),
       0 < shiftedOrders l 0 νOrders a (-u - u' - 1) + xDepth a u + yOrders a u') :
-    P.IsSafeMoveSnd κ x y := by
-  intro g
-  have ⟨y_exp, (y_zero : S'.projTrivial.wittMap y = 0)⟩ := hy
-  have cocycle_mem : g • y - y ∈ S'.kerWithOrders i yOrders :=
-    ⟨smul_sub_mem_withOrders y_exp g, by simp [k.galMonoid.smul_def, y_zero]⟩
-  have gy_mem : g • y ∈ S'.kerWithOrders i yOrders := (sub_mem_iff_left _ hy).1 cocycle_mem
-  have safe : P.IsSafe κ (k.zTauUnit • k.zTauUnit⁻¹ • (g • x - x)) (g • y) :=
-    (P.isSafe_of_orders hν h_anti (zTauUnit_inv_smul_sub_mem_kerWithOrders hx g) gy_mem
-      h_pos).left
-  simpa using safe
-
-lemma mem_letterPart_of_mem_pointsOver (hx : x ∈ S.pointsOver c i e o o') :
-    x ∈ S.extensionLattice.letterPart i := by
-  obtain ⟨-, -, ⟨⟨-, x_letter⟩, -⟩, -⟩ := hx
-  exact x_letter
+    P.IsSafeMoveSnd κ x y := fun g ↦ by
+  have hy_zero : S'.projTrivial.wittMap y = 0 := hy.2
+  have gy_mem : g • y ∈ S'.kerWithOrders i yOrders :=
+    (sub_mem_iff_left _ hy).1
+      ⟨smul_sub_mem_withOrders hy.1 g, by simp [k.galMonoid.smul_def, hy_zero]⟩
+  simpa using (P.isSafe_of_orders hν h_anti (zTauUnit_inv_smul_sub_mem_kerWithOrders hx g) gy_mem
+    h_pos).1
 
 open scoped Classical in
 /-- If `l i` is the distance back from each letter `i` to the nearest cut strictly before it, then
@@ -234,59 +197,49 @@ letter otherwise. -/
 lemma eq_ite_add_one_of_isLeast_cut {cut : k.Letter → Prop} {l : k.Letter → ℕ}
     (h_least : ∀ i : k.Letter, IsLeast {a : ℕ | 0 < a ∧ cut (i.stepBack a)} (l i))
     (i : k.Letter) : l i = (if cut (i.stepBack 1) then 0 else l (i.stepBack 1)) + 1 := by
-  have stepBack_succ (a : ℕ) : (i.stepBack 1).stepBack a = i.stepBack (a + 1) := rfl
   obtain ⟨⟨l_pos, l_cut⟩, l_min⟩ := h_least i
   obtain ⟨⟨-, prev_cut⟩, prev_min⟩ := h_least (i.stepBack 1)
   split_ifs with h_cut
   · exact le_antisymm (l_min ⟨one_pos, h_cut⟩) l_pos
-  refine le_antisymm (l_min ⟨Nat.succ_pos _, by rwa [← stepBack_succ]⟩) ?_
-  obtain ⟨m, hm⟩ : ∃ m : ℕ, l i = m + 1 := Nat.exists_eq_add_one.2 l_pos
+  obtain ⟨m, hm⟩ := Nat.exists_eq_add_one.2 l_pos
   rw [hm] at l_cut ⊢
-  have m_pos : 0 < m := by grind
-  exact Nat.succ_le_succ (prev_min ⟨m_pos, by rwa [stepBack_succ]⟩)
-
-end Points
-
+  exact le_antisymm (hm ▸ l_min ⟨Nat.succ_pos _, prev_cut⟩)
+    (Nat.succ_le_succ (prev_min ⟨by grind, l_cut⟩))
 
 /-- A point of the side `S` over `p ^ e c` at the letter `i` satisfies `LiesOver`: it is in the
 part at `i` and projects to `p ^ e` times the constant of `c`. -/
-lemma liesOver_of_mem_pointsOver {e : ℕ} {o d : ℕ → ℤ → ℤ} {x : S.extensionLattice.Ambient}
-    (hx : x ∈ S.pointsOver c i e o d) : S.LiesOver c i e x :=
-  have ⟨_, x_over, _⟩ := hx
-  ⟨mem_letterPart_of_mem_pointsOver hx, x_over⟩
+lemma liesOver_of_mem_pointsOver (hx : x ∈ S.pointsOver c i e o o') : S.LiesOver c i e x :=
+  ⟨hx.2.2.1.1.2, hx.2.1⟩
 
 /-- `φ ^ l` carries a point over `p ^ e c` at the letter `l` steps before `i` to a vector at `i`
 over `p ^ e c`. -/
-lemma liesOver_phi_pow_smul {e l : ℕ} {o d : ℕ → ℤ → ℤ} {x : S.extensionLattice.Ambient}
-    (hx : x ∈ S.pointsOver c (i.stepBack l) e o d) : S.LiesOver c i e (φ ^ l • x) :=
+lemma liesOver_phi_pow_smul (hx : x ∈ S.pointsOver c (i.stepBack l) e o o') :
+    S.LiesOver c i e (φ ^ l • x) :=
   liesOver_of_mem_pointsOver (phi_pow_smul_mem_pointsOver hx)
 
 /-- If each `x i` lies at the letter `i` over `p ^ e` times the constant of `c` at `i`, then
 `S.projTrivial.wittMap` sends `∑ i, x i` to `p ^ e • DiagTensor.mk 1 c`, as the letter projectors
 sum to `1`. -/
-lemma projTrivial_sum_of_liesOver {e : ℕ} {x : k.Letter → S.extensionLattice.Ambient}
+lemma projTrivial_sum_of_liesOver {x : k.Letter → S.extensionLattice.Ambient}
     (hx : ∀ i : k.Letter, S.LiesOver c i e (x i)) :
     S.projTrivial.wittMap (∑ i : k.Letter, x i) = p ^ e • DiagTensor.mk 1 c := by
   simp [fun i ↦ (hx i).projTrivial_eq, ← smul_sum, constantAt, sum_letterProj]
 
 /-- A point over `p ^ e c` with orders `o₁` and depth `d₁` has also the orders `o₂` and the depth
 `d₂` if, at all jumps, `o₂` is at most `o₁` and `d₂` is at most `d₁`. -/
-lemma mem_pointsOver_of_le {e : ℕ} {o₁ o₂ d₁ d₂ : ℕ → ℤ → ℤ} {x : S.extensionLattice.Ambient}
-    (hx : x ∈ S.pointsOver c i e o₁ d₁)
+lemma mem_pointsOver_of_le {d₁ d₂ : ℕ → ℤ → ℤ} (hx : x ∈ S.pointsOver c i e o₁ d₁)
     (h_exponent : ∀ a : ℕ, ∀ u ∈ S.jumpSet (i.stepBack a), o₂ a u ≤ o₁ a u)
     (h_depth : ∀ a : ℕ, ∀ u ∈ S.jumpSet (i.stepBack a), d₂ a u ≤ d₁ a u) :
-    x ∈ S.pointsOver c i e o₂ d₂ := by
-  obtain ⟨x_mem, x_over, x_exp, x_deep⟩ := hx
-  exact ⟨x_mem, x_over, mem_withOrders_of_le x_exp h_exponent,
-    fun g ↦ mem_withOrders_of_le (x_deep g) h_depth⟩
+    x ∈ S.pointsOver c i e o₂ d₂ :=
+  ⟨hx.1, hx.2.1, mem_withOrders_of_le hx.2.2.1 h_exponent,
+    fun g ↦ mem_withOrders_of_le (hx.2.2.2 g) h_depth⟩
 
 /-- A point over `p ^ e c` with orders `o₁` and depth `d` has also the orders `o₂`, with the same
 depth, if `o₂` is at most `o₁` at all jumps. -/
-lemma mem_pointsOver_of_exponent_le {e : ℕ} {o₁ o₂ d : ℕ → ℤ → ℤ} {x : S.extensionLattice.Ambient}
-    (hx : x ∈ S.pointsOver c i e o₁ d)
+lemma mem_pointsOver_of_exponent_le {d : ℕ → ℤ → ℤ} (hx : x ∈ S.pointsOver c i e o₁ d)
     (h_exponent : ∀ a : ℕ, ∀ u ∈ S.jumpSet (i.stepBack a), o₂ a u ≤ o₁ a u) :
     x ∈ S.pointsOver c i e o₂ d :=
-  mem_pointsOver_of_le hx h_exponent fun a u _ ↦ le_refl (d a u)
+  mem_pointsOver_of_le hx h_exponent fun _ _ _ ↦ le_rfl
 
 /-- Let `x` lie in `S.pointsOver c i e o d`: a point over `p ^ e` times the constant of `c` at the
 letter `i`, with orders `o` and depth `d`. Suppose that at all jumps `u` in `S.jumpSet` at the
@@ -295,35 +248,30 @@ letters `a` steps before `i`, `o` is at least `raisedOrdersAtZero (-t)`, and `d`
 polynomial of the chart: `-u`, lowered by `t` at `a = 0`. If `0 ≤ h₀` and no jump at `i` lies in
 `[-t, -h₀)`, then `x` has orders `raisedOrdersAtZero (-h₀)`, a pole of order at most `h₀` at `E`,
 with the same depth. -/
-lemma mem_pointsOver_raisedOrdersAtZero_of_gap {e : ℕ} {t h₀ : ℤ} {o d : ℕ → ℤ → ℤ}
-    {x : S.extensionLattice.Ambient} (hx : x ∈ S.pointsOver c i e o d) (h₀_nonneg : 0 ≤ h₀)
+lemma mem_pointsOver_raisedOrdersAtZero_of_gap {t h₀ : ℤ} {d : ℕ → ℤ → ℤ}
+    (hx : x ∈ S.pointsOver c i e o d) (h₀_nonneg : 0 ≤ h₀)
     (h_gap : ∀ u ∈ S.jumpSet i, -t ≤ u → -h₀ ≤ u)
     (h_pole : ∀ a : ℕ, ∀ u ∈ S.jumpSet (i.stepBack a), raisedOrdersAtZero (-t) a u ≤ o a u)
     (h_depth : ∀ a : ℕ, ∀ u ∈ S.jumpSet (i.stepBack a), raisedOrdersAtZero 0 a u ≤ d a u) :
     x ∈ S.pointsOver c i e (raisedOrdersAtZero (-h₀)) d := by
-  obtain ⟨-, -, x_pole, x_deep⟩ : x ∈ S.pointsOver c i e (raisedOrdersAtZero (-t))
-    (raisedOrdersAtZero 0) :=
-    mem_pointsOver_of_le hx h_pole h_depth
-  obtain ⟨x_mem, x_over, -, x_depth⟩ := hx
-  exact ⟨x_mem, x_over, mem_withOrders_raisedOrdersAtZero_of_gap h₀_nonneg h_gap x_pole x_deep,
-    x_depth⟩
+  obtain ⟨-, -, x_pole, x_deep⟩ := mem_pointsOver_of_le hx h_pole h_depth
+  exact ⟨hx.1, hx.2.1, mem_withOrders_raisedOrdersAtZero_of_gap h₀_nonneg h_gap x_pole x_deep,
+    hx.2.2.2⟩
 
 /-- A point over `p ^ e c` whose exponents are at least the exponents `stopOrders η l` of a stop
 lies in `stopPoints`, the set of the points with these exponents, whatever its depth. -/
-lemma mem_stopPoints_of_le {e η l : ℕ} {o d : ℕ → ℤ → ℤ} {q : S.extensionLattice.Ambient}
+lemma mem_stopPoints_of_le {η : ℕ} {d : ℕ → ℤ → ℤ} {q : S.extensionLattice.Ambient}
     (hq : q ∈ S.pointsOver c i e o d)
     (h_exponent : ∀ a : ℕ, ∀ u ∈ S.jumpSet (i.stepBack a), stopOrders η l a u ≤ o a u) :
-    q ∈ S.stopPoints c i e η l := by
-  obtain ⟨q_mem, q_over, q_exp, -⟩ := hq
-  have q_stop : q ∈ S.extensionLattice.withOrders i (stopOrders η l) :=
-    mem_withOrders_of_le q_exp h_exponent
-  exact ⟨q_mem, q_over, q_stop, smul_sub_mem_withOrders q_stop⟩
+    q ∈ S.stopPoints c i e η l :=
+  have q_stop := mem_withOrders_of_le hq.2.2.1 h_exponent
+  ⟨hq.1, hq.2.1, q_stop, smul_sub_mem_withOrders q_stop⟩
 
 /-- A point over `p ^ e c` with the exponents `stopOrders η l` of a stop lies in
 `stopPoints`, whatever its depth. -/
-lemma mem_stopPoints_of_mem_pointsOver {e η l : ℕ} {d : ℕ → ℤ → ℤ} {q : S.extensionLattice.Ambient}
+lemma mem_stopPoints_of_mem_pointsOver {η : ℕ} {d : ℕ → ℤ → ℤ} {q : S.extensionLattice.Ambient}
     (hq : q ∈ S.pointsOver c i e (stopOrders η l) d) : q ∈ S.stopPoints c i e η l :=
-  mem_stopPoints_of_le hq fun a u _ ↦ le_refl (stopOrders η l a u)
+  mem_stopPoints_of_le hq fun _ _ _ ↦ le_rfl
 
 /-- The orders of `φ ^ l` of a point of the Tate dual side with a pole of order `t`, on the line of
 jump `-u - u' - 1`, and `ruleBound l t` add up to `1`. With `s = u + u'`, at the levels `a` below,
@@ -350,18 +298,17 @@ of the second side over `p ^ e' c'`, fixed by `Γ'` modulo orders `d'` (its dept
 `u`, `u'` these add up to at least `ruleBound l t`, then the move by `y` is safe with `x'` at rest:
 `p ^ κ` times the pairing of `y` and `g • x' - x'` lies in the image of `W(𝔪^♭)` for all `g` in
 `Γ'`. -/
-lemma SidePairing.isSafeMoveFst_of_killsCokernel {c' : S'.paramLattice} {P : S.SidePairing S'}
-    {κ e' l t : ℕ} {o o' d' : ℕ → ℤ → ℤ}
-    {y : S.extensionLattice.Ambient} {x' : S'.extensionLattice.Ambient}
-    (h_kill : P.tateDualSide.KillsCokernel (i.stepBack l) κ t) (hy : y ∈ S.kerWithOrders i o)
+lemma SidePairing.isSafeMoveFst_of_killsCokernel {t : ℕ} {d' : ℕ → ℤ → ℤ}
+    {x' : S'.extensionLattice.Ambient}
+    (h_kill : P.tateDualSide.KillsCokernel (i.stepBack l) κ t) (hy : w ∈ S.kerWithOrders i o)
     (hx' : x' ∈ S'.pointsOver c' i e' o' d')
     (h_sum : ∀ a : ℕ, ∀ u ∈ S.jumpSet (i.stepBack a), ∀ u' ∈ S'.jumpSet (i.stepBack a),
       ruleBound l t a (u + u') ≤ o a u + d' a u') :
-    P.IsSafeMoveFst κ y x' := by
-  obtain ⟨n, hn⟩ := pointsOver_nonempty_of_killsCokernel h_kill 1
-  refine P.isSafeMoveFst_of_orders hn (antitone_raisedOrdersAtZero (-t)) hy hx' fun a u hu u' hu' ↦
-    ?_
-  linarith only [shiftedOrders_raisedOrdersAtZero_add_ruleBound l t a u u', h_sum a u hu u' hu']
+    P.IsSafeMoveFst κ w x' := by
+  obtain ⟨_, hn⟩ := pointsOver_nonempty_of_killsCokernel h_kill 1
+  exact P.isSafeMoveFst_of_orders hn (antitone_raisedOrdersAtZero (-t)) hy hx'
+    fun a u hu u' hu' ↦ by
+      linarith only [shiftedOrders_raisedOrdersAtZero_add_ruleBound l t a u u', h_sum a u hu u' hu']
 
 /-- Let `p ^ κ * E ^ t` kill the cokernel of the Tate dual side `Hom(Y ⊗ Y', O(1))` of the pairing
 `P` of the sides `S`, `S'` at the letter `l` steps before `i`, `E` being the Eisenstein polynomial
@@ -370,27 +317,24 @@ point of the first side over `p ^ e c`, fixed by `Γ'` modulo orders `d` (its de
 `u`, `u'` these add up to at least `ruleBound l t`, then the move by `y'` is safe with `x` at rest:
 `p ^ κ` times the pairing of `g • x - x` and `g • y'` lies in the image of `W(𝔪^♭)` for all `g` in
 `Γ'`. -/
-lemma SidePairing.isSafeMoveSnd_of_killsCokernel {P : S.SidePairing S'}
-    {κ e l t : ℕ} {o o' d : ℕ → ℤ → ℤ}
-    {x : S.extensionLattice.Ambient} {y' : S'.extensionLattice.Ambient}
-    (h_kill : P.tateDualSide.KillsCokernel (i.stepBack l) κ t) (hy' : y' ∈ S'.kerWithOrders i o')
+lemma SidePairing.isSafeMoveSnd_of_killsCokernel {t : ℕ} {d : ℕ → ℤ → ℤ}
+    (h_kill : P.tateDualSide.KillsCokernel (i.stepBack l) κ t) (hy' : y ∈ S'.kerWithOrders i o')
     (hx : x ∈ S.pointsOver c i e o d)
     (h_sum : ∀ a : ℕ, ∀ u' ∈ S'.jumpSet (i.stepBack a), ∀ u ∈ S.jumpSet (i.stepBack a),
       ruleBound l t a (u' + u) ≤ o' a u' + d a u) :
-    P.IsSafeMoveSnd κ x y' := by
-  obtain ⟨n, hn⟩ := pointsOver_nonempty_of_killsCokernel h_kill 1
-  refine P.isSafeMoveSnd_of_orders hn (antitone_raisedOrdersAtZero (-t)) hx hy' fun a u hu u' hu' ↦
-    ?_
-  have h_bound : ruleBound l t a (u + u') ≤ o' a u' + d a u := by
-    simpa only [add_comm u'] using h_sum a u' hu' u hu
-  linarith [shiftedOrders_raisedOrdersAtZero_add_ruleBound l t a u u']
+    P.IsSafeMoveSnd κ x y := by
+  obtain ⟨_, hn⟩ := pointsOver_nonempty_of_killsCokernel h_kill 1
+  exact P.isSafeMoveSnd_of_orders hn (antitone_raisedOrdersAtZero (-t)) hx hy'
+    fun a u hu u' hu' ↦ by
+      linarith only [shiftedOrders_raisedOrdersAtZero_add_ruleBound l t a u u',
+        add_comm u' u ▸ h_sum a u' hu' u hu]
 
 /-- The first move of the walk satisfies the rule for `l`: the orders of the move from `φ ^ l` of a
 standard point at the cut before to a stop, and the depth of `φ ^ l` of a standard point at rest,
 add up to at least `ruleBound l t₀`, on every pair of jumps `u`, `v`. A standard point at the cut
 before has depth `standardDepth t₀ η l₀`, and `shiftedOrders l n o` is `n` at the levels below `l`
 and `o` shifted up by `l` levels from there on. -/
-lemma ruleBound_le_inf_add_shiftedOrders {l l₀ : ℕ} (hl₀ : 0 < l₀) (t₀ η a : ℕ) (u v : ℤ) :
+lemma ruleBound_le_inf_add_shiftedOrders {l₀ : ℕ} (hl₀ : 0 < l₀) (t₀ η a : ℕ) (u v : ℤ) :
     ruleBound l t₀ a (u + v) ≤
       (stopOrders η l ⊓ shiftedOrders l 0 (raisedOrdersAtZero (-η))) a u +
         shiftedOrders l 1 (standardDepth t₀ η l₀) a v := by
@@ -401,11 +345,20 @@ lemma ruleBound_le_inf_add_shiftedOrders {l l₀ : ℕ} (hl₀ : 0 < l₀) (t₀
 /-- The third move of the walk satisfies the rule for `0`: the orders of the move from a stop to a
 standard point, and the depth of a standard point at rest, add up to at least `ruleBound 0 t`, on
 every pair of jumps `u`, `v`. -/
-lemma ruleBound_zero_le_inf_add_standardDepth {l : ℕ} (hl : 0 < l) (t η a : ℕ) (u v : ℤ) :
+lemma ruleBound_zero_le_inf_add_standardDepth (hl : 0 < l) (t η a : ℕ) (u v : ℤ) :
     ruleBound 0 t a (u + v) ≤
       (raisedOrdersAtZero (-η) ⊓ stopOrders η l) a u + standardDepth t η l a v := by
   simp only [Pi.inf_apply, ruleBound, stopOrders, stdOrders, raisedOrdersAtZero, standardDepth]
   split_ifs <;> omega
+
+/-- At a cut `i` whose predecessor is `l` steps back, one of the two paired sides has a stop at
+which it can rest while the other moves safely from `φ ^ l` of its point at the cut before to its
+point at `i`. -/
+def SidePairing.HasStop (P : S.SidePairing S') (c : S.paramLattice) (c' : S'.paramLattice)
+    (i : k.Letter) (κ e e' η l : ℕ) (x₀ x : S.extensionLattice.Ambient)
+    (x₀' x' : S'.extensionLattice.Ambient) : Prop :=
+  (∃ q ∈ S.stopPoints c i e η l, P.IsSafeMoveSnd κ q (φ ^ l • x₀' - x')) ∨
+    ∃ q' ∈ S'.stopPoints c' i e' η l, P.IsSafeMoveFst κ (φ ^ l • x₀ - x) q'
 
 /-- The moves at a cut (a marked letter) `i` whose predecessor among the cuts is `l` steps back, at
 `i.stepBack l`; the cut before that is `l₀` steps further back. Let `x₀`, `x₀'` and `x`, `x'` be
@@ -414,46 +367,38 @@ Tate dual side there. If one side has a stop at which it can rest while the othe
 for some `w`, `w'` over the same constants (`LiesOver`) four safe moves, of one side with the other
 at rest, lead from `(φ ^ l x₀, φ ^ l x₀')` by `(w, φ ^ l x₀')` and `(w, w')` and `(x, w')` to
 `(x, x')` (`IsSafePath`). -/
-lemma SidePairing.exists_isSafePath_of_stop {c' : S'.paramLattice} {P : S.SidePairing S'}
-    {κ e e' η l l₀ t t₀ : ℕ}
-    {x₀ x : S.extensionLattice.Ambient} {x₀' x' : S'.extensionLattice.Ambient}
+lemma SidePairing.exists_isSafePath_of_stop {η l₀ t t₀ : ℕ}
+    {x₀ : S.extensionLattice.Ambient} {x₀' x' : S'.extensionLattice.Ambient}
     (hl : 0 < l) (hl₀ : 0 < l₀) (h_kill : P.tateDualSide.KillsCokernel i κ t)
     (h_kill₀ : P.tateDualSide.KillsCokernel (i.stepBack l) κ t₀)
     (hx : x ∈ S.standardPoints c i e t η l) (hx' : x' ∈ S'.standardPoints c' i e' t η l)
     (hx₀ : x₀ ∈ S.standardPoints c (i.stepBack l) e t₀ η l₀)
     (hx₀' : x₀' ∈ S'.standardPoints c' (i.stepBack l) e' t₀ η l₀)
-    (h_stop : (∃ q ∈ S.stopPoints c i e η l, P.IsSafeMoveSnd κ q (φ ^ l • x₀' - x')) ∨
-      ∃ q' ∈ S'.stopPoints c' i e' η l, P.IsSafeMoveFst κ (φ ^ l • x₀ - x) q') :
+    (h_stop : P.HasStop c c' i κ e e' η l x₀ x x₀' x') :
     ∃ (w : S.extensionLattice.Ambient) (w' : S'.extensionLattice.Ambient),
       S.LiesOver c i e w ∧ S'.LiesOver c' i e' w' ∧
       P.IsSafePath κ (φ ^ l • x₀) w x (φ ^ l • x₀') w' x' := by
   -- The moves from `φ ^ l x₀` and `φ ^ l x₀'` to a stop satisfy the rule for `l`, those from a stop
   -- to `x` and `x'` the rule for `0`; the remaining move is zero.
-  have hy : φ ^ l • x₀ ∈ S.pointsOver c i e (shiftedOrders l 0 (raisedOrdersAtZero (-η)))
-      (shiftedOrders l 1 (standardDepth t₀ η l₀)) := phi_pow_smul_mem_pointsOver hx₀
-  have hy' : φ ^ l • x₀' ∈ S'.pointsOver c' i e' (shiftedOrders l 0 (raisedOrdersAtZero (-η)))
-      (shiftedOrders l 1 (standardDepth t₀ η l₀)) := phi_pow_smul_mem_pointsOver hx₀'
+  have hy := phi_pow_smul_mem_pointsOver hx₀
+  have hy' := phi_pow_smul_mem_pointsOver hx₀'
   obtain ⟨q, hq, h_rest⟩ | ⟨q', hq', h_rest⟩ := h_stop
   · -- The first side leads: it moves to `q`, rests there, and goes on to `x`.
-    have h_first : P.IsSafeMoveFst κ (φ ^ l • x₀ - q) (φ ^ l • x₀') :=
-      P.isSafeMoveFst_of_killsCokernel h_kill₀ (sub_mem_kerWithOrders_of_pointsOver hq hy) hy'
-        fun a u _ v _ ↦ ruleBound_le_inf_add_shiftedOrders hl₀ t₀ η a u v
-    have h_third : P.IsSafeMoveFst κ (q - x) x' :=
-      P.isSafeMoveFst_of_killsCokernel (l := 0) h_kill
-        (sub_mem_kerWithOrders_of_pointsOver hx hq) hx'
-        fun a u _ v _ ↦ ruleBound_zero_le_inf_add_standardDepth hl t η a u v
     exact ⟨q, x', liesOver_of_mem_pointsOver hq, liesOver_of_mem_pointsOver hx',
-      h_first, h_rest, h_third, fun g ↦ by simp [IsSafe]⟩
+      P.isSafeMoveFst_of_killsCokernel h_kill₀ (sub_mem_kerWithOrders_of_pointsOver hq hy) hy'
+        (fun a u _ v _ ↦ ruleBound_le_inf_add_shiftedOrders hl₀ t₀ η a u v),
+      h_rest,
+      P.isSafeMoveFst_of_killsCokernel (l := 0) h_kill (sub_mem_kerWithOrders_of_pointsOver hx hq)
+        hx' (fun a u _ v _ ↦ ruleBound_zero_le_inf_add_standardDepth hl t η a u v),
+      fun _ ↦ by simp [IsSafe]⟩
   · -- The second side leads: it moves to `q'`, rests there, and goes on to `x'`.
-    have h_second : P.IsSafeMoveSnd κ (φ ^ l • x₀) (φ ^ l • x₀' - q') :=
-      P.isSafeMoveSnd_of_killsCokernel h_kill₀ (sub_mem_kerWithOrders_of_pointsOver hq' hy') hy
-        fun a u _ v _ ↦ ruleBound_le_inf_add_shiftedOrders hl₀ t₀ η a u v
-    have h_fourth : P.IsSafeMoveSnd κ x (q' - x') :=
-      P.isSafeMoveSnd_of_killsCokernel (l := 0) h_kill
-        (sub_mem_kerWithOrders_of_pointsOver hx' hq') hx
-        fun a u _ v _ ↦ ruleBound_zero_le_inf_add_standardDepth hl t η a u v
     exact ⟨φ ^ l • x₀, q', liesOver_of_mem_pointsOver hy, liesOver_of_mem_pointsOver hq',
-      fun g ↦ by simp [IsSafe], h_second, h_rest, h_fourth⟩
+      fun _ ↦ by simp [IsSafe],
+      P.isSafeMoveSnd_of_killsCokernel h_kill₀ (sub_mem_kerWithOrders_of_pointsOver hq' hy') hy
+        (fun a u _ v _ ↦ ruleBound_le_inf_add_shiftedOrders hl₀ t₀ η a u v),
+      h_rest,
+      P.isSafeMoveSnd_of_killsCokernel (l := 0) h_kill (sub_mem_kerWithOrders_of_pointsOver hx' hq')
+        hx (fun a u _ v _ ↦ ruleBound_zero_le_inf_add_standardDepth hl t η a u v)⟩
 
 /-- Let `P` be a pairing of the sides `S`, `S'`, and let `0 < l`. Let `x`, `x'` be standard points
 (`standardPoints`) of `S`, `S'` over `p ^ e c`, `p ^ e' c'` at the letter `d` steps before `i`.
@@ -462,42 +407,39 @@ Their orders are `-u` on the line of jump `u`, lowered by `η` at the level `0`,
 there (`KillsCokernel`), and let `φ` be the Frobenius. Then for every `g` in `k.galMonoid`,
 `P.IsSafeMoveSnd κ` holds: the move of the second side by `g φ ^ d x' - φ ^ d x'` is safe while
 `φ ^ d x` is at rest. -/
-lemma SidePairing.isSafeMoveSnd_cocycle {c' : S'.paramLattice} {P : S.SidePairing S'}
-    {κ e e' η d l t : ℕ}
-    {x : S.extensionLattice.Ambient} {x' : S'.extensionLattice.Ambient} (hl : 0 < l)
+lemma SidePairing.isSafeMoveSnd_cocycle {η d t : ℕ} {x' : S'.extensionLattice.Ambient} (hl : 0 < l)
     (h_kill : P.tateDualSide.KillsCokernel (i.stepBack d) κ t)
     (hx : x ∈ S.standardPoints c (i.stepBack d) e t η l)
     (hx' : x' ∈ S'.standardPoints c' (i.stepBack d) e' t η l) (g : k.galMonoid) :
     P.IsSafeMoveSnd κ (φ ^ d • x) (g • φ ^ d • x' - φ ^ d • x') := by
   -- The depth of `x'` bounds the exponents of its cocycle; use the rule for `d`.
   have hy' := phi_pow_smul_mem_pointsOver hx'
-  have ⟨_, _, _, h_deep⟩ := hy'
   have h_cocycle : g • φ ^ d • x' - φ ^ d • x' ∈
       S'.kerWithOrders i (shiftedOrders d 1 (standardDepth t η l)) :=
-    ⟨h_deep g, by simpa [inv_smul_eq_iff] using (zTauUnit_inv_smul_sub_mem_kerWithOrders hy' g).2⟩
+    ⟨hy'.2.2.2 g,
+      by simpa [inv_smul_eq_iff] using (zTauUnit_inv_smul_sub_mem_kerWithOrders hy' g).2⟩
   refine P.isSafeMoveSnd_of_killsCokernel h_kill h_cocycle (phi_pow_smul_mem_pointsOver hx)
     fun a u _ v _ ↦ ?_
   simp only [ruleBound, shiftedOrders, standardDepth]
   split_ifs <;> omega
 
 /-- The path that stays at `(x, x')` is safe: its four moves are zero. -/
-lemma isSafePath_refl {P : S.SidePairing S'} {κ : ℕ} (x : S.extensionLattice.Ambient)
-    (x' : S'.extensionLattice.Ambient) : P.IsSafePath κ x x x x' x' x' := by
+lemma isSafePath_refl (x : S.extensionLattice.Ambient) (x' : S'.extensionLattice.Ambient) :
+    P.IsSafePath κ x x x x' x' x' := by
   constructor <;> intro g <;> simp [IsSafe]
 
-lemma smul_sub_mem_letterPart {x : S.extensionLattice.Ambient} (g : k.galMonoid)
-    (hx : x ∈ S.extensionLattice.letterPart i) : g • x - x ∈ S.extensionLattice.letterPart i :=
+lemma smul_sub_mem_letterPart (g : k.galMonoid) (hx : x ∈ S.extensionLattice.letterPart i) :
+    g • x - x ∈ S.extensionLattice.letterPart i :=
   sub_mem ((gal_smul_mem_letterPart g).2 hx) hx
 
 /-- Let `y i` and `x' i` lie in the parts of the letter `i`. If each move of the first side by `y i`
 is safe with `x' i` at rest, then so is the move by their sum with the sum of the `x' i` at rest. -/
-lemma isSafeMoveFst_sum {P : S.SidePairing S'} {κ : ℕ} {y : k.Letter → S.extensionLattice.Ambient}
+lemma isSafeMoveFst_sum {y : k.Letter → S.extensionLattice.Ambient}
     {x' : k.Letter → S'.extensionLattice.Ambient}
     (hy : ∀ i : k.Letter, y i ∈ S.extensionLattice.letterPart i)
     (hx' : ∀ i : k.Letter, x' i ∈ S'.extensionLattice.letterPart i)
     (h_safe : ∀ i : k.Letter, P.IsSafeMoveFst κ (y i) (x' i)) :
-    P.IsSafeMoveFst κ (∑ i : k.Letter, y i) (∑ i : k.Letter, x' i) := by
-  intro g
+    P.IsSafeMoveFst κ (∑ i : k.Letter, y i) (∑ i : k.Letter, x' i) := fun g ↦ by
   rw [smul_sum, ← sum_sub_distrib]
   exact isSafe_sum (fun i ↦ ⟨hy i, smul_sub_mem_letterPart g (hx' i)⟩) fun i ↦ h_safe i g
 
@@ -505,13 +447,12 @@ lemma isSafeMoveFst_sum {P : S.SidePairing S'} {κ : ℕ} {y : k.Letter → S.ex
 of the letter `i`. Suppose each move of the second side by `y' i` is safe with `x i` at rest
 (`P.IsSafeMoveSnd κ`). Then the move by the sum of the `y' i` is safe with the sum of the `x i` at
 rest. -/
-lemma isSafeMoveSnd_sum {P : S.SidePairing S'} {κ : ℕ} {x : k.Letter → S.extensionLattice.Ambient}
+lemma isSafeMoveSnd_sum {x : k.Letter → S.extensionLattice.Ambient}
     {y' : k.Letter → S'.extensionLattice.Ambient}
     (hx : ∀ i : k.Letter, x i ∈ S.extensionLattice.letterPart i)
     (hy' : ∀ i : k.Letter, y' i ∈ S'.extensionLattice.letterPart i)
     (h_safe : ∀ i : k.Letter, P.IsSafeMoveSnd κ (x i) (y' i)) :
-    P.IsSafeMoveSnd κ (∑ i : k.Letter, x i) (∑ i : k.Letter, y' i) := by
-  intro g
+    P.IsSafeMoveSnd κ (∑ i : k.Letter, x i) (∑ i : k.Letter, y' i) := fun g ↦ by
   rw [smul_sum, smul_sum, ← sum_sub_distrib]
   exact isSafe_sum (fun i ↦ ⟨smul_sub_mem_letterPart g (hx i),
     (gal_smul_mem_letterPart g).2 (hy' i)⟩) fun i ↦ h_safe i g
@@ -526,8 +467,8 @@ and `g • v'` are. Let the cocycles of `x i` and `x' i` pair safely, and let fo
 from `(y i, y' i)` by `(w i, y' i)`, `(w i, w' i)` and `(x i, w' i)` to `(x i, x' i)`
 (`IsSafePath`). Then the cup product of the cocycles of `c` and `p ^ N c'` is a coboundary
 (`IsScaledCupCoboundary`) for `N ≥ e + e' + κ`. -/
-lemma SidePairing.isScaledCupCoboundary_of_isSafePath {c' : S'.paramLattice} {P : S.SidePairing S'}
-    {κ e e' N : ℕ} {y w x : k.Letter → S.extensionLattice.Ambient}
+lemma SidePairing.isScaledCupCoboundary_of_isSafePath {N : ℕ}
+    {y w x : k.Letter → S.extensionLattice.Ambient}
     {y' w' x' : k.Letter → S'.extensionLattice.Ambient}
     (hy : ∀ i : k.Letter, S.LiesOver c i e (y i)) (hy' : ∀ i : k.Letter, S'.LiesOver c' i e' (y' i))
     (hw : ∀ i : k.Letter, S.LiesOver c i e (w i)) (hw' : ∀ i : k.Letter, S'.LiesOver c' i e' (w' i))
@@ -541,26 +482,23 @@ lemma SidePairing.isScaledCupCoboundary_of_isSafePath {c' : S'.paramLattice} {P 
   have h_cocycle_sum (g : k.galMonoid) :
       P.IsSafeMoveSnd κ (∑ i, x i) (g • ∑ i, x' i - ∑ i, x' i) := by
     rw [smul_sum, ← sum_sub_distrib]
-    exact isSafeMoveSnd_sum (fun i ↦ (hx i).mem_letterPart)
-      (fun i ↦ smul_sub_mem_letterPart g (hx' i).mem_letterPart) fun i ↦ h_cocycles i g
+    exact isSafeMoveSnd_sum (fun i ↦ (hx i).1)
+      (fun i ↦ smul_sub_mem_letterPart g (hx' i).1) fun i ↦ h_cocycles i g
   have h_path_sum :
       P.IsSafePath κ (∑ i, y i) (∑ i, w i) (∑ i, x i) (∑ i, y' i) (∑ i, w' i) (∑ i, x' i) := by
     refine ⟨?_, ?_, ?_, ?_⟩ <;> rw [← sum_sub_distrib]
-    · exact isSafeMoveFst_sum (fun i ↦ sub_mem (hy i).mem_letterPart (hw i).mem_letterPart)
-        (fun i ↦ (hy' i).mem_letterPart) fun i ↦ (h_path i).isSafeMoveFst_start
-    · exact isSafeMoveSnd_sum (fun i ↦ (hw i).mem_letterPart)
-        (fun i ↦ sub_mem (hy' i).mem_letterPart (hw' i).mem_letterPart) fun i ↦
-          (h_path i).isSafeMoveSnd_start
-    · exact isSafeMoveFst_sum (fun i ↦ sub_mem (hw i).mem_letterPart (hx i).mem_letterPart)
-        (fun i ↦ (hw' i).mem_letterPart) fun i ↦ (h_path i).isSafeMoveFst_end
-    · exact isSafeMoveSnd_sum (fun i ↦ (hx i).mem_letterPart)
-        (fun i ↦ sub_mem (hw' i).mem_letterPart (hx' i).mem_letterPart) fun i ↦
-          (h_path i).isSafeMoveSnd_end
+    exacts [isSafeMoveFst_sum (fun i ↦ sub_mem (hy i).1 (hw i).1) (fun i ↦ (hy' i).1)
+        (fun i ↦ (h_path i).1),
+      isSafeMoveSnd_sum (fun i ↦ (hw i).1) (fun i ↦ sub_mem (hy' i).1 (hw' i).1)
+        (fun i ↦ (h_path i).2),
+      isSafeMoveFst_sum (fun i ↦ sub_mem (hw i).1 (hx i).1) (fun i ↦ (hw' i).1)
+        (fun i ↦ (h_path i).3),
+      isSafeMoveSnd_sum (fun i ↦ (hx i).1) (fun i ↦ sub_mem (hw' i).1 (hx' i).1)
+        (fun i ↦ (h_path i).4)]
   rw [← h_phi, ← h_phi'] at h_path_sum
-  exact .of_isSafePath P (∑ i, x i) (∑ i, w i) (∑ i, x' i) (∑ i, w' i) hN
-    (projTrivial_sum_of_liesOver hx) (projTrivial_sum_of_liesOver hw)
-    (projTrivial_sum_of_liesOver hx') (projTrivial_sum_of_liesOver hw')
-    h_cocycle_sum h_path_sum
+  exact .of_isSafePath P _ _ _ _ hN (projTrivial_sum_of_liesOver hx)
+    (projTrivial_sum_of_liesOver hw) (projTrivial_sum_of_liesOver hx')
+    (projTrivial_sum_of_liesOver hw') h_cocycle_sum h_path_sum
 
 /-- The walk. Let `S` and `S'` be sides of the Kummer chart `k` over the coefficient ring `O`
 (lattices `Y`, `Y'` with crystalline cocycles `S.cocycleMap c`, `S'.cocycleMap c'` indexed by
@@ -583,27 +521,22 @@ the Frobenius and `E` is the Eisenstein polynomial of the chart. Assume:
 
 Then for `N ≥ e + e' + κ` the cup product of `S.cocycleMap c` and `p ^ N • S'.cocycleMap c'` under
 `P` is the coboundary of a continuous cochain. -/
-lemma SidePairing.isScaledCupCoboundary_of_stops {S S' : PairingSide O} {c : S.paramLattice}
-    {c' : S'.paramLattice} {P : S.SidePairing S'}
-    {κ e e' η N : ℕ} (cut : k.Letter → Prop) (l t : k.Letter → ℕ)
+lemma SidePairing.isScaledCupCoboundary_of_stops {η N : ℕ} (cut : k.Letter → Prop)
+    (l t : k.Letter → ℕ)
     (x : k.Letter → S.extensionLattice.Ambient) (x' : k.Letter → S'.extensionLattice.Ambient)
     (hl_least : ∀ i : k.Letter, IsLeast {a : ℕ | 0 < a ∧ cut (i.stepBack a)} (l i))
     (h_kill : ∀ i : k.Letter, cut i → P.tateDualSide.KillsCokernel i κ (t i))
     (hx : ∀ i : k.Letter, cut i → x i ∈ S.standardPoints c i e (t i) η (l i))
     (hx' : ∀ i : k.Letter, cut i → x' i ∈ S'.standardPoints c' i e' (t i) η (l i))
     (h_stop : ∀ i : k.Letter, cut i →
-      (∃ q ∈ S.stopPoints c i e η (l i),
-        P.IsSafeMoveSnd κ q (φ ^ l i • x' (i.stepBack (l i)) - x' i)) ∨
-      ∃ q' ∈ S'.stopPoints c' i e' η (l i),
-        P.IsSafeMoveFst κ (φ ^ l i • x (i.stepBack (l i)) - x i) q')
+      P.HasStop c c' i κ e e' η (l i) (x (i.stepBack (l i))) (x i) (x' (i.stepBack (l i))) (x' i))
     (hN : e + e' + κ ≤ N) : P.IsScaledCupCoboundary N c c' := by
   -- At a letter `i` take the points of the last cut up to `i`, `d i` steps back, and carry them to
   -- `i` by `φ ^ d i`. Applying `φ` to their sum gives the same sum with the last cut strictly
   -- before `i`. So off the cuts nothing moves, and at a cut there are the three moves.
   classical
   let d (i : k.Letter) : ℕ := if cut i then 0 else l i
-  obtain ⟨hl_pos, hl_cut⟩ : (∀ i : k.Letter, 0 < l i) ∧ ∀ i : k.Letter, cut (i.stepBack (l i)) :=
-    forall_and.1 fun i ↦ (hl_least i).1
+  obtain ⟨hl_pos, hl_cut⟩ := forall_and.1 fun i ↦ (hl_least i).1
   have hd_cut (i : k.Letter) : cut (i.stepBack (d i)) := by
     by_cases hi : cut i
     · simpa only [d, ite_eq_left hi, stepBack_zero] using hi
@@ -613,34 +546,27 @@ lemma SidePairing.isScaledCupCoboundary_of_stops {S S' : PairingSide O} {c : S.p
     rw [smul_sum, ← sum_comp k.letterFrob⁻¹]
     refine Finset.sum_congr rfl fun i _ ↦ ?_
     have h_frob : k.letterFrob⁻¹ i = i.stepBack 1 := by simp
-    have h_stepBack (a : ℕ) : (i.stepBack 1).stepBack a = i.stepBack (a + 1) := rfl
     have hl_succ : l i = d (i.stepBack 1) + 1 := eq_ite_add_one_of_isLeast_cut hl_least i
-    rw [h_frob, h_stepBack, hl_succ, pow_succ' φ, mul_smul]
-  have h_over {i : k.Letter} {a : ℕ} (ha : cut (i.stepBack a)) :
-      S.LiesOver c i e (φ ^ a • x (i.stepBack a)) := liesOver_phi_pow_smul (hx _ ha)
-  have h_over' {i : k.Letter} {a : ℕ} (ha : cut (i.stepBack a)) :
-      S'.LiesOver c' i e' (φ ^ a • x' (i.stepBack a)) := liesOver_phi_pow_smul (hx' _ ha)
+    rw [h_frob, hl_succ, pow_succ' φ, mul_smul]; rfl
+  have h_over {i : k.Letter} {a : ℕ} (ha : cut (i.stepBack a)) := liesOver_phi_pow_smul (hx _ ha)
+  have h_over' {i : k.Letter} {a : ℕ} (ha : cut (i.stepBack a)) := liesOver_phi_pow_smul (hx' _ ha)
   have exists_path (i : k.Letter) :
-      ∃ (w : S.extensionLattice.Ambient) (w' : S'.extensionLattice.Ambient),
-      S.LiesOver c i e w ∧ S'.LiesOver c' i e' w' ∧
-      P.IsSafePath κ (φ ^ l i • x (i.stepBack (l i))) w (φ ^ d i • x (i.stepBack (d i)))
-        (φ ^ l i • x' (i.stepBack (l i))) w' (φ ^ d i • x' (i.stepBack (d i))) := by
+      ∃ w w', S.LiesOver c i e w ∧ S'.LiesOver c' i e' w' ∧
+        P.IsSafePath κ (φ ^ l i • x (i.stepBack (l i))) w (φ ^ d i • x (i.stepBack (d i)))
+          (φ ^ l i • x' (i.stepBack (l i))) w' (φ ^ d i • x' (i.stepBack (d i))) := by
     by_cases hi : cut i
     · simp only [d, ite_eq_left hi, pow_zero, one_smul, stepBack_zero]
       exact P.exists_isSafePath_of_stop (hl_pos i) (hl_pos _) (h_kill i hi) (h_kill _ (hl_cut i))
         (hx i hi) (hx' i hi) (hx _ (hl_cut i)) (hx' _ (hl_cut i)) (h_stop i hi)
     · simp only [d, ite_eq_right hi]
-      exact ⟨φ ^ l i • x (i.stepBack (l i)), φ ^ l i • x' (i.stepBack (l i)),
-        h_over (hl_cut i), h_over' (hl_cut i), isSafePath_refl _ _⟩
+      exact ⟨_, _, h_over (hl_cut i), h_over' (hl_cut i), isSafePath_refl _ _⟩
   choose w w' hw hw' h_path using exists_path
-  have h_cocycles (i : k.Letter) (g : k.galMonoid) : P.IsSafeMoveSnd κ
-      (φ ^ d i • x (i.stepBack (d i)))
-      (g • φ ^ d i • x' (i.stepBack (d i)) - φ ^ d i • x' (i.stepBack (d i))) :=
-    P.isSafeMoveSnd_cocycle (hl_pos _) (h_kill _ (hd_cut i)) (hx _ (hd_cut i)) (hx' _ (hd_cut i)) g
   exact P.isScaledCupCoboundary_of_isSafePath (fun i ↦ h_over (hl_cut i))
-    (fun i ↦ h_over' (hl_cut i))
-    hw hw' (fun i ↦ h_over (hd_cut i)) (fun i ↦ h_over' (hd_cut i)) (h_phi x) (h_phi x')
-    h_cocycles h_path hN
+    (fun i ↦ h_over' (hl_cut i)) hw hw' (fun i ↦ h_over (hd_cut i)) (fun i ↦ h_over' (hd_cut i))
+    (h_phi x) (h_phi x')
+    (fun i g ↦ P.isSafeMoveSnd_cocycle (hl_pos _) (h_kill _ (hd_cut i)) (hx _ (hd_cut i))
+      (hx' _ (hd_cut i)) g)
+    h_path hN
 
 /-- The walk `isScaledCupCoboundary_of_stops` with a cut at every letter and the same shift `t` at
 all of them, for a pairing `P` of the sides `S` and `S'`. At every letter `i`, let `p ^ κ * E ^ t`
@@ -651,19 +577,16 @@ have a stop at `i`, a point over the same constant with orders `stopOrders η 1`
 rests there, the other side moves safely to its point at `i` from `φ` of its point at the letter
 `i.stepBack 1` before. Then for `N ≥ e + e' + κ` the cup product of `S.cocycleMap c` and
 `p ^ N • S'.cocycleMap c'` is the coboundary of a continuous cochain. -/
-lemma SidePairing.isScaledCupCoboundary_of_stops_at_all_letters {c' : S'.paramLattice}
-    {P : S.SidePairing S'} {κ e e' t η N : ℕ}
+lemma SidePairing.isScaledCupCoboundary_of_stops_at_all_letters {t η N : ℕ}
     (x : k.Letter → S.extensionLattice.Ambient) (x' : k.Letter → S'.extensionLattice.Ambient)
     (h_kill : ∀ i : k.Letter, P.tateDualSide.KillsCokernel i κ t)
     (hx : ∀ i : k.Letter, x i ∈ S.standardPoints c i e t η 1)
     (hx' : ∀ i : k.Letter, x' i ∈ S'.standardPoints c' i e' t η 1)
     (h_stop : ∀ i : k.Letter,
-      (∃ q ∈ S.stopPoints c i e η 1, P.IsSafeMoveSnd κ q (φ ^ 1 • x' (i.stepBack 1) - x' i)) ∨
-      ∃ q' ∈ S'.stopPoints c' i e' η 1, P.IsSafeMoveFst κ (φ ^ 1 • x (i.stepBack 1) - x i) q')
-    (hN : e + e' + κ ≤ N) : P.IsScaledCupCoboundary N c c' := by
-  have h_least : IsLeast {a : ℕ | 0 < a ∧ True} 1 := ⟨⟨one_pos, trivial⟩, fun _ ⟨ha, _⟩ ↦ ha⟩
-  exact P.isScaledCupCoboundary_of_stops (fun _ ↦ True) (fun _ ↦ 1) (fun _ ↦ t) x x'
-    (fun _ ↦ h_least)
+      P.HasStop c c' i κ e e' η 1 (x (i.stepBack 1)) (x i) (x' (i.stepBack 1)) (x' i))
+    (hN : e + e' + κ ≤ N) : P.IsScaledCupCoboundary N c c' :=
+  P.isScaledCupCoboundary_of_stops (fun _ ↦ True) (fun _ ↦ 1) (fun _ ↦ t) x x'
+    (fun _ ↦ ⟨⟨one_pos, trivial⟩, fun _ ⟨ha, _⟩ ↦ ha⟩)
     (fun i _ ↦ h_kill i) (fun i _ ↦ hx i) (fun i _ ↦ hx' i) (fun i _ ↦ h_stop i) hN
 
 /-- If `Q` holds at the jumps at the letter `i`, it holds at the jumps at `i.stepBack a` for all
@@ -678,15 +601,12 @@ level `0`) and depth `standardDepth t η l` (`-u`, raised by `t` at `0` and by `
 Suppose `0 < l` and all jumps of `S` (`S.jumpSet`) at the `l` letters up to `i` are at most `η`.
 Then `x` lies in `stopPoints`: it has the orders `stopOrders η l`, which are `max 0 (-u - η)` below
 `l` and `-u` from there on. -/
-lemma mem_stopPoints_of_down {e t η l : ℕ} {x : S.extensionLattice.Ambient} (hl : 0 < l)
+lemma mem_stopPoints_of_down {t η : ℕ} (hl : 0 < l)
     (h_down : ∀ a : ℕ, a < l → ∀ u ∈ S.jumpSet (i.stepBack a), u ≤ η)
     (hx : x ∈ S.standardPoints c i e t η l) : x ∈ S.stopPoints c i e η l := by
   -- At the levels below `l` the depth is at least `η - u ≥ 0`, so the exponent is at least `0`.
-  obtain ⟨x_mem, x_over, x_exp, x_deep⟩ := hx
-  have x_improved : x ∈ S.pointsOver c i e
-      (improvedOrders (raisedOrdersAtZero (-η)) (standardDepth t η l)) (standardDepth t η l) :=
-    ⟨x_mem, x_over, mem_withOrders_improvedOrders x_exp x_deep, x_deep⟩
-  refine mem_stopPoints_of_le x_improved fun a u hu ↦ ?_
+  refine mem_stopPoints_of_le (o := improvedOrders (raisedOrdersAtZero (-η)) (standardDepth t η l))
+    ⟨hx.1, hx.2.1, mem_withOrders_improvedOrders hx.2.2.1 hx.2.2.2, hx.2.2.2⟩ fun a u hu ↦ ?_
   have h_le : a < l → u ≤ η := (h_down a · u hu)
   simp only [stopOrders, stdOrders, improvedOrders, raisedOrdersAtZero, standardDepth]
   split_ifs <;> omega
@@ -694,7 +614,7 @@ lemma mem_stopPoints_of_down {e t η l : ℕ} {x : S.extensionLattice.Ambient} (
 /-- The second move at a plain cut satisfies the rule for `0`: at a jump `u` of the side that is up
 (`u ≥ -η` below the level `l`) and any jump `v`, the orders of the move and the depth
 `plainDepth t η l η₀` at rest add up to at least `ruleBound 0 t`. -/
-lemma ruleBound_zero_le_inf_add_plainDepth {η l a : ℕ} {u : ℤ} (hl : 0 < l) (h_up : a < l → -η ≤ u)
+lemma ruleBound_zero_le_inf_add_plainDepth {η a : ℕ} {u : ℤ} (hl : 0 < l) (h_up : a < l → -η ≤ u)
     (t η₀ : ℕ) (v : ℤ) :
     ruleBound 0 t a (u + v) ≤
       (raisedOrdersAtZero (-η) ⊓ shiftedOrders l 0 (raisedOrdersAtZero (-η₀))) a u + plainDepth t η
@@ -711,46 +631,21 @@ lemma ruleBound_zero_le_inf_add_plainDepth {η l a : ℕ} {u : ℤ} (hl : 0 < l)
 fixed by the subgroup `Γ'` of `k` modulo orders `-u`, raised by `t` at level `0`, by `η` below `l`,
 by `η₀` at `l`. Then `P.IsSafeMoveFst κ (φ ^ l • x₀ - x) q'` holds: for all `g` in `Γ'`, `p ^ κ`
 times the pairing of this vector with `g • q' - q'` lies in the image of `W(𝔪^♭)`. -/
-lemma SidePairing.isSafeMoveFst_of_neg_le_jumps {c' : S'.paramLattice} {P : S.SidePairing S'}
-    {κ e e' t η l η₀ : ℕ} {d d₀ qOrders : ℕ → ℤ → ℤ} {x₀ x : S.extensionLattice.Ambient}
-    {q' : S'.extensionLattice.Ambient} (hl : 0 < l) (h_kill : P.tateDualSide.KillsCokernel i κ t)
+lemma SidePairing.isSafeMoveFst_of_neg_le_jumps {t η η₀ : ℕ} {d d₀ qOrders : ℕ → ℤ → ℤ}
+    {x₀ : S.extensionLattice.Ambient} {q' : S'.extensionLattice.Ambient}
+    (hl : 0 < l) (h_kill : P.tateDualSide.KillsCokernel i κ t)
     (h_jumps_ge : ∀ a : ℕ, a < l → ∀ u ∈ S.jumpSet (i.stepBack a), -η ≤ u)
     (hx : x ∈ S.pointsOver c i e (raisedOrdersAtZero (-η)) d)
     (hx₀ : x₀ ∈ S.pointsOver c (i.stepBack l) e (raisedOrdersAtZero (-η₀)) d₀)
     (hq' : q' ∈ S'.pointsOver c' i e' qOrders (plainDepth t η l η₀)) :
-    P.IsSafeMoveFst κ (φ ^ l • x₀ - x) q' := by
-  have h_move : φ ^ l • x₀ - x ∈ S.kerWithOrders i
-      (raisedOrdersAtZero (-η) ⊓ shiftedOrders l 0 (raisedOrdersAtZero (-η₀))) :=
-    sub_mem_kerWithOrders_of_pointsOver hx (phi_pow_smul_mem_pointsOver hx₀)
-  exact P.isSafeMoveFst_of_killsCokernel (l := 0) h_kill h_move hq'
-    fun a u hu v _ ↦ ruleBound_zero_le_inf_add_plainDepth hl (fun ha ↦ h_jumps_ge a ha u hu) t η₀ v
-
-/-- Plain cuts, the second side moves: the statement with the sides exchanged. Let `0 < l` and let
-the jumps of `S'` at `i.stepBack a`, `a < l`, be at least `-η`. Let `x₀'` at `i.stepBack l` and `x'`
-at `i` lie in `S'.pointsOver` over `p ^ e'` times the constant of `c'`. Let them have orders
-`raisedOrdersAtZero (-η₀)`, `raisedOrdersAtZero (-η)`, with any depths `d₀'`, `d'`. Let
-`p ^ κ * E ^ t` kill the cokernel of `P.tateDualSide` at `i` (`KillsCokernel`). Let `q` in
-`S.pointsOver c i e` have any orders `qOrders` and depth `plainDepth t η l η₀`. This means it is
-fixed by the subgroup `Γ'` of `k` modulo orders `-u`, raised by `t` at level `0`, by `η` below `l`,
-by `η₀` at `l`. Then `P.IsSafeMoveSnd κ q (φ ^ l • x₀' - x')` holds: for all `g` in `Γ'`, `p ^ κ`
-times the pairing of `g • q - q` with `g` applied to this vector lies in the image of `W(𝔪^♭)`. -/
-lemma SidePairing.isSafeMoveSnd_of_up {c' : S'.paramLattice} {P : S.SidePairing S'}
-    {κ e e' t η l η₀ : ℕ} {d' d₀' qOrders : ℕ → ℤ → ℤ} {x₀' x' : S'.extensionLattice.Ambient}
-    {q : S.extensionLattice.Ambient} (hl : 0 < l) (h_kill : P.tateDualSide.KillsCokernel i κ t)
-    (h_jumps_ge : ∀ a : ℕ, a < l → ∀ u ∈ S'.jumpSet (i.stepBack a), -η ≤ u)
-    (hx' : x' ∈ S'.pointsOver c' i e' (raisedOrdersAtZero (-η)) d')
-    (hx₀' : x₀' ∈ S'.pointsOver c' (i.stepBack l) e' (raisedOrdersAtZero (-η₀)) d₀')
-    (hq : q ∈ S.pointsOver c i e qOrders (plainDepth t η l η₀)) :
-    P.IsSafeMoveSnd κ q (φ ^ l • x₀' - x') := by
-  have h_move : φ ^ l • x₀' - x' ∈ S'.kerWithOrders i
-      (raisedOrdersAtZero (-η) ⊓ shiftedOrders l 0 (raisedOrdersAtZero (-η₀))) :=
-    sub_mem_kerWithOrders_of_pointsOver hx' (phi_pow_smul_mem_pointsOver hx₀')
-  exact P.isSafeMoveSnd_of_killsCokernel (l := 0) h_kill h_move hq
+    P.IsSafeMoveFst κ (φ ^ l • x₀ - x) q' :=
+  P.isSafeMoveFst_of_killsCokernel (l := 0) h_kill
+    (sub_mem_kerWithOrders_of_pointsOver hx (phi_pow_smul_mem_pointsOver hx₀)) hq'
     fun a u hu v _ ↦ ruleBound_zero_le_inf_add_plainDepth hl (fun ha ↦ h_jumps_ge a ha u hu) t η₀ v
 
 /-- A point with a pole of order at most `η` and the depth `plainDepth t η l η₀` asked at a plain
 cut is standard, as this depth is at least `standardDepth t η l`. -/
-lemma mem_standardPoints_of_plainDepth {e t η l η₀ : ℕ} {x : S.extensionLattice.Ambient}
+lemma mem_standardPoints_of_plainDepth {t η η₀ : ℕ}
     (hx : x ∈ S.pointsOver c i e (raisedOrdersAtZero (-η)) (plainDepth t η l η₀)) :
     x ∈ S.standardPoints c i e t η l :=
   mem_pointsOver_of_le hx (fun _ _ _ ↦ le_rfl) fun _ _ _ ↦ le_add_of_nonneg_right (by positivity)
@@ -761,10 +656,9 @@ Tate dual side at `i` (`E` the Eisenstein polynomial), let `x₀'`, `x'` have po
 `η₀`, `η` at `E`, and let `x` have a pole of order at most `η` and be fixed by `Γ'` modulo orders
 `plainDepth t η l η₀`. Then some stop `q` of the first side can rest while the move by
 `φ ^ l x₀' - x'` is safe, `φ` being the Frobenius; `x` is one. -/
-lemma SidePairing.exists_mem_stopPoints_isSafeMoveSnd {c' : S'.paramLattice} {P : S.SidePairing S'}
-    {κ e e' t η l η₀ : ℕ} {d' d₀' : ℕ → ℤ → ℤ} {x : S.extensionLattice.Ambient}
+lemma SidePairing.exists_mem_stopPoints_isSafeMoveSnd {t η η₀ : ℕ} {d' d₀' : ℕ → ℤ → ℤ}
     {x₀' x' : S'.extensionLattice.Ambient} (hl : 0 < l)
-      (h_kill : P.tateDualSide.KillsCokernel i κ t)
+    (h_kill : P.tateDualSide.KillsCokernel i κ t)
     (h_down : ∀ a : ℕ, a < l → ∀ u ∈ S.jumpSet (i.stepBack a), u ≤ η)
     (h_up : ∀ a : ℕ, a < l → ∀ u ∈ S'.jumpSet (i.stepBack a), -η ≤ u)
     (hx : x ∈ S.pointsOver c i e (raisedOrdersAtZero (-η)) (plainDepth t η l η₀))
@@ -772,7 +666,9 @@ lemma SidePairing.exists_mem_stopPoints_isSafeMoveSnd {c' : S'.paramLattice} {P 
     (hx₀' : x₀' ∈ S'.pointsOver c' (i.stepBack l) e' (raisedOrdersAtZero (-η₀)) d₀') :
     ∃ q ∈ S.stopPoints c i e η l, P.IsSafeMoveSnd κ q (φ ^ l • x₀' - x') :=
   ⟨x, mem_stopPoints_of_down hl h_down (mem_standardPoints_of_plainDepth hx),
-    P.isSafeMoveSnd_of_up hl h_kill h_up hx' hx₀' hx⟩
+    P.isSafeMoveSnd_of_killsCokernel (l := 0) h_kill
+      (sub_mem_kerWithOrders_of_pointsOver hx' (phi_pow_smul_mem_pointsOver hx₀')) hx
+      fun a u hu v _ ↦ ruleBound_zero_le_inf_add_plainDepth hl (fun ha ↦ h_up a ha u hu) t η₀ v⟩
 
 /-- A plain cut: at the `l` letters up to `i` the jumps of the second side are at most `η` (it is
 down) and those of the first at least `-η` (it is up). Let `p ^ κ * E ^ t` kill the cokernel of the
@@ -780,9 +676,9 @@ Tate dual side at `i` (`E` the Eisenstein polynomial), let `x₀`, `x` have pole
 `η₀`, `η` at `E`, and let `x'` have a pole of order at most `η` and be fixed by `Γ'` modulo orders
 `plainDepth t η l η₀`. Then some stop `q'` of the second side can rest while the move by
 `φ ^ l x₀ - x` is safe, `φ` being the Frobenius; `x'` is one. -/
-lemma SidePairing.exists_mem_stopPoints_isSafeMoveFst {c' : S'.paramLattice} {P : S.SidePairing S'}
-    {κ e e' t η l η₀ : ℕ} {d d₀ : ℕ → ℤ → ℤ} {x₀ x : S.extensionLattice.Ambient}
-    {x' : S'.extensionLattice.Ambient} (hl : 0 < l) (h_kill : P.tateDualSide.KillsCokernel i κ t)
+lemma SidePairing.exists_mem_stopPoints_isSafeMoveFst {t η η₀ : ℕ} {d d₀ : ℕ → ℤ → ℤ}
+    {x₀ : S.extensionLattice.Ambient} {x' : S'.extensionLattice.Ambient} (hl : 0 < l)
+    (h_kill : P.tateDualSide.KillsCokernel i κ t)
     (h_down : ∀ a : ℕ, a < l → ∀ u ∈ S'.jumpSet (i.stepBack a), u ≤ η)
     (h_up : ∀ a : ℕ, a < l → ∀ u ∈ S.jumpSet (i.stepBack a), -η ≤ u)
     (hx' : x' ∈ S'.pointsOver c' i e' (raisedOrdersAtZero (-η)) (plainDepth t η l η₀))
@@ -810,21 +706,10 @@ lemma _root_.New.Lift.FitsWindows.abs_add_of_opposite {η b W : ℕ} {ε : ℤˣ
   rcases hV v hv with h | ⟨h, hv⟩ | ⟨h, hv⟩ <;>
     rcases hV' v' hv' with h' | ⟨h', hv'⟩ | ⟨h', hv'⟩ <;> simp only [abs_eq_max_neg] <;> omega
 
-/-- For opposite far windows, the negative sum is bounded by the larger of the
-near-near bound and the near-far bound. -/
-lemma _root_.New.Lift.FitsWindows.neg_add_le_of_opposite {η b W : ℕ} {ε : ℤˣ} {V V' : Finset ℤ}
-    (hV : FitsWindows η (-ε) b W V) (hV' : FitsWindows η ε b W V')
-    {v v' : ℤ} (hv : v ∈ V) (hv' : v' ∈ V') :
-    -(v + v') ≤ max (2 * (η : ℤ)) (b + W + η : ℤ) := by
-  have h := hV.abs_add_of_opposite hV' hv hv'
-  simp only [abs_eq_max_neg] at h
-  omega
-
 /-- Let the jumps of `T` and `S` at a letter `i` lie in `[-η, η]` or in far windows `∓σ [β, β + W]`
 of opposite signs. Then each jump `u` of the Tate dual side of a pairing of `T` and `S` lies near
 `0`, `β` or `-β`: such a jump is `0` or `-(v + w) - 1` for jumps `v` of `T` and `w` of `S`. -/
-lemma tateDualSide_jump_near {k : KummerChart Γ} {O : k.Coeffs} {S : k.PairingSide O} {i : Letter}
-    {η W : ℕ} {T : PairingSide O} (P : SidePairing T S) {σ : ℤˣ} {β : ℕ}
+lemma tateDualSide_jump_near {η W : ℕ} {T : PairingSide O} (P : SidePairing T S) {σ : ℤˣ} {β : ℕ}
     (hT_window : FitsWindows η (-σ) β W (T.jumpSet i))
     (hS_window : FitsWindows η σ β W (S.jumpSet i)) {u : ℤ}
     (hu : u ∈ P.tateDualSide.jumpSet i) :
@@ -838,26 +723,90 @@ lemma tateDualSide_jump_near {k : KummerChart Γ} {O : k.Coeffs} {S : k.PairingS
 /-- A side is down, that is, its jumps are at most `η`, at a letter where they lie in the windows
 `[-η, η]` and `σ [β, β + V]` and the far window is negative or ends at or below `η`. -/
 lemma jump_le_of_fitsWindows {η β V : ℕ} {σ : ℤˣ} (hU : FitsWindows η σ β V (S.jumpSet i))
-    (h_sign : σ = -1 ∨ β + V ≤ η) : ∀ u ∈ S.jumpSet i, u ≤ η := by
-  intro u hu
-  obtain h_low | ⟨h_pos, h_far⟩ | ⟨-, h_far⟩ := hU u hu
-  · omega
-  · obtain rfl | h_small := h_sign
-    · exact absurd h_pos (by decide)
-    · omega
-  · omega
+    (h_sign : σ = -1 ∨ β + V ≤ η) : ∀ u ∈ S.jumpSet i, u ≤ η := fun u hu ↦ by
+  rcases hU u hu with _ | ⟨_, _⟩ | ⟨_, _⟩ <;> rcases h_sign with rfl | _ <;>
+    (try simp only [Units.val_neg, Units.val_one] at *) <;> omega
 
 /-- A side is up, that is, its jumps are at least `-η`, at a letter where they lie in the windows
 `[-η, η]` and `σ [β, β + V]` and the far window is positive or ends at or below `η` in modulus. -/
 lemma neg_le_jump_of_fitsWindows {η β V : ℕ} {σ : ℤˣ} (hU : FitsWindows η σ β V (S.jumpSet i))
-    (h_sign : σ = 1 ∨ β + V ≤ η) : ∀ u ∈ S.jumpSet i, -η ≤ u := by
-  intro u hu
-  obtain h_low | ⟨-, h_far⟩ | ⟨h_neg, h_far⟩ := hU u hu
-  · omega
-  · omega
-  · obtain rfl | h_small := h_sign
-    · exact absurd h_neg (by decide)
-    · omega
+    (h_sign : σ = 1 ∨ β + V ≤ η) : ∀ u ∈ S.jumpSet i, -η ≤ u := fun u hu ↦ by
+  rcases hU u hu with _ | ⟨_, _⟩ | ⟨_, _⟩ <;> rcases h_sign with rfl | _ <;>
+    (try simp only [Units.val_one] at *) <;> omega
+
+/-- Two paired sides `S` and `S'` whose jump sets at every letter `i` lie in the low window
+`[-η, η]` and in opposite far windows `∓ε i • [β i, β i + V]`. -/
+structure OppositeWindowSides (P : S.SidePairing S') where
+  /-- The radius of the low window `[-η, η]`. -/
+  η : ℕ
+  /-- The width of the far windows `[β i, β i + V]`. -/
+  V : ℕ
+  /-- The start of the far window at each letter `i`. -/
+  β : k.Letter → ℕ
+  /-- The sign of the far window of `S'` at each letter `i` (`S` has `-ε i`). -/
+  ε : k.Letter → ℤˣ
+  /-- The jumps of `S` lie in `[-η, η] ∪ -ε i • [β i, β i + V]`. -/
+  fst_window : ∀ i : k.Letter, FitsWindows η (-ε i) (β i) V (S.jumpSet i)
+  /-- The jumps of `S'` lie in `[-η, η] ∪ ε i • [β i, β i + V]`. -/
+  snd_window : ∀ i : k.Letter, FitsWindows η (ε i) (β i) V (S'.jumpSet i)
+
+/-- Enlarge the low-window radius of `OppositeWindowSides` from `W.η` to any `t ≥ W.η`. -/
+def OppositeWindowSides.widen_η (W : OppositeWindowSides P) {t : ℕ} (ht : W.η ≤ t) :
+    OppositeWindowSides P :=
+  ⟨t, W.V, W.β, W.ε, fun i u hu ↦ (W.fst_window i u hu).imp_left fun h ↦ by omega,
+    fun i u hu ↦ (W.snd_window i u hu).imp_left fun h ↦ by omega⟩
+
+/-- Bundled version of `tateDualSide_jump_near` for `OppositeWindowSides`. -/
+lemma OppositeWindowSides.tateDualSide_jump_near (W : OppositeWindowSides P) {u : ℤ}
+    (hu : u ∈ P.tateDualSide.jumpSet i) :
+    u = 0 ∨ |u + 1| ≤ max (2 * (W.η : ℤ)) W.V ∨
+      (W.β i : ℤ) - W.η ≤ |u + 1| ∧ |u + 1| ≤ W.β i + W.V + W.η :=
+  PairingSide.tateDualSide_jump_near P (W.fst_window i) (W.snd_window i) hu
+
+/-- Unified plain-cut stop dispatch for paired sides in opposite windows: if at every `a < l`
+either `W.ε (i.stepBack a) = ρ` or the far window ends at or below `W.η`, then whichever side has
+negative far window for `ρ` is down and provides a stop while the other side is up and moves
+safely. -/
+lemma OppositeWindowSides.hasStop_of_sign (W : OppositeWindowSides P) {t η₀ : ℕ} {ρ : ℤˣ}
+    {d₀ d₀' : ℕ → ℤ → ℤ} {x₀ : S.extensionLattice.Ambient}
+    {x₀' x' : S'.extensionLattice.Ambient} (hl : 0 < l)
+    (h_kill : P.tateDualSide.KillsCokernel i κ t)
+    (h_plain : ∀ a < l, W.ε (i.stepBack a) = ρ ∨ W.β (i.stepBack a) + W.V ≤ W.η)
+    (hx : x ∈ S.pointsOver c i e (raisedOrdersAtZero (-W.η)) (plainDepth t W.η l η₀))
+    (hx' : x' ∈ S'.pointsOver c' i e' (raisedOrdersAtZero (-W.η)) (plainDepth t W.η l η₀))
+    (hx₀ : x₀ ∈ S.pointsOver c (i.stepBack l) e (raisedOrdersAtZero (-η₀)) d₀)
+    (hx₀' : x₀' ∈ S'.pointsOver c' (i.stepBack l) e' (raisedOrdersAtZero (-η₀)) d₀') :
+    P.HasStop c c' i κ e e' W.η l x₀ x x₀' x' := by
+  obtain rfl | rfl := Int.units_eq_one_or ρ
+  · exact .inl (P.exists_mem_stopPoints_isSafeMoveSnd hl h_kill
+      (fun a ha ↦ jump_le_of_fitsWindows (W.fst_window _) ((h_plain a ha).imp_left neg_inj.2))
+      (fun a ha ↦ neg_le_jump_of_fitsWindows (W.snd_window _) (h_plain a ha)) hx hx' hx₀')
+  · exact .inr (P.exists_mem_stopPoints_isSafeMoveFst hl h_kill
+      (fun a ha ↦ jump_le_of_fitsWindows (W.snd_window _) (h_plain a ha))
+      (fun a ha ↦ neg_le_jump_of_fitsWindows (W.fst_window _)
+        ((h_plain a ha).imp_left neg_eq_iff_eq_neg.2)) hx' hx hx₀)
+
+/-- Asymmetric `l = 1` stop dispatch for paired sides in opposite windows: when `W.ε i = 1`, the
+first side is down and provides a standard stop; when `W.ε i = -1`, the caller supplies a stop on
+the second side using the resulting up/down bounds at `i`. -/
+lemma OppositeWindowSides.hasStop_one_of_neg (W : OppositeWindowSides P) {t η₀ : ℕ}
+    {d' d₀' : ℕ → ℤ → ℤ} {x₀ : S.extensionLattice.Ambient}
+    {x₀' x' : S'.extensionLattice.Ambient} (h_kill : P.tateDualSide.KillsCokernel i κ t)
+    (hx : x ∈ S.pointsOver c i e (raisedOrdersAtZero (-W.η)) (plainDepth t W.η 1 η₀))
+    (hx' : x' ∈ S'.pointsOver c' i e' (raisedOrdersAtZero (-W.η)) d')
+    (hx₀' : x₀' ∈ S'.pointsOver c' (i.stepBack 1) e' (raisedOrdersAtZero (-η₀)) d₀')
+    (h_neg : W.ε i = -1 → (∀ u ∈ S.jumpSet i, -W.η ≤ u) → (∀ u ∈ S'.jumpSet i, u ≤ W.η) →
+      ∃ q' ∈ S'.stopPoints c' i e' W.η 1, P.IsSafeMoveFst κ (φ ^ 1 • x₀ - x) q') :
+    P.HasStop c c' i κ e e' W.η 1 x₀ x x₀' x' := by
+  obtain hε | hε := Int.units_eq_one_or (W.ε i)
+  · exact .inl (P.exists_mem_stopPoints_isSafeMoveSnd one_pos h_kill
+      (forall_mem_U_stepBack_of_lt_one (jump_le_of_fitsWindows (W.fst_window i)
+        (.inl (neg_inj.2 hε))))
+      (forall_mem_U_stepBack_of_lt_one (neg_le_jump_of_fitsWindows (W.snd_window i) (.inl hε)))
+      hx hx' hx₀')
+  · exact .inr (h_neg hε
+      (neg_le_jump_of_fitsWindows (W.fst_window i) (.inl (neg_eq_iff_eq_neg.2 hε)))
+      (jump_le_of_fitsWindows (W.snd_window i) (.inl hε)))
 
 end PairingSide
 

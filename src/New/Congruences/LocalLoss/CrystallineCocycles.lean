@@ -106,29 +106,26 @@ lemma finrank_crysCocycles_eq_add_neg_jumps {E : Type*} [Field E] [CMFieldWithRo
     simpa [coefficientEmbedding, ext_iff] using h_eq
   -- `σ ↦ complexEmbeddingOf e (r σ * g)` permutes the embeddings of the place.
   have sum_J (g : Gp ℓ) :
-      ∑ σ, J (complexEmbeddingOf e (r σ * g)) = ∑ σ : range (complexEmbeddingOf e), J σ := by
-    let perm (σ : range (complexEmbeddingOf e)) : range (complexEmbeddingOf e) :=
-      ⟨complexEmbeddingOf e (r σ * g), r σ * g, rfl⟩
-    refine (Function.Injective.bijective_of_finite (f := perm) fun σ τ ↦ ?_).sum_comp (J ·)
-    simp [perm, r, Subtype.ext_iff, ← apply_rangeSplitting, h_group.complexEmbeddingOf_eq_iff]
+      ∑ σ, J (complexEmbeddingOf e (r σ * g)) = ∑ σ : range (complexEmbeddingOf e), J σ :=
+    (Function.Injective.bijective_of_finite
+      (f := fun σ : range (complexEmbeddingOf e) ↦ ⟨complexEmbeddingOf e (r σ * g), _, rfl⟩)
+      fun σ τ ↦ by
+        simp [r, Subtype.ext_iff, ← apply_rangeSplitting, h_group.complexEmbeddingOf_eq_iff]
+    ).sum_comp (J ·)
   -- Sum the jumps at `coefficientEmbedding O (r σ * s φ)` first over `φ`, then over `σ`; there are
   -- `𝒥.toGp.range.index` embeddings `σ` and `finrank ℤ_[ℓ] O` embeddings `φ`.
   have double_count :
       𝒥.toGp.range.index • ∑ φ, K φ = finrank ℤ_[ℓ] O • ∑ σ : range (complexEmbeddingOf e), J σ :=
     calc _ = ∑ σ, ∑ φ, K (coefficientEmbedding O (r σ * s φ)) := by
           simp [sum_K, h_group.index_eq_card_range]
-      _ = ∑ φ, ∑ σ, K (coefficientEmbedding O (r σ * s φ)) := sum_comm
-      _ = _ := by simp [K_eq, sum_J, card_algHom_eq_finrank]
+      _ = _ := by rw [sum_comm]; simp [K_eq, sum_J, card_algHom_eq_finrank]
   -- Multiplied by `[O : ℤ_ℓ]`, the ranks become ranks over `ℤ_ℓ`. There `crysCocycles.finrank_eq`
   -- gives the rank of `L` plus the index times the number of negative jumps, which `double_count`
   -- evaluates.
-  have h_neg : 𝒥.toGp.range.index * (∑ φ, K φ).countP (· < 0) =
-      finrank ℤ_[ℓ] O *
-        ∑ σ : E →+* ℂ with ∃ g : Gp ℓ, complexEmbeddingOf e g = σ, (J σ).countP (· < 0) := by
-    simpa [← coe_countPAddMonoidHom, sum_set_coe, ← filter_mem_univ_eq_toFinset] using
-      congrArg (countP (· < 0)) double_count
   refine Nat.mul_left_cancel (finrank_pos (R := ℤ_[ℓ]) (M := O)) ?_
-  rw [mul_add, finrank_mul_finrank, finrank_mul_finrank, (finrank_eq h_crys jumps_sum).2, h_neg]
+  rw [mul_add, finrank_mul_finrank, finrank_mul_finrank, (finrank_eq h_crys jumps_sum).2]
+  simpa [← coe_countPAddMonoidHom, sum_set_coe, ← filter_mem_univ_eq_toFinset] using
+    congrArg (finrank ℤ_[ℓ] L + countP (· < 0) ·) double_count
 
 /-- From an exponent to the defect. Let `L` be potentially crystalline, and let `ℓ ^ k` carry the
 crystalline cocycles of `L` into `cupOrthogonal 𝒬 L`, the functions orthogonal to the lattices in
@@ -153,20 +150,17 @@ lemma normLength_dualDefect_le_of_hasCupExponent {k : ℕ} (hL : IsPotentiallyCr
       _ ≤ finrank ℤ_[ℓ] L + m * finrank ℤ_[ℓ] L := by grw [countP_le_card, hK_card]
       _ ≤ _ := by linarith [Nat.le_mul_of_pos_left (finrank ℤ_[ℓ] L) hm]
   -- The rank over `O`: divide by the degree of `O` over `ℤ_ℓ`.
-  have h_rank : finrank O (crysCocycles L.ρ) ≤ 2 * (m * finrank O L) := by
-    rw [← finrank_mul_finrank ℤ_[ℓ] O, ← finrank_mul_finrank ℤ_[ℓ] O L] at h_rankZ
-    exact le_of_mul_le_mul_left (by linarith) (finrank_pos (R := ℤ_[ℓ]) (M := O))
+  have h_rank : finrank O (crysCocycles L.ρ) ≤ 2 * (m * finrank O L) :=
+    le_of_mul_le_mul_left (by
+      rw [← finrank_mul_finrank ℤ_[ℓ] O, ← finrank_mul_finrank ℤ_[ℓ] O L] at h_rankZ; linarith)
+      (finrank_pos (R := ℤ_[ℓ]) (M := O))
   let I : Ideal O := Ideal.span {(ℓ : ↑O) ^ k}
-  have h_sub : I • ⊤ ≤ (cupOrthogonal 𝒬 L).submoduleOf (crysCocycles L.ρ) := by
-    rw [ideal_span_singleton_smul]
-    rintro _ ⟨c, -, rfl⟩
-    exact h_exp _ c.property
   calc _ ≤ O.normLength (length O (crysCocycles L.ρ ⧸ I • (⊤ : Submodule O _))) := by
-        grw [dualDefect, relLength, length_le_of_surjective _ (factor_surjective h_sub)]
+        grw [dualDefect, relLength, length_le_of_surjective _ (factor_surjective (p := I • ⊤) (by
+          rw [ideal_span_singleton_smul]; rintro _ ⟨c, -, rfl⟩; exact h_exp _ c.property))]
     _ = finrank O (crysCocycles L.ρ) * k := by
       rw [← (quotTensorEquivQuotSMul (crysCocycles L.ρ) I).length_eq,
-        (equivFinsuppOfBasisRight (M := O ⧸ I) (finBasis O (crysCocycles L.ρ))).length_eq]
-      simp [I]
+        (equivFinsuppOfBasisRight (M := O ⧸ I) (finBasis O (crysCocycles L.ρ))).length_eq]; simp [I]
     _ ≤ m * (finrank O L * (2 * k)) := mod_cast by linarith [Nat.mul_le_mul_right k h_rank]
     _ ≤ m * y := mul_le_mul_right (mod_cast hy) _
 
@@ -196,14 +190,11 @@ lemma New.Selmer.le_crystallineLoss_of_pow_dvd {ℓ h b n : ℕ} [ThePrime ℓ]
 the `ℓ`-adic valuation of `(2 b)! (∏ k) ^ h³`, where `k` runs over the positive integers in
 `(b - 30 h³, b + 30 h³]`. The factor `(2 b)!` alone gives it. -/
 lemma New.Selmer.two_mul_lt_mul_crystallineLoss_succ {ℓ : ℕ} [hp : ThePrime ℓ] (h b : ℕ) :
-    2 * b < ℓ * (crystallineLoss h b ℓ + 1) := by
-  have h_val : multiplicity ℓ (2 * b)! ≤ crystallineLoss h b ℓ :=
-    le_crystallineLoss_of_pow_dvd ((pow_multiplicity_dvd ℓ _).mul_right _)
-  have h_div : 2 * b / ℓ ≤ multiplicity ℓ (2 * b)! := by
-    rw [← multiplicity_mul_div_factorial, multiplicity_factorial_mul]
-    exact Nat.le_add_left _ _
-  calc 2 * b < ℓ * (2 * b / ℓ + 1) := lt_mul_div_succ _ hp.out.pos
-    _ ≤ ℓ * (crystallineLoss h b ℓ + 1) := by grw [h_div, h_val]
+    2 * b < ℓ * (crystallineLoss h b ℓ + 1) :=
+  (lt_mul_div_succ _ hp.out.pos).trans_le <| Nat.mul_le_mul_left _ <| Nat.add_le_add_right
+    ((by rw [← multiplicity_mul_div_factorial, multiplicity_factorial_mul]
+         exact Nat.le_add_left _ _ : 2 * b / ℓ ≤ multiplicity ℓ (2 * b)!).trans
+      (le_crystallineLoss_of_pow_dvd ((pow_multiplicity_dvd ℓ _).mul_right _))) 1
 
 /-- If `ℓ` divides some positive integer in `(b - 30 h³, b + 30 h³]`, then the crystalline loss
 `crystallineLoss h b ℓ` is at least `h³`. -/
@@ -216,15 +207,14 @@ lemma New.Selmer.cube_le_crystallineLoss_of_dvd {ℓ h b n : ℕ} [ThePrime ℓ]
 lemma New.Selmer.natLog_lt_of_two_mul_log_lt {ℓ H b m : ℕ} [hp : ThePrime ℓ]
     (hm : 2 * Real.log (4 * b : ℝ) < m) (hH : H ≤ 4 * b) : ℓ.log H < m := by
   have h_half : (2 : ℝ)⁻¹ ≤ Real.log ℓ := by
-    grw [← hp.out.two_le, cast_two, ← one_sub_inv_le_log_of_pos two_pos]
-    norm_num
+    grw [← hp.out.two_le, cast_two, ← one_sub_inv_le_log_of_pos two_pos]; norm_num
   have h_nonneg : 0 ≤ Real.log (4 * b : ℝ) := by exact_mod_cast log_natCast_nonneg (4 * b)
   rw [← Nat.cast_lt (α := ℝ)]
-  calc (ℓ.log H : ℝ) ≤ ℓ.log (4 * b) := by grw [hH]
-    _ ≤ logb ℓ (4 * b : ℕ) := natLog_le_logb _ _
+  calc (ℓ.log H : ℝ) ≤ logb ℓ (4 * b : ℕ) :=
+        (mod_cast Nat.log_mono_right hH : (ℓ.log H : ℝ) ≤ ℓ.log (4 * b)).trans (natLog_le_logb _ _)
     _ = Real.log (4 * b : ℝ) / Real.log ℓ := by simp [logb]
-    _ ≤ Real.log (4 * b : ℝ) / 2⁻¹ := by gcongr
-    _ = 2 * Real.log (4 * b : ℝ) := by ring
+    _ ≤ 2 * Real.log (4 * b : ℝ) := by
+        rw [show (2 : ℝ) * Real.log (4 * b : ℝ) = Real.log (4 * b : ℝ) / 2⁻¹ by ring]; gcongr
     _ < m := hm
 
 /-- Suppose that `ℓ > G + δ + n` divides no integer in `(b - c, b + c]` and that `δ + n < c`. Then
@@ -313,53 +303,60 @@ lemma New.Selmer.fitsWindows_letterJumps {ℓ : ℕ} [ThePrime ℓ] [Γ : GroupO
     FitsWindows (if ℓ ≤ Q then 2 * G else η) (s (theta (k.letterTeich i)))
       (if T (theta (k.letterTeich i)) then b + δ else G + δ) W (k.letterJumps ζ U i) := by
   intro u hu
-  obtain rfl | hu := mem_insert.1 hu
+  obtain rfl | ⟨g, h_letter, hu_g⟩ := by simpa [KummerChart.letterJumps] using hu
   · exact .inl ⟨by omega, by omega⟩
-  obtain ⟨g, h_letter, hu_g⟩ :
-      ∃ g : O →ₐ[ℤ_[ℓ]] ℂ_[ℓ], g ζ = theta (k.letterTeich i) ∧ u ∈ U g := by
-    simpa using mem_biUnion.1 hu
   -- `u` is in the low window or in the far window of `g`, as `FitsWindows` says.
   have h_win := hU g u hu_g
   rw [← h_letter]
   by_cases h_read : th g ∨ Q < ℓ
   · -- The letter reads `th g` and `ε g`, so only the low window changes.
     simp only [← h_sign g h_read, ← h_thick g h_read, ← ite_add]
-    exact h_win.imp_left fun h_low ↦ by split_ifs <;> omega
+    exact h_win.imp_left fun _ ↦ by split_ifs <;> omega
   · -- The embedding is thin and `ℓ ≤ Q`: both windows of `g` lie in `[-2 G, 2 G]`.
     obtain ⟨h_thin, hℓ⟩ := not_or.1 h_read
-    rw [ite_eq_right h_thin] at h_win
-    rw [ite_eq_left (not_lt.1 hℓ)]
-    omega
+    rw [ite_eq_right h_thin] at h_win; rw [ite_eq_left (not_lt.1 hℓ)]; omega
+
+section CrystallineWindowHelpers
+
+variable {ℓ Q m h μ G b δ η W v K : ℕ}
+
+/-- The gap condition for small loss. Under the size conditions `h_sizes`, let `2 b < ℓ (v + 1)`
+with `v < h³`, and let `ℓ` divide no integer in `(b - 30 h³, b + 30 h³]`. Then `ℓ` divides no
+nonzero integer within `6 (2 (v + 1) + η + W)` of `0` or `± a`, for `a = b + δ` and `a = G + δ`. -/
+lemma New.Selmer.CrystallineSizes.noMultipleNear {a : ℕ}
+    (h_sizes : CrystallineSizes Q m h G b δ η W) (h_loss : 2 * b < ℓ * (v + 1)) (hv : v < h ^ 3)
+    (h_not : ∀ u ∈ Ioc (b - 30 * h ^ 3) (b + 30 * h ^ 3), ¬ℓ ∣ u) (ha : a = b + δ ∨ a = G + δ) :
+    NoMultipleNear ℓ (6 * (2 * (v + 1) + η + W)) a := by
+  have ⟨_, hQ, hG, hb, _, hδ, hη⟩ := h_sizes
+  have h_large : 9 * G ≤ ℓ := by nlinarith only [h_loss, hv, hb]
+  exact noMultipleNear_of_forall_not_dvd (by omega) (by omega) h_not ha
+
+variable [hp : ThePrime ℓ] [Γ : GroupOverGp ℓ] {O : CoeffRing ℓ} {L : GalLattice O Γ}
+  {U U' : (O →ₐ[ℤ_[ℓ]] ℂ_[ℓ]) → Finset ℤ} {k : KummerChart Γ}
 
 /-- Assume the size conditions `CrystallineSizes`, that the ramification index `e` of the Kummer
 chart `k` is at most `h`, and that `2 (b + δ) < h² K`. Then `20 (⌊log_ℓ h³⌋ + 1 + d) · 2 G + ⌊log_ℓ
 (2 (b + δ + 10 G))⌋ ≤ K`, where `d = k.differentBound` is `0` if `e = 1` and `v_ℓ(e) + 1`
 otherwise. -/
-lemma New.Selmer.CrystallineSizes.differentBound_mul_add_log_le {ℓ : ℕ} [ThePrime ℓ]
-    [Γ : GroupOverGp ℓ] {k : KummerChart Γ} {Q m h G b δ η W K : ℕ}
+lemma New.Selmer.CrystallineSizes.differentBound_mul_add_log_le
     (h_sizes : CrystallineSizes Q m h G b δ η W) (he : k.e ≤ h) (hK : 2 * (b + δ) < h ^ 2 * K) :
     20 * (ℓ.log (h ^ 3) + 1 + k.differentBound) * (2 * G) +
       ℓ.log (2 * (b + δ + 5 * (2 * G))) ≤ K := by
   -- The bracket is at most `h`, the logarithm at most `h G`, and `41 G h ≤ K` because
   -- `198 G h³ ≤ 2 b < h² K`.
-  have ⟨_, (hQ : 99 * (Q * Q + (W + 1) * Q + Q + W + m) ≤ h), (hG : 99 * h ^ 3 ≤ G),
-    (hb : 99 * (G * h ^ 3 + G) ≤ b), _, (hδ : δ < η),
-    (hη : 99 * ((η + W) * Q + η + h) ≤ h ^ 3)⟩ := h_sizes
-  have h_log {H : ℕ} (hH : H ≤ 4 * b) : ℓ.log H < m :=
-    natLog_lt_of_two_mul_log_lt h_sizes.log_lt hH
+  have ⟨_, hQ, hG, hb, h_log, hδ, hη⟩ := h_sizes
+  have h_log_lt {H : ℕ} (hH : H ≤ 4 * b) : ℓ.log H < m := natLog_lt_of_two_mul_log_lt h_log hH
   have h_bracket : ℓ.log (h ^ 3) + 1 + k.differentBound ≤ h := by
-    have h_cube : ℓ.log (h ^ 3) < m := h_log (by omega)
-    have h_val : padicValNat ℓ k.e < m := by
-      rw [Nat.padicValNat_def]
-      exact (multiplicity_le_nat_log k.e).trans_lt (h_log (by omega))
-    grw [KummerChart.differentBound, ite_le_sup]
-    omega
-  have h_last : ℓ.log (2 * (b + δ + 5 * (2 * G))) ≤ h * G :=
-    calc _ ≤ m := (h_log (by omega)).le
-      _ ≤ h := by omega
-      _ ≤ h * G := Nat.le_mul_of_pos_right h (by omega)
-  grw [h_bracket, h_last]
+    have := h_log_lt (by omega : h ^ 3 ≤ 4 * b)
+    have : padicValNat ℓ k.e < m :=
+      (Nat.padicValNat_def (p := ℓ) (n := k.e) ▸ multiplicity_le_nat_log k.e).trans_lt
+        (h_log_lt (by omega))
+    grw [KummerChart.differentBound, ite_le_sup]; omega
+  grw [h_bracket, ((h_log_lt (by omega)).le.trans (by omega) :
+    ℓ.log (2 * (b + δ + 5 * (2 * G))) ≤ h).trans (Nat.le_mul_of_pos_right h (by omega : 0 < G))]
   nlinarith only [hK, hb]
+
+variable [TopologicalSpace Γ]
 
 /-- The exponent for small primes `ℓ ≤ Q`. Let `Γ → G_ℓ` be an open embedding. The hypothesis
 `h_sizes` is the list of inequalities `Q² ≪ h`, `m ≪ h`, `W Q ≪ h`, `h³ ≪ G`, `h³ G ≪ b`,
@@ -375,48 +372,34 @@ from `U` and `U'` lie in the union of `[-2 G, 2 G]` and opposite far windows of 
 at `b + δ` if the letter is thick and at `G + δ` otherwise. If `2 (b + δ) < h² K`, then
 `ℓ ^ (10⁴ K (⌊log_ℓ h³⌋ + 1))` times any crystalline cocycle of `L` is orthogonal under cup products
 to the class for `U`. -/
-lemma New.Selmer.LettersReadThick.hasCupExponent_of_le {ℓ : ℕ} [hp : ThePrime ℓ]
-    [Γ : GroupOverGp ℓ] [TopologicalSpace Γ] {O : CoeffRing ℓ} {L : GalLattice O Γ}
-    {U U' : (O →ₐ[ℤ_[ℓ]] ℂ_[ℓ]) → Finset ℤ} {k : KummerChart Γ} {ι : Type} {letter : ι → ℂ_[ℓ]}
-    {th : ι → Prop} {ε : ι → ℤˣ} {Q m h G b δ η W K : ℕ} {T : ℂ_[ℓ] → Prop} [DecidablePred T]
-    {s : ℂ_[ℓ] → ℤˣ} (h_chart : LettersReadThick k letter th ε Q h T s)
+lemma New.Selmer.LettersReadThick.hasCupExponent_of_le {ι : Type} {letter : ι → ℂ_[ℓ]}
+    {th : ι → Prop} {ε : ι → ℤˣ} {T : ℂ_[ℓ] → Prop} [DecidablePred T] {s : ℂ_[ℓ] → ℤˣ}
+    (h_chart : LettersReadThick k letter th ε Q h T s)
     (h_sizes : CrystallineSizes Q m h G b δ η W) (hℓ : ℓ ≤ Q) (hK : 2 * (b + δ) < h ^ 2 * K)
-    (ζ : k.LetterRoot O) (h_open : Topology.IsOpenEmbedding Γ.overGp.toGp) (hL : InClass ⊤ ⊥ U' L)
-    (hU : ∀ i : k.Letter, FitsWindows (2 * G) (-s (theta (k.letterTeich i)))
-      (if T (theta (k.letterTeich i)) then b + δ else G + δ) W (k.letterJumps ζ U i))
-    (hU' : ∀ i : k.Letter, FitsWindows (2 * G) (s (theta (k.letterTeich i)))
-      (if T (theta (k.letterTeich i)) then b + δ else G + δ) W (k.letterJumps ζ U' i)) :
+    (D : k.OppositeWindowData L U U' (2 * G) W
+      (fun i ↦ if T (theta (k.letterTeich i)) then b + δ else G + δ)
+      (fun i ↦ s (theta (k.letterTeich i)))) :
     HasCupExponent (InClass ⊤ ⊥ U) L (10 ^ 4 * (K * (ℓ.log (h ^ 3) + 1))) := by
   -- The thick letters are sparse, with gaps measured up to `J = ⌊log_ℓ h³⌋`, so
   -- `hasCupExponent_sparse_thick` applies with low window `[-2 G, 2 G]` and costs `2 K` and `K`.
-  have ⟨_, hQ, (hG : 99 * h ^ 3 ≤ G), (hb : 99 * (G * h ^ 3 + G) ≤ b), _, hδ, hη⟩ := h_sizes
-  have he : k.e ≤ h := h_chart.e_le
+  have ⟨_, hQ, hG, hb, _, hδ, hη⟩ := h_sizes
   have h_pow : h ^ 3 ≤ ℓ ^ (ℓ.log (h ^ 3) + 1) := (lt_pow_succ_log_self hp.out.one_lt _).le
   have h_depth : k.e * (2 * (b + δ + 5 * (2 * G))) ≤ ℓ ^ (ℓ.log (h ^ 3) + 1) * (2 * K) := by
-    have h_le : 2 * (b + δ + 5 * (2 * G)) ≤ 2 * (2 * (b + δ)) := by omega
-    grw [← h_pow, h_le, hK, he]
-    linarith
-  have h_far : 10 * ℓ ^ ℓ.log (h ^ 3) * (2 * G) ≤ b + δ := by
-    grw [pow_log_le_self _ (by omega)]
+    grw [← h_pow, show 2 * (b + δ + 5 * (2 * G)) ≤ 2 * (2 * (b + δ)) by omega, hK, h_chart.e_le]
     linarith
   have h_sign : k.IsUnramified ∧ 7 ≤ ℓ ∧ 10 * ℓ ^ ℓ.log (h ^ 3) * (2 * G) ≤ b + δ ∨
       (∀ i i' : k.Letter, s (theta (k.letterTeich i)) = s (theta (k.letterTeich i'))) ∧
-        8 * k.e ≤ ℓ ^ (ℓ.log (h ^ 3) + 1) := by
-    obtain ⟨h_un, h_seven⟩ | ⟨-, h_same⟩ := h_chart.isUnramified_or_sign_eq
-    · exact .inl ⟨h_un, h_seven, h_far⟩
-    · exact .inr ⟨fun i i' ↦ h_same _ _, h_pow.trans' (by omega)⟩
-  have h_gaps : 1 ≤ ℓ.log (h ^ 3) := Nat.log_pos hp.out.one_lt (by omega)
-  have h_sparse (i : k.Letter) : ∀ a ∈ Icc 1 (ℓ.log (h ^ 3)), ∀ a' ∈ Icc 1 (ℓ.log (h ^ 3)),
-      T (theta (k.letterTeich i)) → T (theta (k.letterTeich ((k.letterFrob ^ a) i))) →
-        ¬T (theta (k.letterTeich ((k.letterFrob ^ (a + a')) i))) := by
-    -- The Frobenius on letters is `z ↦ z ^ ℓ`.
-    have h_shift (t : ℕ) : ⇑(k.letterFrob ^ t) = fun i ↦ i ^ ℓ ^ t :=
-      (k.letterFrob.coe_pow t).trans (pow_iterate ℓ t)
-    simpa [h_shift] using h_chart.not_thick_pow hℓ (theta (k.letterTeich i))
-  have h_exp : HasCupExponent (InClass ⊤ ⊥ U) L (10 ^ 3 * (2 * K + (ℓ.log (h ^ 3) + 1) * K)) :=
-    k.hasCupExponent_sparse_thick ζ h_open (by omega) hL hU hU' (by omega) h_gaps h_sparse h_sign
-      h_depth (h_sizes.differentBound_mul_add_log_le he hK)
-  exact h_exp.mono (by lia)
+        8 * k.e ≤ ℓ ^ (ℓ.log (h ^ 3) + 1) :=
+    h_chart.isUnramified_or_sign_eq.imp
+      (fun ⟨h1, h2⟩ ↦ ⟨h1, h2, by grw [pow_log_le_self _ (by omega)]; linarith⟩)
+      fun ⟨_, h_same⟩ ↦ ⟨fun _ _ ↦ h_same _ _, h_pow.trans' (by have := h_chart.e_le; omega)⟩
+  -- The Frobenius on letters is `z ↦ z ^ ℓ`.
+  have h_shift (t : ℕ) : ⇑(k.letterFrob ^ t) = fun i ↦ i ^ ℓ ^ t :=
+    (k.letterFrob.coe_pow t).trans (pow_iterate ℓ t)
+  exact (k.hasCupExponent_sparse_thick D (by omega) (by omega)
+    (Nat.log_pos hp.out.one_lt (by omega))
+    (fun i ↦ by simpa [h_shift] using h_chart.not_thick_pow hℓ (theta (k.letterTeich i)))
+    h_sign h_depth (h_sizes.differentBound_mul_add_log_le h_chart.e_le hK)).mono (by lia)
 
 /-- The exponent for large primes `ℓ > Q` and large loss `v ≥ h³`. Let `Γ → G_ℓ` be an open
 embedding and `ℓ ≥ 7`. The hypothesis `h_sizes` is the list of inequalities `Q² ≪ h`, `m ≪ h`,
@@ -429,49 +412,24 @@ Teichmüller root of unity of `i`. At each letter let the jumps from `U` and `U'
 `[-η, η]` and the far windows `-s i · [a, a + W]` and `s i · [a, a + W]`, where `a = b + δ` if `T i`
 holds and `a = G + δ` otherwise. If `2 b < ℓ (v + 1)` and `2 v < (K + 1) Q`, then `ℓ ^ (10⁴ K m)`
 times any crystalline cocycle of `L` is orthogonal under cup products to the class for `U`. -/
-lemma New.Selmer.CrystallineSizes.hasCupExponent_of_cube_le {ℓ : ℕ} [ThePrime ℓ]
-    [Γ : GroupOverGp ℓ] [TopologicalSpace Γ] {O : CoeffRing ℓ} {L : GalLattice O Γ}
-    {Q m h G b δ η W v K : ℕ} {U U' : (O →ₐ[ℤ_[ℓ]] ℂ_[ℓ]) → Finset ℤ}
-    (h_sizes : CrystallineSizes Q m h G b δ η W) {k : KummerChart Γ} (h_un : k.IsUnramified)
-    (h_seven : 7 ≤ ℓ) (hℓ : Q < ℓ) (ζ : k.LetterRoot O)
-    (h_open : Topology.IsOpenEmbedding Γ.overGp.toGp) (hL : InClass ⊤ ⊥ U' L)
-    {T : k.Letter → Prop} [DecidablePred T] {s : k.Letter → ℤˣ}
-    (hU : ∀ i : k.Letter,
-      FitsWindows η (-s i) (if T i then b + δ else G + δ) W (k.letterJumps ζ U i))
-    (hU' : ∀ i : k.Letter,
-      FitsWindows η (s i) (if T i then b + δ else G + δ) W (k.letterJumps ζ U' i))
+lemma New.Selmer.CrystallineSizes.hasCupExponent_of_cube_le
+    (h_sizes : CrystallineSizes Q m h G b δ η W) (h_un : k.IsUnramified) (h_seven : 7 ≤ ℓ)
+    (hℓ : Q < ℓ) {T : k.Letter → Prop} [DecidablePred T] {s : k.Letter → ℤˣ}
+    (D : k.OppositeWindowData L U U' η W (fun i ↦ if T i then b + δ else G + δ) s)
     (h_loss : 2 * b < ℓ * (v + 1)) (hv : h ^ 3 ≤ v) (hK : 2 * v < K * Q + Q) :
     HasCupExponent (InClass ⊤ ⊥ U) L (10 ^ 4 * (K * m)) := by
-  have ⟨_, hQ, hG, (hb : 99 * (G * h ^ 3 + G) ≤ b), _, (hδ : δ < η),
-    (hη : 99 * ((η + W) * Q + η + h) ≤ h ^ 3)⟩ := h_sizes
-  have hQ_le : Q ≤ h ^ 3 := by omega
+  have ⟨_, hQ, hG, hb, h_log, hδ, hη⟩ := h_sizes
   -- `K` is large enough for `hasCupExponent_any_pattern`.
-  have hbK : b + δ < K * ℓ ^ 2 := by nlinarith only [h_loss, hℓ, hb, hη, hδ, hv, hK, hQ_le]
-  have hGK : 2 * (G + δ) < K * ℓ := by nlinarith only [h_loss, hℓ, hb, hη, hδ, hv, hK, hQ_le]
-  have hWK : W + 4 * η ≤ K := by nlinarith only [hη, hv, hK, hQ_le]
-  have h_exp :
-      HasCupExponent (InClass ⊤ ⊥ U) L (10 ^ 4 * (K + ℓ.log (2 * (b + δ + (W + 4 * η))))) :=
-    k.hasCupExponent_any_pattern ζ h_open h_un h_seven (by omega) le_rfl hL hU hU' (by omega)
-      (Nat.add_le_add_right (by omega) δ) hbK hGK hWK
-  have h_log : ℓ.log (2 * (b + δ + (W + 4 * η))) < m :=
-    natLog_lt_of_two_mul_log_lt h_sizes.log_lt (by omega)
-  have hK_pos : 1 ≤ K := by omega
-  have h_add : K + ℓ.log (2 * (b + δ + (W + 4 * η))) ≤ K * m := by nlinarith only [h_log, hK_pos]
-  exact h_exp.mono (Nat.mul_le_mul_left _ h_add)
-
-/-- The gap condition for small loss. Under the size conditions `h_sizes`, let `2 b < ℓ (v + 1)`
-with `v < h³`, and let `ℓ` divide no integer in `(b - 30 h³, b + 30 h³]`. Then `ℓ` divides no
-nonzero integer within `6 (2 (v + 1) + η + W)` of `0` or `± a`, for `a = b + δ` and `a = G + δ`. -/
-lemma New.Selmer.CrystallineSizes.noMultipleNear {ℓ Q m h G b δ η W v a : ℕ}
-    (h_sizes : CrystallineSizes Q m h G b δ η W) (h_loss : 2 * b < ℓ * (v + 1)) (hv : v < h ^ 3)
-    (h_not : ∀ u ∈ Ioc (b - 30 * h ^ 3) (b + 30 * h ^ 3), ¬ℓ ∣ u) (ha : a = b + δ ∨ a = G + δ) :
-    NoMultipleNear ℓ (6 * (2 * (v + 1) + η + W)) a := by
-  have ⟨_, (hQ : 99 * (Q * Q + (W + 1) * Q + Q + W + m) ≤ h), (hG : 99 * h ^ 3 ≤ G),
-    (hb : 99 * (G * h ^ 3 + G) ≤ b), _, (hδ : δ < η),
-    (hη : 99 * ((η + W) * Q + η + h) ≤ h ^ 3)⟩ := h_sizes
-  have h_large : 9 * G ≤ ℓ := by nlinarith only [h_loss, hv, hb]
-  have h_lt : G + δ + 6 * (2 * (v + 1) + η + W) < ℓ := by omega
-  exact noMultipleNear_of_forall_not_dvd h_lt (by omega) h_not ha
+  have hQ_le : Q ≤ h ^ 3 := by omega
+  have h_natLog := natLog_lt_of_two_mul_log_lt h_log (by omega : 2 * (b + δ + (W + 4 * η)) ≤ 4 * b)
+  exact (k.hasCupExponent_any_pattern (M := W + 4 * η) (K := K) D h_un h_seven (by omega) le_rfl
+    (by omega) (by omega)
+    (by nlinarith only [h_loss, hℓ, hb, hη, hδ, hv, hK, hQ_le])
+    (by nlinarith only [h_loss, hℓ, hb, hη, hδ, hv, hK, hQ_le])
+    (by nlinarith only [hη, hv, hK, hQ_le])).mono
+    (Nat.mul_le_mul_left _ (by
+      have : 1 ≤ K := by nlinarith only [hK, hv, hQ_le]
+      nlinarith only [h_natLog, this]))
 
 /-- Let `Γ → G_ℓ` be an open embedding, `ℓ ≥ 7`, and `O` the ring of integers of a finite Galois
 extension of `ℚ_ℓ`. The hypothesis `h_sizes` is the list of inequalities `Q² ≪ h`, `m ≪ h`,
@@ -493,63 +451,48 @@ Then the defect of `L` for the class of `U`, the length of the crystalline cocyc
 orthogonal, under cup products, to the crystalline cocycles of the lattices in the class, normalised
 so that `O / ℓ` has length `1`, is at most `[G_ℓ : Γ] · y` for any
 `y ≥ 10⁵ (rank L · K m + μ v)`. -/
-lemma New.Selmer.normLength_dualDefect_le_of_noMultipleNear {ℓ : ℕ} [ThePrime ℓ] [Γ : GroupOverGp ℓ]
-    [TopologicalSpace Γ] {O : CoeffRing ℓ} {L : GalLattice O Γ} {Q m h μ G b δ η W v K : ℕ}
-    {U U' : (O →ₐ[ℤ_[ℓ]] ℂ_[ℓ]) → Finset ℤ} (h_sizes : CrystallineSizes Q m h G b δ η W)
-    {k : KummerChart Γ} (h_un : k.IsUnramified) (h_seven : 7 ≤ ℓ)
-    (h_index : k.f = Γ.overGp.toGp.range.index) (ζ : k.LetterRoot O)
-    (h_open : Topology.IsOpenEmbedding Γ.overGp.toGp) (hL : InClass ⊤ ⊥ U' L)
-    {T : k.Letter → Prop} [DecidablePred T] {s : k.Letter → ℤˣ}
-    (hU : ∀ i : k.Letter,
-      FitsWindows η (-s i) (if T i then b + δ else G + δ) W (k.letterJumps ζ U i))
-    (hU' : ∀ i : k.Letter,
-      FitsWindows η (s i) (if T i then b + δ else G + δ) W (k.letterJumps ζ U' i))
+lemma New.Selmer.normLength_dualDefect_le_of_noMultipleNear
+    (h_sizes : CrystallineSizes Q m h G b δ η W) (h_un : k.IsUnramified) (h_seven : 7 ≤ ℓ)
+    (h_index : k.f = Γ.overGp.toGp.range.index) {T : k.Letter → Prop} [DecidablePred T]
+    {s : k.Letter → ℤˣ}
+    (D : k.OppositeWindowData L U U' η W (fun i ↦ if T i then b + δ else G + δ) s)
     (h_jumps : HasFewLowJumps L h μ η U U' ∨ ∀ g : O →ₐ[ℤ_[ℓ]] ℂ_[ℓ], U' g ⊆ Icc (-η : ℤ) 0)
     (h_loss : 2 * b < ℓ * (v + 1)) (hv : v < h ^ 3) (hK : 2 * v < K * Q + Q)
     (h_gap : ∀ i : k.Letter,
       NoMultipleNear ℓ (6 * (2 * (v + 1) + η + W)) (if T i then b + δ else G + δ : ℕ))
     {y : NNReal} (hy : (10 ^ 5 * (finrank O L * (K * m) + μ * v) : ℕ) ≤ y) :
     O.normLength (dualDefect (InClass ⊤ ⊥ U) L) ≤ Γ.overGp.toGp.range.index * y := by
-  have ⟨hQ_pos, (hQ : 99 * (Q * Q + (W + 1) * Q + Q + W + m) ≤ h), (hG : 99 * h ^ 3 ≤ G),
-    (hb : 99 * (G * h ^ 3 + G) ≤ b), h_log, (hδ : δ < η),
-    (hη : 99 * ((η + W) * Q + η + h) ≤ h ^ 3)⟩ := h_sizes
-  have h_height (i : k.Letter) :
-      (if T i then b + δ else G + δ) + W + η ≤ (ℓ - 3) * (2 * (v + 1)) := by
-    grw [ite_le_sup, mul_left_comm, tsub_mul]
-    omega
-  have h_far (i : k.Letter) : 6 * (2 * (v + 1) + η + W) < if T i then b + δ else G + δ := by
-    split_ifs <;> omega
+  have ⟨hQ_pos, hQ, hG, hb, h_log, hδ, hη⟩ := h_sizes
   -- The two bounds of `dualDefect_eq_zero_and_dualDefect_le`, for the length `2 (v + 1)`. The
   -- defect vanishes if `U` and `U'` avoid `[-2 (v + 1), 0)` or `U'` lies in `[-η, 0]`. If at most
   -- `n` jumps lie in `[-η, η]`, it is at most `f (n (16 (v + 1) + 1) + 3 rank L · (W + 1))` times
   -- the length of `O / ℓ`.
-  obtain ⟨h_zero, h_defect_le⟩ :=
-    k.dualDefect_eq_zero_and_dualDefect_le ζ h_open h_un (by omega) h_height (by omega) h_far h_gap
-      hL hU hU'
+  obtain ⟨h_zero, h_defect_le⟩ := k.dualDefect_eq_zero_and_dualDefect_le D h_un (by omega)
+    (fun _ ↦ by grw [ite_le_sup, mul_left_comm, tsub_mul]; omega)
+    (fun _ ↦ by split_ifs <;> omega) h_gap
   by_cases h_few : h / 5 ≤ v ∧ HasFewLowJumps L h μ η U U'
   · -- At most `μ` low jumps, and `⌊h / 5⌋ ≤ v`: the bound `h_defect_le` is at most
     -- `f (33 μ v + 3 rank L · K)` times the length of `O / ℓ`, and `f` is the index.
-    obtain ⟨hv_large, h_low⟩ := h_few
-    have hW_lt_K : W + 1 ≤ K := Nat.le_of_mul_le_mul_right (by omega) hQ_pos
+    have hW_lt_K : W + 1 ≤ K := Nat.le_of_mul_le_mul_right (by have := h_few.1; omega) hQ_pos
     have hm_pos : 1 ≤ m :=
       Nat.zero_lt_of_lt (natLog_lt_of_two_mul_log_lt (ℓ := ℓ) h_log (Nat.zero_le _))
     have h_bound : k.f * (μ * (8 * (2 * (v + 1)) + 1) + finrank O L * (3 * (W + 1))) ≤
         k.f * (10 ^ 5 * (finrank O L * (K * m) + μ * v)) := by
-      grw [show 8 * (2 * (v + 1)) + 1 ≤ 33 * v by omega, ← hm_pos, hW_lt_K]
-      ring_nf
-      omega
+      grw [show 8 * (2 * (v + 1)) + 1 ≤ 33 * v by have := h_few.1; omega, ← hm_pos, hW_lt_K]
+      ring_nf; omega
     -- The normalised length of `O / ℓ` is `1`.
-    grw [h_defect_le μ h_low.sum_jump_le, O.normLength_natCast_mul, ← hy, ← h_index, h_bound]
+    grw [h_defect_le μ h_few.2.sum_jump_le, O.normLength_natCast_mul, ← hy, ← h_index, h_bound]
     simp
   · -- Otherwise `U` and `U'` avoid `[-2 (v + 1), 0)`, since `h / 2 > 2 (v + 1)`, or `U'` lies in
     -- `[-η, 0]`; in both cases the defect vanishes.
-    have h_vanish : dualDefect (InClass ⊤ ⊥ U) L = 0 := by
-      refine h_zero (h_jumps.imp_left fun h_low g u h_mem hu ↦ ?_)
-      have hv_small : v < h / 5 := not_le.1 fun hv' ↦ h_few ⟨hv', h_low⟩
-      obtain ⟨hu_ge, hu_neg⟩ : -(2 * (v + 1) : ℕ) ≤ u ∧ u < 0 := mem_Ico.1 hu
-      have hu_le : 2 * u ≤ -h := h_low.two_mul_le g u hu_neg h_mem
-      omega
+    have h_vanish : dualDefect (InClass ⊤ ⊥ U) L = 0 :=
+      h_zero (h_jumps.imp_left fun h_low g u h_mem hu ↦ by
+        have := not_le.1 fun hv' ↦ h_few ⟨hv', h_low⟩
+        obtain ⟨_, hu_neg⟩ := mem_Ico.1 hu
+        have := h_low.two_mul_le g u hu_neg h_mem; omega)
     simp [h_vanish]
+
+end CrystallineWindowHelpers
 
 open scoped Classical in
 /-- Let `Γ → G_ℓ = Gal(ℚ̄_ℓ / ℚ_ℓ)` be an open embedding (`h_open`), `O` the ring of integers of a
@@ -594,63 +537,41 @@ lemma New.Selmer.normLength_dualDefect_le_of_crystallineSizes {ℓ : ℕ} [hp : 
   -- `ℓ ^ (10⁴ K x)` with `x ≤ m` carries `crysCocycles` into the annihilator, which gives the
   -- bound. Otherwise `ℓ` divides no nonzero integer near the windows, and
   -- `normLength_dualDefect_le_of_noMultipleNear` applies.
-  have hQ : 99 * (Q * Q + (W + 1) * Q + Q + W + m) ≤ h := h_sizes.sq_le
-  have hG : 99 * h ^ 3 ≤ G := h_sizes.cube_le
-  have hb : 99 * (G * h ^ 3 + G) ≤ b := h_sizes.mul_cube_le
-  have hδ : δ < η := h_sizes.shift_lt
-  have hη : 99 * ((η + W) * Q + η + h) ≤ h ^ 3 := h_sizes.low_le
-  have hη_le : η ≤ G := by omega
-  have hW_le : δ + W ≤ G := by omega
+  have ⟨hQ_pos, hQ, hG, hb, h_log, hδ, hη⟩ := h_sizes
   -- Besides `hy`, only these facts about `v` and `K` are used below.
-  have h_loss : 2 * b < ℓ * (crystallineLoss h b ℓ + 1) := two_mul_lt_mul_crystallineLoss_succ h b
+  have h_loss := two_mul_lt_mul_crystallineLoss_succ (ℓ := ℓ) h b
   have h_cube {n : ℕ} (hn : n ∈ Ioc (b - 30 * h ^ 3) (b + 30 * h ^ 3)) (h_dvd : ℓ ∣ n) :
       h ^ 3 ≤ crystallineLoss h b ℓ := cube_le_crystallineLoss_of_dvd hn h_dvd
-  have hK : 2 * crystallineLoss h b ℓ < 2 * crystallineLoss h b ℓ / Q * Q + Q :=
-    lt_div_mul_add h_sizes.bound_pos
+  have hK := (2 * crystallineLoss h b ℓ).lt_div_mul_add hQ_pos
   generalize crystallineLoss h b ℓ = v at *
   generalize 2 * v / Q = K at *
   -- The windows in terms of the letters.
-  have h_winU (i : k.Letter) :
-      FitsWindows (if ℓ ≤ Q then 2 * G else η) (-s (theta (k.letterTeich i)))
-        (if T (theta (k.letterTeich i)) then b + δ else G + δ) W (k.letterJumps ζ U i) :=
-    fitsWindows_letterJumps (s := fun z ↦ -s z) h_chart.thick_iff
-      (fun g hg ↦ congrArg Neg.neg (h_chart.sign_eq g hg)) hU hη_le hW_le i
-  have h_winU' (i : k.Letter) :
-      FitsWindows (if ℓ ≤ Q then 2 * G else η) (s (theta (k.letterTeich i)))
-        (if T (theta (k.letterTeich i)) then b + δ else G + δ) W (k.letterJumps ζ U' i) :=
-    fitsWindows_letterJumps h_chart.thick_iff h_chart.sign_eq hU' hη_le hW_le i
+  let D : k.OppositeWindowData L U U' (if ℓ ≤ Q then 2 * G else η) W
+      (fun i ↦ if T (theta (k.letterTeich i)) then b + δ else G + δ)
+      (fun i ↦ s (theta (k.letterTeich i))) :=
+    ⟨ζ, h_open, hL, fitsWindows_letterJumps (s := fun z ↦ -s z) h_chart.thick_iff
+        (fun g hg ↦ congrArg Neg.neg (h_chart.sign_eq g hg)) hU (by omega) (by omega),
+      fitsWindows_letterJumps h_chart.thick_iff h_chart.sign_eq hU' (by omega) (by omega)⟩
   -- An exponent `10⁴ K x` with `x ≤ m` is small enough for the bound.
   have h_exp {x : ℕ} (hx : x ≤ m) : finrank O L * (2 * (10 ^ 4 * (K * x) : ℕ)) ≤ y := by
-    refine hy.trans' (mod_cast ?_)
-    grw [hx]
-    ring_nf
-    omega
+    refine hy.trans' (mod_cast ?_); grw [hx]; ring_nf; omega
   by_cases hℓ : ℓ ≤ Q
   · -- For small `ℓ` the thick letters are sparse.
-    simp only [hℓ, ite_true] at h_winU h_winU'
     have hbK : 2 * (b + δ) < h ^ 2 * K := by
-      have h_add : h + δ ≤ b := by omega
-      nlinarith only [hK, h_loss, hℓ, hQ, h.le_mul_self, h_add]
-    have h_log : ℓ.log (h ^ 3) < m := natLog_lt_of_two_mul_log_lt h_sizes.log_lt (by omega)
-    exact normLength_dualDefect_le_of_hasCupExponent hL.isPotentiallyCrystalline (h_exp h_log)
-      (h_chart.hasCupExponent_of_le h_sizes hℓ hbK ζ h_open hL h_winU h_winU')
+      nlinarith only [hK, h_loss, hℓ, hQ, h.le_mul_self, show h + δ ≤ b by omega]
+    exact normLength_dualDefect_le_of_hasCupExponent hL.isPotentiallyCrystalline
+      (h_exp (natLog_lt_of_two_mul_log_lt h_log (by omega)))
+      (h_chart.hasCupExponent_of_le h_sizes hℓ hbK (ite_eq_left hℓ ▸ D))
   -- From now on `ℓ > Q`, so the chart is unramified and `ℓ ≥ 7`.
-  simp only [hℓ, ite_false] at h_winU h_winU'
-  obtain ⟨h_un, h_seven⟩ : k.IsUnramified ∧ 7 ≤ ℓ :=
-    h_chart.isUnramified_or_sign_eq.resolve_right fun ⟨h_le, _⟩ ↦ hℓ h_le
+  let D' : k.OppositeWindowData L U U' η W _ _ := ite_eq_right hℓ ▸ D
+  obtain ⟨h_un, h_seven⟩ := h_chart.isUnramified_or_sign_eq.resolve_right fun ⟨h_le, _⟩ ↦ hℓ h_le
   by_cases hv : h ^ 3 ≤ v
   · exact normLength_dualDefect_le_of_hasCupExponent hL.isPotentiallyCrystalline (h_exp le_rfl)
-      (h_sizes.hasCupExponent_of_cube_le h_un h_seven (not_le.1 hℓ) ζ h_open hL h_winU h_winU'
-        h_loss hv hK)
+      (h_sizes.hasCupExponent_of_cube_le h_un h_seven (not_le.1 hℓ) D' h_loss hv hK)
   -- If `v < h³`, then `ℓ` divides no integer near `b`.
-  have h_gap (z : ℂ_[ℓ]) :
-      NoMultipleNear ℓ (6 * (2 * (v + 1) + η + W)) (if T z then b + δ else G + δ : ℕ) :=
-    h_sizes.noMultipleNear h_loss (not_le.1 hv) (fun u hu h_dvd ↦ hv (h_cube hu h_dvd))
-      (ite_eq_or_eq (T z) (b + δ) (G + δ))
-  have h_index : k.f = Γ.overGp.toGp.range.index := by
-    obtain ⟨-, he_one : k.e = 1, -⟩ := h_un
-    rw [← h_chart.e_mul_f_eq_index, he_one, one_mul]
-  exact normLength_dualDefect_le_of_noMultipleNear h_sizes h_un h_seven h_index ζ h_open hL
-    h_winU h_winU' h_jumps h_loss (not_le.1 hv) hK (fun i ↦ h_gap (theta (k.letterTeich i))) hy
+  exact normLength_dualDefect_le_of_noMultipleNear h_sizes h_un h_seven
+    (by rw [← h_chart.e_mul_f_eq_index, h_un.2.1, one_mul]) D' h_jumps h_loss (not_le.1 hv) hK
+    (fun i ↦ h_sizes.noMultipleNear h_loss (not_le.1 hv) (fun _ hu h_dvd ↦ hv (h_cube hu h_dvd))
+      (ite_eq_or_eq (T (theta (k.letterTeich i))) (b + δ) (G + δ))) hy
 
 end CrystallineBound
