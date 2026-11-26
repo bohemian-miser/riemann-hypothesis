@@ -1,15 +1,15 @@
 module
 
-import TauCeti.RingTheory.AdicCompletion.Pi
+import TauCeti.RingTheory.AdicCompletion.DerivedComplete.Module
+import TauCeti.RingTheory.AdicCompletion.Finite
+import TauCeti.RingTheory.AdicCompletion.Regular
 public import Mathlib.RingTheory.SimpleRing.Principal
 public import Mathlib.NumberTheory.Padics.Complex
 public import Mathlib.RingTheory.AdicCompletion.Algebra
 import Mathlib.RingTheory.AdicCompletion.LocalRing
 import Mathlib.RingTheory.Coalgebra.IsFrobenius
-import Mathlib.RingTheory.Henselian
 import Mathlib.RingTheory.HopfAlgebra.Basic
 import Mathlib.RingTheory.Ideal.Finsupp
-import Mathlib.RingTheory.RegularLocalRing.Defs
 import Mathlib.RingTheory.TotallySplit
 import Mathlib.RingTheory.Valuation.Integral
 import Mathlib.Topology.Sheaves.Presheaf
@@ -397,19 +397,12 @@ lemma isAdicComplete :
 `X`, then it acts injectively on the `n`-adic completion of `X`. -/
 lemma isSMulRegular_completion {n : ℕ} (h_reg : IsSMulRegular X n) :
     IsSMulRegular (AdicCompletion (span {(n : R)}) X) n := by
-  -- Multiplication by `n` is an isomorphism `e` of `X` onto `n X`. On completions it becomes
-  -- the isomorphism induced by `e` followed by the injection of the completion of `n X`.
-  let J : Ideal R := span {(n : R)}
-  have h_range : LinearMap.range (n : Module.End R X) = J ^ 1 • ⊤ := by
-    ext
-    simp [J, Submodule.ideal_span_singleton_smul, Submodule.pointwise_smul_def,
-      Nat.cast_smul_eq_nsmul]
-  let e : X ≃ₗ[R] ↥(J ^ 1 • (⊤ : Submodule R X)) :=
-    .ofInjective (n : Module.End R X) h_reg ≪≫ₗ .ofEq _ _ h_range
-  -- both sides are determined by their effect on Cauchy sequences, where they agree termwise
-  have h_comp : ofPowSMul J X 1 ∘ congr J e = fun x ↦ n • x := map_ext _ fun _ ↦ rfl
-  rw [IsSMulRegular, ← h_comp]
-  exact (ofPowSMul_injective _ 1).comp (congr _ e).injective
+  -- Convert `IsSMulRegular` for the natural number `n` into regularity for the scalar `(n : R)`
+  -- via `Nat.cast_smul_eq_nsmul`, apply `IsSMulRegular.adicCompletion` on the `(n)`-adic
+  -- completion, and convert the action of `(n : R)` back to `n : ℕ`.
+  have h_reg' : IsSMulRegular X (n : R) := by
+    simpa [IsSMulRegular, Nat.cast_smul_eq_nsmul] using h_reg
+  simpa only [IsSMulRegular, ← Nat.cast_smul_eq_nsmul R] using h_reg'.adicCompletion
 
 end Adic
 
@@ -438,12 +431,9 @@ instance [IsPrecomplete I S] [Module.Finite S M] : IsPrecomplete I M := by
 /-- A module that embeds linearly in a product of copies of an `I`-adically separated module is
 `I`-adically separated. -/
 lemma isHausdorff_of_injective_pi [IsHausdorff I F] {ι : Type*} (f : M →ₗ[S] ι → F)
-    (hf : Function.Injective f) : IsHausdorff I M := by
-  -- If `x` and `y` agree in the completion of `M`, so do the coordinates of `f x` and `f y`.
-  refine of_injective_iff.mp fun x y hxy ↦ hf (funext fun i ↦ ?_)
-  have h_coord : of I F ((LinearMap.proj i ∘ₗ f) x) = of I F ((LinearMap.proj i ∘ₗ f) y) := by
-    rw [← map_of, ← map_of, hxy]
-  exact of_inj.mp h_coord
+    (hf : Function.Injective f) : IsHausdorff I M :=
+  -- The product `ι → F` is `I`-adically separated, so the injection `f` pulls it back to `M`.
+  .of_injective I f hf
 
 /-- Let C be I-adically complete, β: F → M have I-adically dense image, and g: F → C satisfy
 g(f) ∈ I^n C whenever β(f) ∈ I^{2n} M. Then g = G ∘ β for some S-linear G: M → C. -/
@@ -734,21 +724,12 @@ instance [IsHausdorff (Ideal.span {π}) N] : Fact (shiftDiff N π).Injective := 
 
 /-- On a `π`-adically complete module, `(x_j) ↦ (x_j - π • x_{j+1})` is surjective. -/
 instance [IsAdicComplete (Ideal.span {π}) N] : Fact (shiftDiff N π).Surjective := by
-  refine ⟨fun y ↦ ?_⟩
-  -- `shiftDiff N π` is the linear map `f`, which is the identity modulo `π`; so `f` is onto after
-  -- `π`-adic completion.
-  let f : (ℕ → N) →ₗ[R] ℕ → N := 1 - π • .funLeft R N .succ
-  have hf : Function.Surjective (AdicCompletion.map (Ideal.span {π}) f) :=
-    map_surjective_of_mkQ_comp_surjective <|
-      Quot.ind fun z ↦ ⟨z, SModEq.sub_mem.mpr (by simp [f, smul_mem_smul])⟩
-  obtain ⟨w, hw⟩ := hf (of (Ideal.span {π}) (ℕ → N) y)
-  -- `N` is complete, so each coordinate of the preimage `w` comes from an element of `N`.
-  refine ⟨fun j ↦ (ofLinearEquiv (.span {π}) N).symm (pi _ _ w j), funext fun j ↦ ?_⟩
-  obtain ⟨x, rfl⟩ := mk_surjective _ _ w
-  apply of_injective (.span {π})
-  -- This is the `j`-th coordinate of `hw`, read in the completion of `N`.
-  -- `using!`: `pi` and `mk` are computed on representatives by definition
-  simpa [shiftDiff, f] using! congrArg (fun z ↦ pi (Ideal.span {π}) (fun _ : ℕ ↦ N) z j) hw
+  -- `shiftDiff N π` agrees with `TauCeti.telescope N π`, which is bijective (hence surjective) on
+  -- every `π`-adically complete module by `TauCeti.IsDerivedComplete.of_isAdicComplete`.
+  have h : ⇑(TauCeti.telescope N π) = shiftDiff N π := funext₂ (TauCeti.telescope_apply π)
+  rw [← h]
+  exact ⟨((TauCeti.IsDerivedComplete.of_isAdicComplete (I := .span {π}) (M := N)).bijective
+    (Ideal.mem_span_singleton_self π)).2⟩
 
 /-- Successive approximation: let `New.shiftDiff`, the operator `(x_j) ↦ (x_j - π • x_{j+1})` on
 sequences, be surjective for `π` on `N` and injective for `π'` on `M`. Let `f : N → M` be additive
