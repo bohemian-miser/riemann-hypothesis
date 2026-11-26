@@ -55,11 +55,6 @@ See `New.Congruences.FirstOrder.AuxiliaryPrimeTie` for related work.
 
 open Pi Fintype Polynomial Nat Group Submodule ComplexOrder
 
-attribute [local instance low] Fintype.ofFinite
-
--- Ring homomorphisms are additive and multiplicative: the direct instances are tried first.
-attribute [local instance 1100] RingHomClass.toAddMonoidHomClass MonoidHomClass.toMulHomClass
-
 namespace New.Patching.TaylorWilesPlaces
 
 open Valued
@@ -177,6 +172,31 @@ lemma commute_heckeAction_residueRep (hQ : ∀ j : J, D.IsOffLevel ![] (Q.place 
   refine Submonoid.pi_mem_of_mulSingle_mem g fun j ↦ ?_
   simpa [Submonoid.mem_centralizer_iff, commute_iff_eq] using
     localOperators.commute_heckeAction (residueRep_mem_localOperators hQ (g j)) s
+
+variable (D) in
+omit [Nonempty n] in
+/-- The norm operator `∑ g, D.residueRep Q g` over `∏ GL_n(𝔽_{w j})`. -/
+noncomputable def normOp : D.integralEnd Q.place :=
+  letI : ∀ j : J, Fintype (GL (Fin (card n)) (ResField (Q.place j))) := fun _ ↦ .ofFinite _
+  ∑ g : (j : J) → GL (Fin (card n)) (ResField (Q.place j)), D.residueRep Q g
+
+omit [Nonempty n] in
+@[simp] lemma residueRep_mul_normOp (g : ∀ j : J, GL (Fin (card n)) (ResField (Q.place j))) :
+    D.residueRep Q g * D.normOp Q = D.normOp Q :=
+  letI : ∀ j : J, Fintype (GL (Fin (card n)) (ResField (Q.place j))) := fun _ ↦ .ofFinite _
+  mul_sum_monoidHom (D.residueRep Q) g
+
+omit [Nonempty n] in
+@[simp] lemma normOp_mul_residueRep (g : ∀ j : J, GL (Fin (card n)) (ResField (Q.place j))) :
+    D.normOp Q * D.residueRep Q g = D.normOp Q :=
+  letI : ∀ j : J, Fintype (GL (Fin (card n)) (ResField (Q.place j))) := fun _ ↦ .ofFinite _
+  sum_monoidHom_mul (D.residueRep Q) g
+
+omit [Nonempty n] in
+lemma commute_heckeAction_normOp (hQ : ∀ j : J, D.IsOffLevel ![] (Q.place j))
+    (s : D.heckeAlgebra Q.place) : Commute (heckeAction s) (D.normOp Q) :=
+  letI : ∀ j : J, Fintype (GL (Fin (card n)) (ResField (Q.place j))) := fun _ ↦ .ofFinite _
+  .sum_right _ _ _ fun g _ ↦ commute_heckeAction_residueRep Q hQ s g
 
 section Parahoric
 
@@ -348,6 +368,7 @@ lemma exists_indicator_isCongruent (hN : IsGalRepTwist N a)
     ∃ A : D.heckeAlgebra L,
       (∀ x : D.Eigensystem L, IsCongruent N x π → A.val x = 1) ∧
       ∀ x : D.Eigensystem L, ¬IsCongruent N x π → A.val x = 0 := by
+  classical
   -- For each `x'` not congruent to `π` choose a coefficient with incongruent values at `x'` and
   -- `π`, and subtract it from its value at `x'`. The product `sepProd` of these differences
   -- vanishes at all `x'` and has norm at least `1` at each congruent `x`. The indicator is
@@ -598,28 +619,18 @@ logarithm `P.ind` on `𝔽_wˣ` gives `P.indDet = P.ind ∘ det` with values mod
 the norm over `GL_n(𝔽_w)` with weight `f ∘ P.indDet`, then
 `L tr[(γ - 1) g p(φ)] = (⟨γ⟩ - 1) L tr[g p(φ)]`, where `φ` is the Frobenius element at `w`,
 `⟨γ⟩ = P.diamond`, and the traces are `tameTrace` and `traceElement`. -/
-lemma weightedSum_indDet_mul_tameTrace (hQ : ∀ j : J, D.IsOffLevel ![] (Q.place j))
+lemma weightedSum_indDet_mul_tameTrace [Fintype (GL (Fin (card n)) (ResField (Q.place j)))]
+    (hQ : ∀ j : J, D.IsOffLevel ![] (Q.place j))
     (hN : IsGalRepTwist N a) (ha : ∀ j : J, a (Q.frobData j).isPlaceOver.tameGenerator = 1)
     (P : Q.LocalChoice j) (p : EllAdicIntegers[X]) (g : Gal(Ω/E)) (f : ZMod (ℓ ^ ν) → ℤ) :
     weightedSum (D.placeRep Q j) P.indDet f * heckeAction (tameTrace Q hN j p g) =
       (D.placeRep Q j P.diamond - 1) * weightedSum (D.placeRep Q j) P.indDet f *
-        heckeAction (traceElement hN p (Q.frobData j).frob g) := by
-  have placeRep_mem (k : GL (Fin (card n)) (ResField (Q.place j))) :
-      D.placeRep Q j k ∈ D.localOperators Q j :=
-    residueRep_mem_localOperators hQ _
-  let B : D.formsOfLevel Q.place →ₗ[ℂ] V.forms κ :=
-    (formsOfLevel _).subtype ∘ₗ (D.placeRep Q j P.diamond - 1).val
-  -- It suffices to compare the traces on eigenvectors, where `γ` acts as the diamond element.
-  have dict (x : D.Eigensystem Q.place) (ψ : AddChar (ZMod (ℓ ^ ν)) ℂ)
-      (z : D.formsOfLevel Q.place) (hz : (z : V.forms κ) ∈ (x : Isotypic V κ).val)
-      (hz_eigen : ∀ k : GL (Fin (card n)) (ResField (Q.place j)),
-        (D.placeRep Q j k).val z = ψ (P.indDet k).toAdd • z) :
-      ιℓ.symm ((tameTrace Q hN j p g).val x) • (z : V.forms κ) =
-        ιℓ.symm ((traceElement hN p (Q.frobData j).frob g : D.heckeAlgebra Q.place).val x) • B z :=
-    tameTrace_smul_eq_diamond_sub_one hQ hN ha P p g ψ hz hz_eigen
-  exact weightedSum_mul_heckeAction_eq_of_eigen Q (shift := 0) (root := 0) (B := B) placeRep_mem
-    (fun _ ↦ rfl) (f := fun s ↦ (f s : ℂ))
-    (fun x ψ z hz hz_eigen _ ↦ dict x ψ z hz hz_eigen) (by simp)
+        heckeAction (traceElement hN p (Q.frobData j).frob g) :=
+  weightedSum_mul_heckeAction_eq_of_eigen Q (shift := 0) (root := 0)
+    (B := (formsOfLevel _).subtype ∘ₗ (D.placeRep Q j P.diamond - 1).val)
+    (fun _ ↦ residueRep_mem_localOperators hQ _) (fun _ ↦ rfl) (f := fun s ↦ (f s : ℂ))
+    (fun _ ψ _ hz hz_eigen _ ↦ tameTrace_smul_eq_diamond_sub_one hQ hN ha P p g ψ hz hz_eigen)
+    (by simp)
 
 /-- Let the auxiliary places be off the base level (`hQ`), and let `N x` be the twist of `x.galRep`
 by `a`, which is `1` at the tame generators (`hN`, `ha`). The norm over `GL_n(𝔽_w)` at
@@ -627,13 +638,15 @@ by `a`, which is `1` at the tame generators (`hN`, `ha`). The norm over `GL_n(�
 the trace of the `N x` as an element of the Hecke algebra. -/
 lemma norm_mul_traceElement_tameGenerator_eq_zero (hQ : ∀ j : J, D.IsOffLevel ![] (Q.place j))
     (hN : IsGalRepTwist N a) (ha : ∀ j : J, a (Q.frobData j).isPlaceOver.tameGenerator = 1)
-    (i : J) (g : Gal(Ω/E)) :
-    (∑ k : GL (Fin (card n)) (ResField (Q.place i)), D.residueRep Q (mulSingle i k)) *
+    (i : J) [Fintype (GL (Fin (card n)) (ResField (Q.place i)))] (g : Gal(Ω/E)) :
+    (∑ k, D.placeRep Q i k) *
       heckeAction (traceElement hN (X - 1) (Q.frobData i).isPlaceOver.tameGenerator g) = 0 := by
   obtain ⟨P⟩ := Q.nonempty_localChoice i
   -- The dictionary for `p = 1` and the weight `1`; the diamond element fixes the norm.
   have dict := weightedSum_indDet_mul_tameTrace hQ hN ha P 1 g 1
   rwa [weightedSum_one, sub_one_mul, mul_sum_monoidHom, sub_self, zero_mul, tameTrace_one] at dict
+
+variable [Fintype (residueLineStabilizer (ResField (Q.place j)) (card n))]
 
 omit [V.IsStd] [WeilData E] in
 /-- Let the auxiliary places be off the base level and `w = Q.place j`. The norm over the stabiliser
@@ -705,22 +718,11 @@ lemma map_aevalHecke_valMinAbs_mul_tameTrace (hQ : ∀ j : J, D.IsOffLevel ![] (
         (weightedSum (D.lineRep Q j) P.indLine)
   rw [← sub_eq_zero, ← σ.map_sub]
   refine map_valMinAbs_eq_zero_of_shift hσ ℰ fun f ↦ sub_eq_zero.2 (Eq.symm ?_)
-  -- The eigenvectors to be tested are those with `ψ (n!) ≠ 1`, where the dictionary applies.
-  have lineRep_mem (k : residueLineStabilizer (ResField (Q.place j)) (card n)) :
-      D.lineRep Q j k ∈ D.localOperators Q j :=
-    residueRep_mem_localOperators hQ _
-  let U : D.formsOfLevel Q.place →ₗ[ℂ] V.forms κ :=
-    LinearMap.domRestrict (aevalHecke V κ P a p) _
-  have dict (x : D.Eigensystem Q.place) (ψ : AddChar (ZMod (ℓ ^ ν)) ℂ)
-      (z : D.formsOfLevel Q.place) (hz : (z : V.forms κ) ∈ (x : Isotypic V κ).val)
-      (hz_eigen : ∀ k : residueLineStabilizer (ResField (Q.place j)) (card n),
-        (D.lineRep Q j k).val z = ψ (P.indLine k).toAdd • z)
-      (hψ : ψ ((card n)! : ZMod (ℓ ^ ν)) ≠ 1) :
-      ιℓ.symm ((tameTrace Q hN j p g).val x) • (z : V.forms κ) =
-        ιℓ.symm ((tameTrace Q hN j 1 g).val x) • U z :=
-    tameTrace_smul_eq_aevalHecke hQ hN ha P p g hψ hz hz_eigen
   exact weightedSum_mul_heckeAction_eq_of_eigen Q (shift := ((card n)! : ZMod (ℓ ^ ν))) (root := 1)
-    (B := U) lineRep_mem (hB _) (f := fun s ↦ (f s : ℂ)) dict (by simp)
+    (B := LinearMap.domRestrict (aevalHecke V κ P a p) _)
+    (fun _ ↦ residueRep_mem_localOperators hQ _) (hB _) (f := fun s ↦ (f s : ℂ))
+    (fun _ _ _ hz hz_eigen hψ ↦ tameTrace_smul_eq_aevalHecke hQ hN ha P p g hψ hz hz_eigen)
+    (by simp)
 
 omit [V.IsStd] [WeilData E] in
 /-- Let the auxiliary places be off the base level (`hQ`), let `P` be a local choice at
@@ -768,18 +770,17 @@ lemma heckeAction_mul_norm_mul_eq_zero (hQ : ∀ j : J, D.IsOffLevel ![] (Q.plac
     (h_chain : ∀ x : D.Eigensystem Q.place, x.val ∈ D.Eigensystem ![] → δ.val x ≠ 0 →
       HasRootChain (x.val.heckePolyAt (Q.place j)) (H.map (algebraMap EllAdicIntegers ℂ))
         (Q.place j).q (algebraMap EllAdicIntegers ℂ (a (Q.frobData j).frob))⁻¹ (t + 1)) :
-    heckeAction δ * (∑ g : (j : J) → GL (Fin (card n)) (ResField (Q.place j)), D.residueRep Q g) *
-      B 1 = 0 := by
+    heckeAction δ * D.normOp Q * B 1 = 0 := by
   obtain ⟨-, -, -, h_sys⟩ := hQ j
   obtain ⟨F, F_pos, F_inv⟩ := V.exists_isUnitary_formTranslation κ
   have unitary : IsUnitary (localFormRep V κ (Q.apart.star_ne j j)).ρ F :=
     ⟨F_pos, fun _ _ _ ↦ F_inv ..⟩
   -- The values of `S = Nm U'` have base level. We show that `δ S y` is orthogonal to all `δ w` with
   -- `w` of base level, hence to itself.
-  let S : D.integralEnd Q.place := (∑ g, D.residueRep Q g) * B 1
+  let S : D.integralEnd Q.place := D.normOp Q * B 1
   have S_base (y : D.formsOfLevel Q.place) : (S.val y).val ∈ D.formsOfLevel ![] := by
     refine mem_formsOfLevel_empty_iff_residueRep_fixed.2 fun g ↦ ?_
-    rw [← FormEnd.mul_apply, ← Subalgebra.coe_mul, ← mul_assoc, mul_sum_monoidHom]
+    rw [← FormEnd.mul_apply, ← Subalgebra.coe_mul, ← mul_assoc, residueRep_mul_normOp]
   -- A form `w` of base level in a system where `δ` does not vanish is orthogonal to the values of
   -- `U'` by the chain lemma, and the finite groups fix it.
   have orth (x : D.Eigensystem Q.place) (hx : x.val ∈ D.Eigensystem ![]) (hδ : δ.val x ≠ 0)
@@ -800,10 +801,9 @@ lemma heckeAction_mul_norm_mul_eq_zero (hQ : ∀ j : J, D.IsOffLevel ![] (Q.plac
         congrArg Subtype.val (mem_formsOfLevel_empty_iff_residueRep_fixed.1 hw.2 g)
       rw [← w_fixed]
       exact (F_inv ..).trans orth_B
-    simp [S, term]
+    simp [S, normOp, term]
   have comm : Commute (heckeAction δ) S :=
-    .mul_right (.sum_right _ _ _ fun g _ ↦ commute_heckeAction_residueRep Q hQ δ g)
-      (localOperators.commute_heckeAction hB_mem δ)
+    .mul_right (commute_heckeAction_normOp Q hQ δ) (localOperators.commute_heckeAction hB_mem δ)
   rw [mul_assoc]
   ext y : 3
   have orth_base :
