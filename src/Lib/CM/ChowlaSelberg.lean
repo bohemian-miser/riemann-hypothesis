@@ -1,17 +1,13 @@
 module
 
-public import Mathlib.NumberTheory.Harmonic.ZetaAsymp
 import Mathlib.Algebra.GroupWithZero.Torsion
 import Mathlib.Algebra.Order.Monoid.Unbundled.Units
-import Mathlib.Algebra.Ring.IsFormallyReal
-import Mathlib.Analysis.LocallyConvex.AbsConvexOpen
-import Mathlib.Topology.UniformSpace.Uniformizable
+import TauCeti.NumberTheory.NumberField.Quadratic.ChowlaSelberg
+import TauCeti.NumberTheory.NumberField.Quadratic.DedekindZeta
 public import Lib.CM.ConjugateCurve
-public import Lib.ClassField.HeckeL.EulerProduct
 public import Lib.General.Algebra.AdicCompletion
 import Lib.Analytic.EntireLFunction
 import Lib.CM.Integrality.IsogenyIntegrality
-import Lib.CM.KroneckerLimit
 import Lib.ClassField.Places.ValuationSubrings
 import Lib.General.NumberTheory.EmbeddingsAndDifferent
 
@@ -29,14 +25,15 @@ and the formula of Chowla and Selberg for the areas of the conjugate lattices.
 
 * `New.QuadField.classGroup_sq_bijective`: squaring permutes the class group, that is, the class
   number is odd.
-* `New.QuadField.eulerProd_one_eq_zeta_mul`: `ζ_K(s) = ζ(s) L(s, χ)` for real `s > 1`, with `χ` the
-  Legendre symbol modulo `d`.
+* `TauCeti.NumberField.dedekindZeta_eq_riemannZeta_mul_LFunction`: `ζ_K(s) = ζ(s) L(s, χ)` for
+  `Re s > 1`, specialised here to `χ` the Legendre symbol modulo `d`.
 * `New.CMLattice.IsComplexMultiplicationData`, `New.CMLattice.complex_multiplication_theta`: the
   action of `σ` on the translates of `θ` by torsion points is given by one finite adele of `K`, if
   the lattice is `Ω₀ 𝓞_K`.
-* `New.CMLattice.sum_kronecker_terms`: Kronecker's limit formula summed over the class group.
+* `TauCeti.NumberField.chowlaSelberg_classMean`: Kronecker's limit formula summed over the class
+  group, giving the geometric mean of `exp (UpperHalfPlane.logPeriod τ)`.
 * `New.CMLattice.chowla_selberg`: after scaling by the conjugates of one unit, all conjugate
-  lattices have the area that this sum gives.
+  lattices have the area that this class-group mean gives.
 
 Notions from other files:
 * `New.CMLattice`: A lattice `Λ` stable under the integers of `ℚ(√-d)`, with a point `t` of order
@@ -58,7 +55,7 @@ function and the L-function of its character, and the sum of the zeta functions 
 classes. Source: J. Neukirch, Algebraic Number Theory (1999), VII.5 and VII.10.
 
 Known result: The formula of Lerch and of Chowla and Selberg for the geometric mean of
-area · |disc|^(1/6) over the ideal classes (`New.CMLattice.sum_kronecker_terms`). Here the
+area · |disc|^(1/6) over the ideal classes (`TauCeti.NumberField.chowlaSelberg_classMean`). Here the
 discriminant is prime with 2 split, and the mean is left in terms of the logarithmic derivative of
 the L-function at 1, with no Gamma values. The integrality of isogenies then gives one number, a
 unit at every p-adic place, whose conjugates scale all conjugate lattices to this area. Source: A.
@@ -78,16 +75,16 @@ Multiplication (2020), 9.17.
 /-!
 ## The odd class number and the factorisation of ζ_K
 
-* `New.QuadField.eq_d_of_span_eq_sq`: only `d` ramifies in `K`. Both the oddness of the class number
-  and the factorisation of `ζ_K` use this.
+* `New.QuadField.eq_d_of_span_eq_sq`: only `d` ramifies in `K`, used directly to prove that the
+  class number of `K` is odd (`classGroup_sq_bijective`).
 
-Convention: `New.eulerProd a s` is the Euler product `∏ (1 - a v * q_v ^ (-s))⁻¹` over the primes of
-`K`.
+The factorisation `ζ_K(s) = ζ(s) L(s, χ)` is obtained from Tau Ceti's
+`TauCeti.NumberField.dedekindZeta_eq_riemannZeta_mul_LFunction` after showing `discr K = -d`.
 -/
 
 section QuadraticZeta
 
-open NumberField Ideal ClassGroup Nat Equiv Complex CharP DirichletCharacter
+open NumberField Ideal ClassGroup Nat Equiv Complex DirichletCharacter
 
 namespace New.QuadField
 
@@ -166,83 +163,47 @@ lemma classGroup_sq_bijective :
   change I = span {w}
   simpa [hJ_def, hw, ← span_singleton_mul_span_singleton, h_ne] using hJ_span
 
-open scoped Classical in
-/-- Let `w` and `J` be the primes of `K` above the prime number `p`, either equal and of norm
-`p ^ 2` or both of norm `p` with product `(p)`. Then the Euler factors of `ζ` and `L(s, χ)` at `p`,
-with `chiK d` the Legendre symbol `χ` modulo `d` and `v.q` the norm of `v`, multiply to the product
-of the Euler factors over `{w, J}`. -/
-lemma eulerFactor_mul_eq_prod_inv {p : ℕ} [hp : Fact p.Prime] {w J : FinPlace (QuadField d)}
-    (hw : (p : 𝓞 (QuadField d)) ∈ w.asIdeal)
-    (h_split : w = J ∧ w.q = p ^ 2 ∨
-      w.q = p ∧ J.q = p ∧ span {(p : 𝓞 (QuadField d))} = w.asIdeal * J.asIdeal) (s : ℝ) :
-    (1 - (p : ℂ) ^ (-s : ℂ))⁻¹ * (1 - chiK d p * (p : ℂ) ^ (-s : ℂ))⁻¹ =
-      (∏ v ∈ {w, J}, (1 - (v.q : ℂ) ^ (-s : ℂ)))⁻¹ := by
-  have hq : w.q = p ↔ chiK d p ≠ -1 := q_eq_iff_chiK_ne_neg_one w hw
-  obtain ⟨rfl, h_norm⟩ | ⟨hwq, hJq, h_span⟩ := h_split
-  · -- Inert: one prime of norm `p ^ 2`, and the symbol is `-1`.
-    have h_chi : chiK d p = -1 := by grind [hp.out.one_lt, lt_self_pow₀]
-    simp [h_chi, h_norm, sq, Complex.natCast_mul_cpow, ← mul_inv, ← mul_self_sub_mul_self]
-  obtain ⟨rfl, h_chi : chiK p p = 0⟩ | ⟨hp_ne, h_chi⟩ := chiK_cases d p
-  · -- Ramified: `w * J` is a square, so `w = J`, as coprime factors of a square are squares.
-    have h_sq : w.asIdeal * J.asIdeal = span {sqrtNegDInt p} ^ 2 := by
-      simp [← h_span, span_singleton_pow, sqrtNegDInt_sq]
-    have hwJ : w = J := by
-      by_contra hwJ_ne
-      obtain ⟨C, hC⟩ := exists_eq_pow_of_mul_eq_pow_of_coprime (w.isCoprime_of_ne J hwJ_ne) h_sq
-      exact w.prime.not_isSquare (isSquare_iff_exists_sq _ |>.2 ⟨C, hC⟩)
-    rw [h_chi]
-    simp [← hwJ, hwq]
-  · -- Split: `w ≠ J` since only `d` ramifies, and the symbol is `1`.
-    have hwJ_ne : w ≠ J := by grind [eq_d_of_span_eq_sq hp w.asIdeal, sq]
-    simp [h_chi.resolve_right (hq.1 hwq), hwJ_ne, hwq, hJq]
+/-- The discriminant of `K = ℚ(√-d)` is `-d` for a prime `d ≡ 7 mod 8`: the different `(√-d)` has
+norm `d`, and `K` has a single complex place. -/
+private lemma discr_eq_neg : NumberField.discr (QuadField d) = -(d : ℤ) := by
+  have h_star : star (sqrtNegDInt d) = -sqrtNegDInt d := by
+    simp
+    ring
+  have h_norm : (span {sqrtNegDInt d}).absNorm = d := by
+    refine Nat.cast_injective (R := 𝓞 (QuadField d)) ?_
+    rw [absNorm_span_eq_mul_star, h_star, mul_neg, ← sq, sqrtNegDInt_sq, neg_neg]
+  have h_abs : (NumberField.discr (QuadField d)).natAbs = d := by
+    rw [← absNorm_differentIdeal (QuadField d) (𝓞 (QuadField d)),
+      (different_eq_span_and_adjoin_betaK d).1, h_norm]
+  have h_places : InfinitePlace.nrComplexPlaces (QuadField d) = 1 := by
+    have h_finrank : 2 * InfinitePlace.nrComplexPlaces (QuadField d) = 2 :=
+      (IsTotallyComplex.finrank (K := QuadField d)).symm.trans (finrank_eq_two d)
+    omega
+  have h_mul : (NumberField.discr (QuadField d)).sign *
+      (NumberField.discr (QuadField d)).natAbs = NumberField.discr (QuadField d) :=
+    Int.sign_mul_natAbs (NumberField.discr (QuadField d))
+  rw [NumberField.sign_discr, h_places, pow_one, h_abs] at h_mul
+  omega
 
--- Keeps definitional checks from unfolding the finite products.
-seal Finset.prod in
-/-- The Euler product over the primes of `K = ℚ(√-d)` with all coefficients `1`, that is, the
-Dedekind zeta function of `K`, is `ζ(s) L(s, χ)` for real `s > 1`. Here `quadTwist (N := 1) 1 d` is
-the trivial character modulo `1` twisted by the Legendre symbol, that is, the character
-`χ = (· / d)` modulo `1 * d`, and `entireL` is its L-function, continued to an entire function. -/
-lemma eulerProd_one_eq_zeta_mul {s : ℝ} (hs : 1 < s) :
-    eulerProd (K := QuadField d) 1 s = riemannZeta s * entireL (quadTwist (N := 1) 1 d) s := by
-  classical
-  -- Group the primes of `K` by the rational prime `p` below them and compare Euler factors.
-  have hs_re : 1 < (s : ℂ).re := by simpa
-  rw [entireL, ite_eq_right (quadTwist_ne_one 1 d (by grind [PrimeSevenModEight]) (by simp)),
-    (quadTwist (N := 1) 1 d).LFunction_eq_LSeries hs_re]
-  let below (v : FinPlace (QuadField d)) : Subtype Nat.Prime :=
-    ⟨ringChar (ResField v), CharP.prime_ringChar (ResField v)⟩
-  -- `h_left`: the product over the primes of `K`, indexed by `p` and a prime above it; `h_right`:
-  -- the product over `p` of the Euler factors of `ζ` and `L(s, χ)`.
-  have h_left : HasProd (fun x : Σ p, {v // below v = p} ↦
-      (1 - (1 : FinPlace (QuadField d) → ℂ) x.2 * ((x.2 : FinPlace (QuadField d)).q : ℂ) ^
-        (-s : ℂ))⁻¹) (eulerProd 1 s) :=
-    (Equiv.sigmaFiberEquiv below).hasProd_iff.2 (hasProd_eulerProd (a := 1) (by simp) hs)
-  have h_right : HasProd (fun p : Nat.Primes ↦ (1 - (p : ℂ) ^ (-s : ℂ))⁻¹ *
-      (1 - quadTwist (N := 1) 1 d p * (p : ℂ) ^ (-s : ℂ))⁻¹)
-      (riemannZeta s * LSeries (fun n : ℕ ↦ quadTwist (N := 1) 1 d n) s) :=
-    (riemannZeta_eulerProduct_hasProd hs_re).mul
-      ((quadTwist (N := 1) 1 d).LSeries_eulerProduct_hasProd hs_re)
-  refine (h_left.sigma fun ⟨p, hp⟩ ↦ ?_).unique h_right
-  have : Fact p.Prime := Fact.mk hp
-  obtain ⟨w, hw⟩ := FinPlace.exists_natCast_mem (QuadField d) p
-  -- The primes above `p` are `w` and `J` (`h_above`); either `w = J` has norm `p ^ 2`, or both have
-  -- norm `p` and `(p) = w * J` (`h_split`).
-  obtain ⟨J, h_above, h_split⟩ := prime_inert_or_eq_mul w hw
-  have h_factor : (1 - (p : ℂ) ^ (-s : ℂ))⁻¹ * (1 - chiK d p * (p : ℂ) ^ (-s : ℂ))⁻¹ =
-      (∏ v ∈ {w, J}, (1 - (v.q : ℂ) ^ (-s : ℂ)))⁻¹ :=
-    eulerFactor_mul_eq_prod_inv hw h_split s
-  have h_char : quadTwist (N := 1) 1 d p = chiK d p := by
-    simpa [Subsingleton.elim (p : ZMod 1) 1, chiK_eq_legendreSym] using
-      quadTwist_apply (N := 1) 1 d p
-  have h_fibre (v : FinPlace (QuadField d)) : below v = ⟨p, hp⟩ ↔ v ∈ ({w, J} : Finset _) := by
-    simp [below, ringChar.eq_iff, charP_iff_prime_eq_zero hp, ← algebraMap_ResField_eq_zero,
-      ← h_above]
-  -- The fibre over `p` is `{w, J}`.
-  have h_fibre_prod : HasProd
-      (fun v : {v // below v = ⟨p, hp⟩} ↦ ((1 : ℂ) - v.val.q ^ (-s : ℂ))⁻¹)
-      (∏ v ∈ {w, J}, ((1 : ℂ) - v.q ^ (-s : ℂ))⁻¹) :=
-    (Equiv.subtypeEquivRight h_fibre).hasProd_iff.2 (Finset.hasProd {w, J} _)
-  simpa [h_char, h_factor] using h_fibre_prod
+/-- On `Re s > 1`, the Dedekind zeta function of `K = ℚ(√-d)` is `ζ(s) L(s, χ)`, where
+`quadTwist (N := 1) 1 d` is the Legendre character modulo `1 * d`: Tau Ceti's fundamental
+discriminant character of `-d ≡ 1 (mod 4)` agrees termwise with the Legendre symbol modulo `d`. -/
+private lemma dedekindZeta_eq_riemannZeta_mul {s : ℂ} (hs : 1 < s.re) :
+    dedekindZeta (QuadField d) s = riemannZeta s * (quadTwist (N := 1) 1 d).LFunction s := by
+  have hd_mod : -(d : ℤ) ≡ 1 [ZMOD 4] := by
+    have hd8 : d % 8 = 7 := PrimeSevenModEight.mod_eight
+    rw [Int.ModEq]
+    omega
+  rw [TauCeti.NumberField.dedekindZeta_eq_riemannZeta_mul_LFunction (finrank_eq_two d) hs]
+  congr 1
+  rw [LFunction_eq_LSeries _ hs, LFunction_eq_LSeries _ hs]
+  refine LSeries_congr (fun {n} _ ↦ ?_) s
+  rw [← Int.cast_natCast n, MulChar.ringHomComp_apply, Int.coe_castRingHom,
+    TauCeti.Multiquadratic.fundamentalDiscriminantChar_intCast, discr_eq_neg,
+    TauCeti.kroneckerSym_eq_jacobiSym_natAbs hd_mod, Int.natAbs_neg, Int.natAbs_natCast,
+    ← jacobiSym.legendreSym.to_jacobiSym]
+  symm
+  simpa [Subsingleton.elim ((n : ℤ) : ZMod 1) 1] using quadTwist_apply (N := 1) 1 d n
 
 end New.QuadField
 
@@ -397,59 +358,6 @@ lemma CMLattice.complex_multiplication_theta (C : CMLattice d) (σ : Gal(ℂ/Qua
       exists_mul_mem_latticeModule := ⟨⟨𝔠.absNorm, Nat.pos_of_ne_zero hn⟩, h_multiple⟩
       taylorVia_twistedTranslate_theta := hβ }⟩
 
-/-- Grouping the ideals of a number field by their classes, as for its Dedekind zeta function. Let
-the fractional ideals `𝔟 c` represent each ideal class once, let `f 0 = 0`, let `S c` be the sum of
-`f (|N y| / N (𝔟 c))` over `y ∈ 𝔟 c`. Then `∑ c, S c` is the sum of `#𝓞ˣ · f (N I)` over the
-integral ideals `I`, as the maps `y ↦ (y) / 𝔟 c` together cover each nonzero one `#𝓞ˣ` times.
-Here `Nat.card` gives `#𝓞ˣ = 0` if there are infinitely many units. -/
-lemma hasSum_ideal_classes {K ι : Type*} [Field K] [NumberField K] [Fintype ι]
-    {𝔟 : ι → (FractionalIdeal (nonZeroDivisors (𝓞 K)) K)ˣ} (f : ℚ → ℝ)
-    (h_classes : ∀ C : ClassGroup (𝓞 K), ∃! c : ι, ClassGroup.mk K (𝔟 c) = C)
-    (hf_zero : f 0 = 0) {S : ι → ℝ}
-    (hS : ∀ c : ι,
-      HasSum (fun y : (𝔟 c).val.val ↦ f (|Algebra.norm ℚ y.val| / absNorm (𝔟 c).val)) (S c)) :
-    HasSum (fun I : Ideal (𝓞 K) ↦ Nat.card (𝓞 K)ˣ * f I.absNorm) (∑ c : ι, S c) := by
-  -- For `y ∈ 𝔟 c` let `Φ c y` be the integral ideal `(y) / 𝔟 c`. Group each sum by the fibres of
-  -- `Φ c`: a nonzero `I` is hit for one class `c` only, and there by one orbit of the units.
-  have h_quot (c : ι) (y : (𝔟 c).val.val) : ∃ J : Ideal (𝓞 K), ∀ {I : Ideal (𝓞 K)},
-      J = I ↔ (I : FractionalIdeal _ K) * (𝔟 c).val = spanSingleton _ y.val := by
-    obtain ⟨J, hJ⟩ := le_one_iff_exists_coeIdeal.1
-      (div_le_one_of_le₀ (spanSingleton_le_iff_mem.2 y.property) bot_le)
-    refine ⟨J, fun {I} ↦ ?_⟩
-    rw [← coeIdeal_inj (K := K), hJ, div_eq_iff (by simp), eq_comm]
-  choose Φ hΦ using h_quot
-  have h_norm (c : ι) (y : (𝔟 c).val.val) :
-      |Algebra.norm ℚ y.val| / absNorm (𝔟 c).val = (Φ c y).absNorm := by
-    simpa [coeIdeal_absNorm, div_eq_iff] using (congrArg absNorm ((hΦ c y).1 rfl)).symm
-  have h_fibre (I : Ideal (𝓞 K)) :
-      Nat.card (𝓞 K)ˣ * f I.absNorm = ∑ c, ∑' _ : Φ c ⁻¹' {I}, f I.absNorm := by
-    by_cases hI : I = ⊥
-    · simp [hI, hf_zero]
-    -- `𝔟 c` represents the inverse class of `I` exactly when `I * 𝔟 c` is principal
-    obtain ⟨c, ⟨z, hz⟩, h_unique⟩ :
-        ∃! c, ∃ z, (I : FractionalIdeal _ K) * (𝔟 c).val = spanSingleton _ z := by
-      -- `using!`: the two forms of the invertible ideal of `I` agree only after unfolding
-      simpa [← mul_eq_one_iff_eq_inv', ← map_mul, mk_eq_one_iff, ↓isPrincipal_iff] using!
-        h_classes (.mk K (.mk0 I (by simpa)))⁻¹
-    have h_other (c' : ι) (hc' : c' ≠ c) : ∑' _ : Φ c' ⁻¹' {I}, f I.absNorm = 0 :=
-      have : IsEmpty (Φ c' ⁻¹' {I}) := ⟨fun ⟨y, hy⟩ ↦ hc' (h_unique c' ⟨y.val, (hΦ c' y).1 hy⟩)⟩
-      tsum_empty
-    have hz_mem : z ∈ (𝔟 c).val := by
-      simpa [← spanSingleton_le_iff_mem, ← hz] using mul_le_of_le_one_left' coeIdeal_le_one
-    have hz_ne : (⟨z, hz_mem⟩ : (𝔟 c).val.val) ≠ 0 := fun h_zero ↦ by
-      simp [show z = 0 from congrArg Subtype.val h_zero, hI] at hz
-    -- the generators of `I * 𝔟 c` are the unit multiples of `z`
-    have h_orbit : Φ c ⁻¹' {I} = .range fun u : (𝓞 K)ˣ ↦ u • ⟨z, hz_mem⟩ := by
-      ext y
-      rw [Set.mem_preimage, Set.mem_singleton_iff, hΦ, hz, spanSingleton_eq_spanSingleton]
-      exact exists_congr fun u ↦ .symm Subtype.ext_iff
-    rw [Fintype.sum_eq_single c h_other, h_orbit, tsum_const, nsmul_eq_mul,
-      Nat.card_range_of_injective]
-    exact (smul_left_injective (𝓞 K) hz_ne).comp Units.val_injective
-  -- add up the sums grouped by fibres; on the fibre over `I` the summand is `f (N I)`
-  refine (hasSum_sum fun c _ ↦ (hS c).tsum_fiberwise (Φ c)).congr_fun fun I ↦ (h_fibre I).trans ?_
-  exact sum_congr rfl fun c _ ↦ tsum_congr fun ⟨y, (hy : Φ c y = I)⟩ ↦ by simp [h_norm, hy]
-
 /-- Let `f` be a family of pairs (number, ideal) over the class group such that each
 `scaledIdeal d (f c)`, the module `u 𝔞` for `f c = (u, 𝔞)`, multiplies the lattice of `A c` into
 that of `B c`, and the product of the ideals contains `1`. Then the product of the numbers is
@@ -536,100 +444,6 @@ lemma CMLattice.latticeModule_galConjugate_eq_mul (σ : Gal(ℂ/QuadField d)) {C
     (scaledIdeal_map_mul_galConjugate_le σ ((scaledIdeal_inv_mul_le_iff x).2 h_lattice.le) :)
   exact (scaledIdeal_inv_mul_le_iff _).1 h_inv
 
-/-- Let the lattices of the `E c` be `u c 𝔞 c`, for `v c = (u c, 𝔞 c)`, with ideals that represent
-each class once, and let `F c` be the sum of `(s - 1) (|l|² / (k · area))^(-s)` over the lattice of
-`E c`, `k = 2/√d`, for a real `s` with `1 < s`; the term at `l = 0` is `0`. Then
-`∑ c, F c = (s - 1) ζ(s) #𝓞ˣ L(s, χ)`, where `riemannZeta₁` is `(s - 1) ζ(s)`,
-`entireL (quadTwist (N := 1) 1 d)` is `L(s, χ)` and `χ` is the Legendre symbol modulo `d`. -/
-lemma CMLattice.riemannZeta₁_mul_entireL_eq_sum {E : ClassGroup (𝓞 (QuadField d)) → CMLattice d}
-    {v : ClassGroup (𝓞 (QuadField d)) →
-      ℂˣ × (FractionalIdeal (nonZeroDivisors (𝓞 (QuadField d))) (QuadField d))ˣ}
-    (hE : ∀ c : ClassGroup (𝓞 (QuadField d)), (E c).latticeModule = scaledIdeal d (v c))
-    (hv : ∀ g : ClassGroup (𝓞 (QuadField d)),
-      ∃! c : ClassGroup (𝓞 (QuadField d)), ClassGroup.mk (QuadField d) (v c).2 = g)
-    {s : ℝ} (hs : 1 < s) {F : ClassGroup (𝓞 (QuadField d)) → ℝ}
-    (hF : ∀ c : ClassGroup (𝓞 (QuadField d)), HasSum (fun l : (E c).periodPair.lattice ↦
-      (s - 1) * (‖l.val‖ ^ 2 / (2 / √d) / (E c).periodPair.area) ^ (-s)) (F c)) :
-    riemannZeta₁ s * (Nat.card (𝓞 (QuadField d))ˣ * entireL (quadTwist (N := 1) 1 d) s) =
-      ↑(∑ c : ClassGroup (𝓞 (QuadField d)), F c) := by
-  have hd_pos : 0 < d := NeZero.pos d
-  -- the lattice `u 𝔞` has area `|u|² N𝔞 √d / 2`, so `|u y|² / (k · area) = |N y| / N𝔞`
-  have h_lattice (c : ClassGroup (𝓞 (QuadField d))) : HasSum (fun y : (v c).2.val.val ↦
-      (s - 1) * ((|Algebra.norm ℚ y.val| / absNorm (v c).2.val : ℚ) : ℝ) ^ (-s)) (F c) := by
-    refine ((latticeEquiv (hE c)).hasSum_iff.mpr (hF c)).congr_fun fun y ↦ ?_
-    change _ = (s - 1) * (‖((v c).1 : ℂ) * y.val‖ ^ 2 / (2 / √d) / (E c).area) ^ (-s)
-    congr 2
-    simp [field, abs_norm_eq_norm_sq, area_eq_of_eq_scaledIdeal (hE c)]
-  have h_ideals : HasSum (fun I : Ideal (𝓞 (QuadField d)) ↦
-      Nat.card (𝓞 (QuadField d))ˣ * ((s - 1) * Ideal.absNorm I ^ (-s))) (∑ c, F c) :=
-    hasSum_ideal_classes (fun r ↦ (s - 1) * r ^ (-s)) hv (by simp [(one_pos.trans hs).ne'])
-      h_lattice
-  -- `f I = (s - 1) #𝓞ˣ N(I)^(-s)`; both sides are the sum of `f`, as `ζ_K(s) = ζ(s) L(s, χ)`
-  let f (I : Ideal (𝓞 (QuadField d))) : ℂ :=
-    (s - 1) * Nat.card (𝓞 (QuadField d))ˣ * Ideal.absNorm I ^ (-(s : ℂ))
-  have h_euler : HasSum f
-      ((s - 1) * Nat.card (𝓞 (QuadField d))ˣ * eulerProd (K := QuadField d) 1 s) := by
-    simpa [f, ← Pi.one_def] using (hasSum_eulerProd (K := QuadField d) 1 (by simp) hs).mul_left
-      ((s - 1) * Nat.card (𝓞 (QuadField d))ˣ : ℂ)
-  have h_terms : HasSum f ↑(∑ c, F c) :=
-    (hasSum_ofReal.mpr h_ideals).congr_fun fun I ↦ by simp [f, ofReal_cpow, field]
-  have hs_ne : (s : ℂ) - 1 ≠ 0 := sub_ne_zero.mpr (mod_cast hs.ne')
-  rw [h_terms.unique h_euler]
-  simp [eulerProd_one_eq_zeta_mul hs, riemannZeta_eq_inv_sub_mul, field, hs.ne']
-
-/-- Kronecker's limit formula summed over CM lattices `E c`, where the lattice of `E c` is `u 𝔞` for
-`v c = (u, 𝔞)` and the ideals represent each class once: the sum of the constant terms
-`2 γ - log (area / (k π²)) - log |disc| / 6`, `k = 2/√d`, is the class number times
-`γ + Re L'/L(1, χ) = 2 γ - chowlaSelbergConst d`, with `χ` the Legendre symbol modulo `d`. -/
-lemma CMLattice.sum_kronecker_terms {E : ClassGroup (𝓞 (QuadField d)) → CMLattice d}
-    {v : ClassGroup (𝓞 (QuadField d)) →
-      ℂˣ × (FractionalIdeal (nonZeroDivisors (𝓞 (QuadField d))) (QuadField d))ˣ}
-    (hE : ∀ c : ClassGroup (𝓞 (QuadField d)), (E c).latticeModule = scaledIdeal d (v c))
-    (hv : ∀ g : ClassGroup (𝓞 (QuadField d)),
-      ∃! c : ClassGroup (𝓞 (QuadField d)), ClassGroup.mk (QuadField d) (v c).2 = g) :
-    ∑ c : ClassGroup (𝓞 (QuadField d)),
-        (2 * eulerMascheroniConstant - Real.log ((E c).area / (2 / √d) / π ^ 2) -
-          Real.log ‖(E c).a₁ ^ 4 - 64‖ / 6) =
-      classNumber (QuadField d) * (2 * eulerMascheroniConstant - chowlaSelbergConst d) := by
-  have hd_pos : 0 < d := NeZero.pos d
-  -- `F c s = (s - 1) ∑ (|l|² / (k · area))^(-s)` over the lattice of `E c`, `k = 2/√d`; at `1`
-  -- its value is `π k` (`hF₁`), its right derivative `π k` times the summand of the claim (`hF`)
-  choose F hF₁ hF hS using
-    fun c ↦ kronecker_limit (E c).periodPair (2 / √d) (by positivity)
-  set L : ℂ → ℂ := entireL (quadTwist (N := 1) 1 d) with hL
-  set U : ℂ := (Nat.card (𝓞 (QuadField d))ˣ : ℂ)
-  let Z (s : ℝ) : ℂ := riemannZeta₁ s * (U * L s)
-  -- on `(1, 2)` both `Z s` and `∑ c, F c s` are `(s - 1) ζ_K(s)` times the number of units
-  have h_eq : Z =ᶠ[nhdsWithin 1 (Set.Ioi 1)] fun s : ℝ ↦ ((∑ c, F c s : ℝ) : ℂ) := by
-    filter_upwards [Ioo_mem_nhdsGT one_lt_two] with s hs
-    exact riemannZeta₁_mul_entireL_eq_sum hE hv hs.1 fun c ↦ hS c s hs
-  -- compare the values and the right derivatives at `1`
-  set S : ℝ := ∑ c, (2 * eulerMascheroniConstant - Real.log ((E c).area / (2 / √d) / π ^ 2) -
-    Real.log ‖(E c).a₁ ^ 4 - 64‖ / 6) with hS_def
-  have h_sum : HasDerivWithinAt (fun s : ℝ ↦ ((∑ c, F c s : ℝ) : ℂ))
-      ((π * (2 / √d) * S : ℝ) : ℂ) (Set.Ioi 1) 1 := by
-    simpa [hF₁, disc_eq, ← mul_sum, hS_def] using
-      (HasDerivWithinAt.fun_sum (u := univ) fun c _ ↦ hF c).ofReal_comp
-  have hZ : HasDerivAt Z (deriv riemannZeta₁ 1 * (U * L 1) + riemannZeta₁ 1 * (U * deriv L 1)) 1 :=
-    ((differentiable_riemannZeta₁ _).hasDerivAt.mul
-      ((analyticAt_entireL _ 1).differentiableAt.hasDerivAt.const_mul _)).comp_ofReal
-  have h_one : Z 1 = ↑(∑ c, F c 1) :=
-    tendsto_nhds_unique (hZ.continuousAt.continuousWithinAt.congr' h_eq) h_sum.continuousWithinAt
-  -- the values give the class number formula; the number `U` of units cancels at the end
-  have h_val : U * L 1 = (classNumber (QuadField d) * (π * (2 / √d)) : ℝ) := by
-    simpa [Z, hF₁, classNumber, riemannZeta₁_one] using h_one
-  have h_der : eulerMascheroniConstant * (U * L 1) + U * deriv L 1 = (π * (2 / √d) * S : ℝ) := by
-    simpa [riemannZeta₁_one, deriv_riemannZeta₁_one] using (uniqueDiffWithinAt_Ioi 1).eq_deriv _
-      hZ.hasDerivWithinAt (h_sum.congr_of_eventuallyEq h_eq h_one)
-  have h_ne : U * L 1 ≠ 0 := by simp [h_val, classNumber_ne_zero, hd_pos.ne']
-  have h_log : logDeriv L 1 = ↑(S / classNumber (QuadField d) - eulerMascheroniConstant) := by
-    rw [logDeriv_apply, ← mul_div_mul_left _ _ (left_ne_zero_of_mul h_ne),
-      eq_sub_of_add_eq' h_der, h_val]
-    push_cast
-    field [classNumber_ne_zero, hd_pos.ne']
-  rw [chowlaSelbergConst, ← hL, h_log, ofReal_re]
-  field [classNumber_ne_zero]
-
 /-- There are fractional ideals of `K`, one in each ideal class, whose product is `(1)`. -/
 lemma QuadField.exists_mk_eq_and_prod_eq_one :
     ∃ 𝔠 : ClassGroup (𝓞 (QuadField d)) →
@@ -643,53 +457,53 @@ lemma QuadField.exists_mk_eq_and_prod_eq_one :
   refine ⟨fun 𝒞 ↦ 𝔟 (𝒞 ^ 2) / 𝔟 𝒞, fun 𝒞 ↦ by simp [h𝔟, sq], ?_⟩
   rw [prod_div_distrib, classGroup_sq_bijective.prod_comp 𝔟, div_self']
 
-/-- Let the lattice of `D 𝒞` be `μ 𝒞 • 𝔠 𝒞 • Λ`, with `Λ` the lattice of `C` and ideals `𝔠 𝒞` of
-product `(1)`, and let `u` be a `12 h`-th root of `∏ (μ 𝒞)¹² disc (D 𝒞)`, where `h` is the class
-number and `disc = a₁⁴ - 64`. For an automorphism `σ` of `ℂ` over `K`, the product of
-`area · |disc|^(1/6)` over the conjugates of the `D 𝒞` is `(area (Λ^σ) |σ u|²)^h`, with `Λ^σ` the
-lattice of `C.galConjugate σ`. -/
-lemma CMLattice.prod_area_mul_norm_disc_galConjugate (σ : Gal(ℂ/QuadField d)) {C : CMLattice d}
-    {D : ClassGroup (𝓞 (QuadField d)) → CMLattice d} {μ : ClassGroup (𝓞 (QuadField d)) → ℂˣ}
-    {𝔠 : ClassGroup (𝓞 (QuadField d)) →
-      (FractionalIdeal (nonZeroDivisors (𝓞 (QuadField d))) (QuadField d))ˣ}
-    (hD : ∀ 𝒞 : ClassGroup (𝓞 (QuadField d)),
-      (D 𝒞).latticeModule = scaledIdeal d (μ 𝒞, 𝔠 𝒞) * C.latticeModule)
-    (h_prod : ∏ 𝒞 : ClassGroup (𝓞 (QuadField d)), 𝔠 𝒞 = 1) {u : ℂ}
-    (hu : u ^ (12 * classNumber (QuadField d)) =
-      ∏ 𝒞 : ClassGroup (𝓞 (QuadField d)), μ 𝒞 ^ 12 * ((D 𝒞).a₁ ^ 4 - 64)) :
-    ∏ 𝒞 : ClassGroup (𝓞 (QuadField d)),
-        ((D 𝒞).galConjugate σ).area * ‖((D 𝒞).galConjugate σ).a₁ ^ 4 - 64‖ ^ (6⁻¹ : ℝ) =
-      ((C.galConjugate σ).area * ‖σ u‖ ^ 2) ^ classNumber (QuadField d) := by
-  -- The conjugate of `D 𝒞` has the lattice `σ(μ 𝒞) • 𝔠 𝒞 • Λ^σ`, hence the area
-  -- `|σ(μ 𝒞)|² N(𝔠 𝒞) area (Λ^σ)`, and the norms have product `1`. Compare sixth powers.
-  obtain ⟨x, hx⟩ := (C.galConjugate σ).exists_latticeModule_eq_scaledIdeal
-  set A : ℝ := (C.galConjugate σ).area with hA
-  have hA_pos : 0 < A := area_pos _
-  have h_area (𝒞 : ClassGroup (𝓞 (QuadField d))) :
-      ((D 𝒞).galConjugate σ).area = ‖σ (μ 𝒞)‖ ^ 2 * absNorm (𝔠 𝒞).val * A := by
-    have h_lattice : ((D 𝒞).galConjugate σ).latticeModule =
-        scaledIdeal d (((μ 𝒞).map σ, 𝔠 𝒞) * x) := by
-      rw [latticeModule_galConjugate_eq_mul σ (hD 𝒞), hx, map_mul]
-    simp [hA, area_eq_of_eq_scaledIdeal h_lattice, area_eq_of_eq_scaledIdeal hx, field]
-  have h_norm : ∏ 𝒞, (absNorm (𝔠 𝒞).val : ℝ) = 1 := by
-    simp [← Rat.cast_prod, ← map_prod, ← Units.coe_prod, h_prod]
-  have h_root : ‖σ u‖ ^ (12 * classNumber (QuadField d)) = ∏ 𝒞 : ClassGroup (𝓞 (QuadField d)),
-      ‖σ (μ 𝒞)‖ ^ 12 * ‖((D 𝒞).galConjugate σ).a₁ ^ 4 - 64‖ := by
-    rw [← norm_pow, ← map_pow, hu]
-    simp [galConjugate_a₁, map_ofNat]
-  have h_sixth {r : ℝ} (hr : 0 ≤ r) : (r ^ (6⁻¹ : ℝ)) ^ 6 = r :=
-    mod_cast rpow_inv_natCast_pow hr (by norm_num : 6 ≠ 0)
-  refine (pow_left_inj₀ (prod_nonneg fun 𝒞 _ ↦ mul_nonneg (area_pos _).le (by positivity))
-    (by positivity) (by norm_num : 6 ≠ 0)).1 ?_
-  calc (∏ 𝒞, ((D 𝒞).galConjugate σ).area * ‖((D 𝒞).galConjugate σ).a₁ ^ 4 - 64‖ ^ (6⁻¹ : ℝ)) ^ 6
-      = ∏ 𝒞, (absNorm (𝔠 𝒞).val : ℝ) ^ 6 * A ^ 6 *
-          (‖σ (μ 𝒞)‖ ^ 12 * ‖((D 𝒞).galConjugate σ).a₁ ^ 4 - 64‖) := by
-        rw [← prod_pow]
-        exact prod_congr rfl fun 𝒞 _ ↦ by rw [mul_pow, h_area, h_sixth (norm_nonneg _)]; ring
-    _ = (A ^ 6) ^ classNumber (QuadField d) * ‖σ u‖ ^ (12 * classNumber (QuadField d)) := by
-        rw [prod_mul_distrib, prod_mul_distrib, prod_pow, h_norm, ← h_root]
-        simp [classNumber]
-    _ = ((A * ‖σ u‖ ^ 2) ^ classNumber (QuadField d)) ^ 6 := by ring
+/-- Writing the lattice `u 𝔞` of a CM lattice `E` as `a (ℤ τ + ℤ)` expresses the image of `𝔞` in
+`ℂ` as `(u⁻¹ a) (ℤ + ℤ τ)` and identifies `exp (6 · logPeriod τ)` with `(area / π)⁶ |a₁⁴ - 64|`. -/
+private lemma CMLattice.exists_tau_image_and_exp_logPeriod {E : CMLattice d}
+    {x : ℂˣ × (FractionalIdeal (nonZeroDivisors (𝓞 (QuadField d))) (QuadField d))ˣ}
+    (hE : E.latticeModule = scaledIdeal d x) :
+    ∃ τ : UpperHalfPlane,
+      (∃ c : ℂ, c ≠ 0 ∧ (QuadField d).val.toRingHom '' (x.2.val : Set (QuadField d)) =
+        (c * ·) '' (Submodule.span ℤ {(1 : ℂ), (τ : ℂ)} : Set ℂ)) ∧
+      rexp (6 * τ.logPeriod) = (E.area / π) ^ 6 * ‖E.a₁ ^ 4 - 64‖ := by
+  obtain ⟨a, τ, e, he, ha, h_area⟩ := exists_lattice_eq_mul_tau E.periodPair
+  refine ⟨τ, ⟨(x.1 : ℂ)⁻¹ * a, mul_ne_zero (inv_ne_zero x.1.ne_zero) ha, ?_⟩, ?_⟩
+  · -- `u y ∈ E.Λ = a (ℤ τ + ℤ)` if and only if `y ∈ (u⁻¹ a) (ℤ + ℤ τ)`.
+    ext z
+    constructor
+    · rintro ⟨y, hy, rfl⟩
+      have h_mem : (x.1 : ℂ) * (y : QuadField d) ∈ E.Λ := hE.ge (mem_scaledIdeal.2 ⟨y, hy, rfl⟩)
+      let p : ℤ × ℤ := e.symm ⟨_, h_mem⟩
+      have hp : (x.1 : ℂ) * (y : QuadField d) = a * (p.1 * τ + p.2) := by simpa [p] using he p
+      refine ⟨p.1 * τ + p.2, Submodule.mem_span_pair.2 ⟨p.2, p.1, by simp [add_comm]⟩, ?_⟩
+      dsimp only
+      rw [mul_assoc, ← hp, inv_mul_cancel_left₀ x.1.ne_zero]
+      rfl
+    · rintro ⟨w, hw, rfl⟩
+      obtain ⟨n, m, rfl⟩ := Submodule.mem_span_pair.1 hw
+      have h_mem : (x.1 : ℂ) * (((x.1 : ℂ)⁻¹ * a) * (n • (1 : ℂ) + m • (τ : ℂ))) ∈
+          scaledIdeal d x := by
+        rw [← hE, ← mul_assoc, mul_inv_cancel_left₀ x.1.ne_zero,
+          show a * (n • (1 : ℂ) + m • (τ : ℂ)) = (e (m, n) : ℂ) by simp [he, add_comm]]
+        exact (e (m, n)).property
+      obtain ⟨y, hy, hy_eq⟩ := mem_scaledIdeal.1 h_mem
+      exact ⟨y, hy, mul_left_cancel₀ x.1.ne_zero hy_eq⟩
+  · -- With `a₁⁴ - 64 = (2 π / a)¹² η(τ)²⁴` and `area = |a|² Im τ`, compare sixth powers.
+    have h_disc : ‖E.a₁ ^ 4 - 64‖ = (2 * π / ‖a‖) ^ 12 * ‖ModularForm.eta (τ : ℂ)‖ ^ 24 := by
+      rw [← E.disc_eq, g₂_pow_three_sub_g₃_sq_eq_discriminant he, ModularForm.discriminant,
+        norm_mul, norm_pow, norm_pow, norm_div, norm_mul, Complex.norm_ofNat, Complex.norm_real,
+        Real.norm_of_nonneg pi_nonneg]
+    have h_pos_disc : 0 < ‖E.a₁ ^ 4 - 64‖ := by
+      rw [← E.disc_eq]
+      exact norm_pos_iff.2 (weierstrass_disc_ne_zero E.periodPair)
+    have h_eta_pos : 0 < ‖ModularForm.eta (τ : ℂ)‖ :=
+      (norm_nonneg _).lt_of_ne' fun h0 ↦ h_pos_disc.ne' (by simp [h_disc, h0])
+    have h_inner_pos : 0 < 4 * π * τ.im * ‖ModularForm.eta (τ : ℂ)‖ ^ 4 := by
+      have h_im_pos : 0 < τ.im := τ.im_pos
+      positivity
+    rw [show (6 : ℝ) * τ.logPeriod = (6 : ℕ) * τ.logPeriod by norm_num, Real.exp_natCast_mul,
+      UpperHalfPlane.logPeriod_def, Real.exp_log h_inner_pos, h_area, h_disc]
+    field [norm_ne_zero_iff.2 ha]
 
 /-- The formula of Chowla and Selberg, with a unit: for a CM lattice `C` for `K = ℚ(√-d)` there is
 a number `u`, a unit at every `p`-adic place `ιₚ : ℂ → ℂ_p`, such that for the automorphisms `σ` of
@@ -703,8 +517,8 @@ lemma CMLattice.chowla_selberg (C : CMLattice d) :
       ∀ σ : Gal(ℂ/QuadField d),
         (C.galConjugate σ).area * ‖σ u‖ ^ 2 = π * rexp (chowlaSelbergConst d) * (2 * π / √d) := by
   -- Take ideals `𝔠 𝒞`, one in each class, with product `(1)`, CM lattices `D 𝒞 = μ 𝒞 • 𝔠 𝒞 • Λ`,
-  -- and a `12 h`-th root `u` of `∏ (μ 𝒞)¹² disc (D 𝒞)`, `h` the class number. Kronecker's limit
-  -- formula, summed over the conjugates of the `D 𝒞`, gives the area.
+  -- and a `12 h`-th root `u` of `∏ (μ 𝒞)¹² disc (D 𝒞)`, `h` the class number. Tau Ceti's
+  -- `chowlaSelberg_classMean`, applied to the conjugates of the `D 𝒞`, gives the area.
   obtain ⟨𝔠, h_class : ∀ 𝒞, ClassGroup.mk (QuadField d) (𝔠 𝒞) = 𝒞, h_prod : ∏ 𝒞, 𝔠 𝒞 = 1⟩ :=
     exists_mk_eq_and_prod_eq_one (d := d)
   choose D μ hD using fun 𝒞 ↦ C.exists_latticeModule_eq_scaledIdeal_mul (𝔠 𝒞)
@@ -719,41 +533,73 @@ lemma CMLattice.chowla_selberg (C : CMLattice d) :
   let E (𝒞 : ClassGroup (𝓞 (QuadField d))) : CMLattice d := (D 𝒞).galConjugate σ
   obtain ⟨x, hx⟩ := (C.galConjugate σ).exists_latticeModule_eq_scaledIdeal
   have hE (𝒞 : ClassGroup (𝓞 (QuadField d))) :
-      (E 𝒞).latticeModule = scaledIdeal d (((μ 𝒞).map σ, 𝔠 𝒞) * x) := by
-    rw [latticeModule_galConjugate_eq_mul σ (hD 𝒞), hx, map_mul]
-  have h_kronecker : ∑ 𝒞, (2 * eulerMascheroniConstant -
-      Real.log ((E 𝒞).area / (2 / √d) / π ^ 2) - Real.log ‖(E 𝒞).a₁ ^ 4 - 64‖ / 6) =
-        classNumber (QuadField d) * (2 * eulerMascheroniConstant - chowlaSelbergConst d) :=
-    sum_kronecker_terms hE (by simp [h_class, ← eq_mul_inv_iff_mul_eq])
-  -- the mean of `log (area · |disc|^(1/6))` over the `E 𝒞` is the logarithm of the left side `B`
-  set B : ℝ := (C.galConjugate σ).area * ‖σ u‖ ^ 2
-  have h_product : ∏ 𝒞, (E 𝒞).area * ‖(E 𝒞).a₁ ^ 4 - 64‖ ^ (6⁻¹ : ℝ) =
-      B ^ classNumber (QuadField d) :=
-    prod_area_mul_norm_disc_galConjugate σ hD h_prod hu
-  have h_area (𝒞 : ClassGroup (𝓞 (QuadField d))) : (E 𝒞).area ≠ 0 := (area_pos _).ne'
-  have h_disc (𝒞 : ClassGroup (𝓞 (QuadField d))) : 0 < ‖(E 𝒞).a₁ ^ 4 - 64‖ :=
-    norm_pos_iff.2 (by simpa [← disc_eq] using weierstrass_disc_ne_zero _)
-  have h_mean : ∑ 𝒞, (Real.log (E 𝒞).area + Real.log ‖(E 𝒞).a₁ ^ 4 - 64‖ / 6) =
-      classNumber (QuadField d) * Real.log B := by
-    rw [← Real.log_pow, ← h_product,
-      log_prod fun 𝒞 _ ↦ mul_ne_zero (h_area 𝒞) (rpow_pos_of_pos (h_disc 𝒞) _).ne']
-    simp [Real.log_mul, log_rpow, h_area, h_disc, (rpow_pos_of_pos (h_disc _) _).ne',
-      div_eq_inv_mul]
+      (E 𝒞).latticeModule = scaledIdeal d ((μ 𝒞).map σ * x.1, 𝔠 𝒞 * x.2) := by
+    rw [latticeModule_galConjugate_eq_mul σ (hD 𝒞), hx, ← map_mul, Prod.mk_mul_mk]
+  choose τ hτ_im hτ_exp using fun 𝒞 ↦ exists_tau_image_and_exp_logPeriod (hE 𝒞)
+  let x₀ : ClassGroup (𝓞 (QuadField d)) := ClassGroup.mk (QuadField d) x.2
+  have hd2 : d ≠ 2 := by
+    have hd8 : d % 8 = 7 := PrimeSevenModEight.mod_eight
+    omega
+  have h_cs : (∑ g, (τ (g * x₀⁻¹)).logPeriod) / classNumber (QuadField d) =
+      eulerMascheroniConstant + Real.log (2 * π / √(1 * d : ℕ)) -
+        (deriv (quadTwist (N := 1) 1 d).LFunction 1 /
+          (quadTwist (N := 1) 1 d).LFunction 1).re := by
+    simpa [ofReal_re, sub_re] using congrArg Complex.re <|
+      TauCeti.NumberField.chowlaSelberg_classMean (finrank_eq_two d) (QuadField d).val.toRingHom
+        (1 * d) (by simpa using discr_eq_neg (d := d)) (quadTwist (N := 1) 1 d)
+        (fun _ hs ↦ dedekindZeta_eq_riemannZeta_mul hs) (fun g ↦ τ (g * x₀⁻¹)) fun g ↦
+          ⟨𝔠 (g * x₀⁻¹) * x.2, by simp [x₀, map_mul, h_class], hτ_im (g * x₀⁻¹)⟩
+  have h_sum_shift : ∑ g, (τ (g * x₀⁻¹)).logPeriod = ∑ 𝒞, (τ 𝒞).logPeriod :=
+    Fintype.sum_equiv (Equiv.mulRight x₀⁻¹) _ _ fun _ ↦ rfl
+  have h_ent : entireL (quadTwist (N := 1) 1 d) = (quadTwist (N := 1) 1 d).LFunction :=
+    ite_eq_right (quadTwist_ne_one 1 d hd2 (Nat.coprime_one_left d))
+  have h_mean : (∑ 𝒞, (τ 𝒞).logPeriod) / classNumber (QuadField d) =
+      chowlaSelbergConst d + Real.log (2 * π / √d) := by
+    rw [h_sum_shift, Nat.cast_mul, Nat.cast_one, one_mul, ← logDeriv_apply, ← h_ent] at h_cs
+    rw [h_cs, chowlaSelbergConst]
+    ring
+  -- compare `6 h`-th powers of `exp (mean)` and `((C.galConjugate σ).area * ‖σ u‖ ^ 2) / π`
+  set A : ℝ := (C.galConjugate σ).area with hA
+  set B : ℝ := A * ‖σ u‖ ^ 2
+  have h_area (𝒞 : ClassGroup (𝓞 (QuadField d))) :
+      (E 𝒞).area = ‖σ (μ 𝒞)‖ ^ 2 * absNorm (𝔠 𝒞).val * A := by
+    simp [hA, area_eq_of_eq_scaledIdeal (hE 𝒞), area_eq_of_eq_scaledIdeal hx, field]
+  have h_norm : ∏ 𝒞, (absNorm (𝔠 𝒞).val : ℝ) = 1 := by
+    simp [← Rat.cast_prod, ← map_prod, ← Units.coe_prod, h_prod]
+  have h_root : ‖σ u‖ ^ (12 * classNumber (QuadField d)) =
+      ∏ 𝒞, ‖σ (μ 𝒞)‖ ^ 12 * ‖(E 𝒞).a₁ ^ 4 - 64‖ := by
+    rw [← norm_pow, ← map_pow, hu]
+    simp [E, galConjugate_a₁, map_ofNat]
+  have h6h : 6 * classNumber (QuadField d) ≠ 0 := by simp [classNumber_ne_zero]
+  have hB_nonneg : 0 ≤ B / π := div_nonneg (mul_nonneg (area_pos _).le (sq_nonneg _)) pi_pos.le
+  have h_pow : rexp ((∑ 𝒞, (τ 𝒞).logPeriod) / classNumber (QuadField d)) ^
+      (6 * classNumber (QuadField d)) = (B / π) ^ (6 * classNumber (QuadField d)) :=
+    calc rexp ((∑ 𝒞, (τ 𝒞).logPeriod) / classNumber (QuadField d)) ^
+          (6 * classNumber (QuadField d))
+        = rexp (6 * ∑ 𝒞, (τ 𝒞).logPeriod) := by
+          rw [← Real.exp_natCast_mul]
+          congr 1
+          push_cast
+          field [Nat.cast_ne_zero.2 (classNumber_ne_zero (QuadField d))]
+      _ = ∏ 𝒞, rexp (6 * (τ 𝒞).logPeriod) := by rw [mul_sum, Real.exp_sum]
+      _ = ∏ 𝒞, (absNorm (𝔠 𝒞).val : ℝ) ^ 6 * (A / π) ^ 6 *
+            (‖σ (μ 𝒞)‖ ^ 12 * ‖(E 𝒞).a₁ ^ 4 - 64‖) := by
+          refine prod_congr rfl fun 𝒞 _ ↦ ?_
+          rw [hτ_exp 𝒞, h_area 𝒞]
+          ring
+      _ = (B / π) ^ (6 * classNumber (QuadField d)) := by
+          rw [prod_mul_distrib, prod_mul_distrib, prod_pow, h_norm, ← h_root]
+          simp only [one_pow, one_mul, prod_const, Finset.card_univ, classNumber, B]
+          rw [pow_mul ‖σ u‖ 12, pow_mul (A * ‖σ u‖ ^ 2 / π) 6, ← mul_pow]
+          congr 1
+          ring
+  have h_eq : rexp ((∑ 𝒞, (τ 𝒞).logPeriod) / classNumber (QuadField d)) = B / π :=
+    (pow_left_inj₀ (Real.exp_pos _).le hB_nonneg h6h).1 h_pow
   have hd_pos : 0 < d := NeZero.pos d
-  have h_log : Real.log B = chowlaSelbergConst d + Real.log (2 / √d) + 2 * Real.log π := by
-    have h_term (𝒞 : ClassGroup (𝓞 (QuadField d))) : Real.log ((E 𝒞).area / (2 / √d) / π ^ 2) =
-        Real.log (E 𝒞).area - Real.log (2 / √d) - 2 * Real.log π := by
-      simp [log_div, h_area, hd_pos.ne', pi_ne_zero]
-    refine mul_left_cancel₀ (Nat.cast_ne_zero.2 (classNumber_ne_zero (QuadField d))) ?_
-    rw [← h_mean]
-    simp only [h_term, sum_sub_distrib, sum_add_distrib, sum_const, nsmul_eq_mul,
-      Finset.card_univ, classNumber] at h_kronecker ⊢
-    linear_combination -h_kronecker
-  have hB_pos : 0 < B := by
-    refine mul_pos (area_pos _) (pow_pos (norm_pos_iff.2 ((map_ne_zero σ).2 ?_)) 2)
-    rintro rfl
-    simpa [h_pos.ne', prod_eq_zero_iff, ← disc_eq, ↓weierstrass_disc_ne_zero] using hu.symm
-  rw [← Real.exp_log hB_pos, h_log]
-  simp [field, Real.exp_add, two_mul, Real.exp_log, hd_pos, pi_pos, one_add_one_eq_two]
+  rw [h_mean, Real.exp_add, Real.exp_log (by positivity)] at h_eq
+  calc B = B / π * π := (div_mul_cancel₀ B pi_ne_zero).symm
+    _ = π * rexp (chowlaSelbergConst d) * (2 * π / √d) := by
+      rw [← h_eq]
+      ring
 
 end New
