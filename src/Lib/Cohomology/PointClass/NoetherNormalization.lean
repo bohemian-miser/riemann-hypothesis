@@ -3,12 +3,13 @@ module
 public import Aesop.BuiltinRules
 public import Mathlib.RingTheory.Invariant.Defs
 import Mathlib.FieldTheory.PurelyInseparable.Exponent
-import Mathlib.GroupTheory.CosetCover
 import Mathlib.RingTheory.Henselian
 import Mathlib.RingTheory.Invariant.Galois
 import Mathlib.RingTheory.PicardGroup
 import Mathlib.RingTheory.Valuation.LocalSubring
+import TauCeti.RingTheory.Invariant.Basic
 import TauCeti.RingTheory.MvPolynomial.Homogeneous
+import TauCeti.RingTheory.NoetherNormalization
 public import Lib.General.Geometry.ProjectiveSpace
 public import Lib.General.Geometry.EtaleCharts
 import Lib.General.Algebra.MultivariatePolynomials
@@ -83,12 +84,6 @@ def IsHomogeneousSolution : Prop :=
 /-- The tuple of values of the polynomials `Λ j` at `v`. -/
 noncomputable abbrev evalForms (v : ι → A) (j : Fin (d + 1)) : A := ((Λ j).val.aeval v : A)
 
-/-- A homogeneous polynomial of degree `n` takes at `u • v` the value `u ^ n` times that at `v`. -/
-@[grind =>]
-lemma aeval_smul_of_isHomogeneous {n : ℕ} (hF : F.IsHomogeneous n) :
-    aeval (u • v) F = u ^ n * aeval v F :=
-  hF.eval₂_const_mul (algebraMap k A) v u
-
 /-- If `χ` kills the kernel of `φ` and `φ ∘ v` lies on the cone of `g`, then so does `χ ∘ v`. -/
 lemma IsHomogeneousSolution.of_ker {D : Type} [CommRing D] [Algebra k D] (χ : A →ₐ[k] D)
     (h_ker : ∀ r : A, φ r = 0 → χ r = 0) (h_sol : IsHomogeneousSolution k g (φ ∘ v)) :
@@ -103,7 +98,7 @@ lemma IsHomogeneousSolution.smul (u : C) (h : IsHomogeneousSolution k g v) :
     IsHomogeneousSolution k g (u • φ ∘ v) := by
   intro n F hF h_g
   have h_map : aeval (φ ∘ v) F = 0 := h.map φ hF h_g
-  rw [aeval_smul_of_isHomogeneous hF, h_map, mul_zero]
+  rw [hF.aeval_smul_of_algebra, h_map, smul_zero]
 
 @[simp]
 lemma evalForms_map (v : ι → A) : evalForms Λ (φ ∘ v) = φ ∘ evalForms Λ v := by
@@ -111,7 +106,7 @@ lemma evalForms_map (v : ι → A) : evalForms Λ (φ ∘ v) = φ ∘ evalForms 
 
 @[simp]
 lemma evalForms_smul : evalForms Λ (u • v) = u • evalForms Λ v := by
-  simp [funext_iff, aeval_smul_of_isHomogeneous (Λ _).prop]
+  simp [funext_iff, ((Λ _).prop).aeval_smul_of_algebra]
 
 /-- If `t` is transcendental over the ring `B` of the entries of `g`, every polynomial that
 vanishes at `t • g`, homogeneous or not, vanishes at each point `v` of the cone of `g`. -/
@@ -128,7 +123,7 @@ lemma IsHomogeneousSolution.aeval_eq_zero_of_transcendental [Algebra B L] [IsSca
   have h_sum : P.aeval t = ∑ n ∈ range (F.totalDegree + 1),
       aeval (t • algebraMap B L ∘ g) (homogeneousComponent n F) := by
     simp [P, Polynomial.aeval_monomial, mul_comm, aeval_algebraMap_apply,
-      aeval_smul_of_isHomogeneous (homogeneousComponent_mem _ F)]
+      (homogeneousComponent_mem _ F).aeval_smul_of_algebra]
   have hP : P = 0 := transcendental_iff.mp ht P (h_sum.trans h_zero)
   refine sum_eq_zero fun n hn ↦ h_sol (homogeneousComponent_mem n F) ?_
   -- the value `F_n(g)` is the `n`-th coefficient of `P = 0`
@@ -211,86 +206,70 @@ lemma exists_galois_hull [Finite ι]
   exact ⟨.of A B, .ofEquiv _ (galRestrict A K N B).toEquiv, j, x, isInvariant_of_isGalois' A K N B,
     finite_algebraMap.mpr (finite A K N B), algebraMap_injective B L, rfl⟩
 
-/-- Elimination step of Noether normalisation. If the values of the linear forms `Λ` at `g` satisfy
-a homogeneous relation `f`, and `a` is a point with `f a ≠ 0` and `a 0 ≠ 0`, then on the cone of `g`
-a common zero with entries in a field `K` of the forms `Λ (j + 1) - (a (j + 1) / a 0) • Λ 0` is a
-common zero of `Λ`. -/
-lemma aeval_eq_zero_of_eliminated_forms {m : ℕ} {f : MvPolynomial (Fin (d + 1)) k}
-    (hf : f.IsHomogeneous m) (h_rel : aeval (evalForms Λ g) f = 0) {a : Fin (d + 1) → k}
-    (hfa : MvPolynomial.eval a f ≠ 0) (ha₀ : a 0 ≠ 0) {K : Type} [Field K] [Algebra k K] {x : ι → K}
-    (hx : IsHomogeneousSolution k g x)
-    (h_zero : ∀ j : Fin d, (Λ j.succ - (a j.succ / a 0) • Λ 0).val.aeval x = 0) (j : Fin (d + 1)) :
-    (Λ j).val.aeval x = 0 := by
-  -- the relation is a homogeneous equation of `g`, so it holds at `x`
-  have h_relx : aeval (evalForms Λ x) f = 0 := by
-    simpa [comp_aeval_apply, h_rel] using hx (hf.aeval _ fun j ↦ (Λ j).prop)
-  -- the values of `Λ` at `x` are proportional to `a`
-  obtain ⟨c, h_prop⟩ : ∃ c : K, evalForms Λ x = c • algebraMap k K ∘ a := by
-    refine ⟨(a 0)⁻¹ • evalForms Λ x 0, funext (forall_fin_succ.mpr ?_)⟩
-    simpa [ha₀, algebraMap_eq_smul_one, smul_smul, div_eq_mul_inv, sub_eq_zero] using h_zero
-  -- by homogeneity `c ^ m * f a = 0`, so `c = 0`
-  have h_pow : c ^ m * algebraMap k K (MvPolynomial.eval a f) = 0 := by
-    simpa [h_prop, aeval_smul_of_isHomogeneous hf, aeval_algebraMap_apply] using h_relx
-  have hc : c = 0 :=
-    eq_zero_of_pow_eq_zero ((mul_eq_zero.mp h_pow).resolve_right (by simpa using hfa))
-  simpa [hc] using congrFun h_prop j
+/-- Evaluation at `X • g` in `RatFunc L`; its kernel cuts out the homogeneous coordinate ring of
+the cone of `g`. -/
+private noncomputable abbrev coneEval (k : Type) [Field k] [Algebra k L] (g : ι → L) :
+    MvPolynomial ι k →ₐ[k] RatFunc L :=
+  aeval ((RatFunc.X : RatFunc L) • algebraMap L (RatFunc L) ∘ g)
 
-/-- If linear forms `Λ` have no non-trivial common zero on the cone of a finite tuple `g` over any
-field, then a point `v` of the cone with `Λ v = φ ∘ p` has coordinates integral over the image of
-`φ`. -/
-lemma isIntegralElem_of_no_common_zero [Finite ι]
-    (h_no_common_zero : ∀ {K : Type} [Field K] [Algebra k K] (v : ι → K),
-      IsHomogeneousSolution k g v →
-      (∀ j : Fin (d + 1), (Λ j).val.aeval v = (0 : K)) → v = 0)
-    {K R : Type} [Field K] [Algebra k K] [CommRing R] [Algebra k R] (φ : R →ₐ[k] K)
-    (p : Fin (d + 1) → R) (v : ι → K) (hv : IsHomogeneousSolution k g v)
-    (h_val : evalForms Λ v = φ ∘ p) (i : ι) :
-    φ.IsIntegralElem (v i) := by
-  -- Show `v i ∈ V` for each valuation ring `V` that contains the image of `φ`. Divide `v` by a
-  -- coordinate `v j` of largest valuation. If `v j ∉ V`, the quotient reduces to a common zero
-  -- of `Λ` over the residue field whose `j`-th coordinate is `1`, against `h_no_common_zero`.
-  refine isIntegralElem_of_valuationSubring fun V hV ↦ ?_
-  -- largest valuation says that each `v l` is a multiple of `v j` by some `x l ∈ V`
-  have h_nonempty : Nonempty ι := ⟨i⟩
-  obtain ⟨j, hj⟩ : ∃ j : ι, ∀ l : ι, ∃ x : V, x • v j = v l := exists_max (V.valuation ∘ v)
-  choose x hx using hj
-  algebraize [(φ.toRingHom.codRestrict V hV).comp (algebraMap k _)]
-  let incl : V →ₐ[k] K := AlgHom.mk V.subtype φ.commutes'
-  suffices h_vj_le : V.valuation (v j) ≤ 1 by
-    rw [← hx i]
-    exact mul_mem (x i).prop ((V.valuation_le_one_iff _).mp h_vj_le)
-  by_contra! h_big
-  have hvj : v j ≠ 0 := ne_zero_of_map h_big.ne_zero
-  have h_quot : incl ∘ x = (v j)⁻¹ • v :=
-    (eq_inv_smul_iff₀ hvj).mpr <| funext fun l ↦ (mul_comm _ _).trans (hx l)
-  let red : V →ₐ[k] IsLocalRing.ResidueField V :=
-    IsScalarTower.toAlgHom k V (IsLocalRing.ResidueField V)
-  have h_res {y : V} : red y = 0 ↔ V.valuation y < 1 := by simp [red, V.valuation_lt_one_iff]
-  -- the reduction of `x` lies on the cone, since `incl ∘ x` is a multiple of `v`
-  have h_ker (r : V) (hr : incl r = 0) : red r = 0 := by
-    rw [show r = 0 from Subtype.ext hr, map_zero]
-  have h_incl : IsHomogeneousSolution k g (incl ∘ x) := by
-    rw [h_quot]
-    exact hv.smul (AlgHom.id k K) (v j)⁻¹
-  have h_cone : IsHomogeneousSolution k g (red ∘ x) := .of_ker incl red h_ker h_incl
-  -- `Λ l x = (v j)⁻¹ * φ (p l)` has valuation less than one
-  have h_zero (l : Fin (d + 1)) : (Λ l).val.aeval (red ∘ x) = 0 := by
-    have h_incl_l : (((Λ l).val.aeval x : V) : K) = (v j)⁻¹ * φ (p l) := by
-      calc (((Λ l).val.aeval x : V) : K) = evalForms Λ (incl ∘ x) l :=
-            comp_aeval_apply x incl (Λ l).val
-        _ = ((v j)⁻¹ • evalForms Λ v) l := by rw [h_quot, evalForms_smul]
-        _ = (v j)⁻¹ * φ (p l) := by simp [h_val]
-    have h_le : V.valuation (φ (p l)) ≤ 1 := V.valuation_le_one ⟨φ (p l), hV (p l)⟩
-    have h_lt_one : V.valuation ((v j)⁻¹ * φ (p l)) < 1 := by
-      simpa [inv_mul_lt_one₀ h_big.pos] using h_le.trans_lt h_big
-    -- `Λ l (red ∘ x) = red (Λ l x)`
-    refine (comp_aeval_apply x red (Λ l).val).symm.trans ?_
-    rw [h_res, h_incl_l]
-    exact h_lt_one
-  have h_lt : V.valuation (x j) < 1 := h_res.mp (congrFun (h_no_common_zero _ h_cone h_zero) j)
-  -- but `x j = (v j)⁻¹ * v j = 1`
-  have h_xj : ((x j : V) : K) = 1 := (congrFun h_quot j).trans (inv_mul_cancel₀ hvj)
-  simp [h_xj] at h_lt
+/-- If `a : Q` is integral over `aeval y : k[Fin d'] → Q` and a `k`-algebra map `ev : Q → K`
+intertwines `aeval y` with `φ ∘ aeval p`, then `ev a` is integral over `φ`. -/
+private lemma isIntegralElem_of_comp_aeval_eq {Q K R : Type} [CommRing Q] [Algebra k Q]
+    [CommRing K] [Algebra k K] [CommRing R] [Algebra k R] {d' : ℕ} {y : Fin d' → Q}
+    {a : Q} (ha : (aeval (R := k) y).toRingHom.IsIntegralElem a) (φ : R →ₐ[k] K)
+    (p : Fin d' → R) (ev : Q →ₐ[k] K) (hev : ev.comp (aeval y) = φ.comp (aeval p)) :
+    φ.IsIntegralElem (ev a) := by
+  obtain ⟨q, hq_monic, hq_eval⟩ := ha
+  refine ⟨q.map (aeval p).toRingHom, hq_monic.map _, ?_⟩
+  have hev' : φ.toRingHom.comp (aeval p).toRingHom = ev.toRingHom.comp (aeval y).toRingHom :=
+    congrArg AlgHom.toRingHom hev.symm
+  rw [Polynomial.eval₂_map, hev']
+  simpa [Polynomial.hom_eval₂] using congrArg ev.toRingHom hq_eval
+
+/-- For a non-zero tuple `g : ι → L`, the homogeneous coordinate ring `k[ι] / ker (coneEval k g)`
+of the cone of `g` cannot be finite over `k[Fin 0]`: since `RatFunc.X` is transcendental over `L`,
+some coordinate `X * g i₀` is not integral over `L`. -/
+private lemma dim_ne_zero_of_finite_cone {d' : ℕ} (hg : g ≠ 0)
+    (y : Fin d' → MvPolynomial ι k ⧸ ker (coneEval k g))
+    (hy_fin : (aeval (R := k) y).toRingHom.Finite) : d' ≠ 0 := by
+  rintro rfl
+  obtain ⟨i₀, hi₀⟩ := Function.ne_iff.mp hg
+  have hcomp : (kerLiftAlg (coneEval k g)).comp (aeval y) =
+      (toAlgHom k L (RatFunc L)).comp (aeval Fin.elim0) := algHom_ext fun i ↦ i.elim0
+  have hker_x : kerLiftAlg (coneEval k g) (Quotient.mkₐ k (ker (coneEval k g)) (X i₀)) =
+      RatFunc.X * algebraMap L (RatFunc L) (g i₀) := by
+    rw [Ideal.Quotient.mkₐ_eq_mk, kerLiftAlg_mk]
+    simp [coneEval]
+  have h_int : IsIntegral L (RatFunc.X * algebraMap L (RatFunc L) (g i₀)) := by
+    rw [← hker_x]
+    exact isIntegralElem_of_comp_aeval_eq
+      (hy_fin.to_isIntegral (Quotient.mkₐ k (ker (coneEval k g)) (X i₀)))
+      (toAlgHom k L (RatFunc L)) Fin.elim0 (kerLiftAlg (coneEval k g)) hcomp
+  have hX : IsIntegral L (RatFunc.X : RatFunc L) := by
+    have hmul : IsIntegral L (RatFunc.X * algebraMap L (RatFunc L) (g i₀) *
+        algebraMap L (RatFunc L) (g i₀)⁻¹) := h_int.mul isIntegral_algebraMap
+    rwa [mul_assoc, ← map_mul, mul_inv_cancel₀ hi₀, map_one, mul_one] at hmul
+  exact RatFunc.transcendental_X hX.isAlgebraic
+
+/-- If the classes of linear forms `Λ` in the homogeneous coordinate ring
+`k[ι] / ker (coneEval k g)` of the cone of `g` are algebraically independent over `k`, then the
+values `Λ j (g)` satisfy no non-zero homogeneous polynomial relation over `k`. -/
+private lemma isHomogeneousSolution_evalForms_of_algebraicIndependent
+    (hy_ind : AlgebraicIndependent k fun l : Fin (d + 1) ↦
+      Quotient.mkₐ k (ker (coneEval k g)) (Λ l).val) :
+    IsHomogeneousSolution k (evalForms Λ g) (X (R := k)) := by
+  intro m F hF h_rel
+  let F' : MvPolynomial ι k := aeval (fun l ↦ (Λ l).val) F
+  have hF' : F'.IsHomogeneous m := by simpa using hF.aeval _ fun l ↦ (Λ l).prop
+  have hFg : aeval g F' = 0 := (comp_aeval_apply _ (aeval g) F).trans h_rel
+  have hΨF' : F' ∈ ker (coneEval k g) := by
+    rw [RingHom.mem_ker]
+    dsimp only [coneEval]
+    rw [hF'.aeval_smul_of_algebra, aeval_algebraMap_apply, hFg, map_zero, smul_zero]
+  have hyF : aeval (fun l ↦ Quotient.mkₐ k (ker (coneEval k g)) (Λ l).val) F = 0 := by
+    rw [← comp_aeval_apply]
+    exact Ideal.Quotient.eq_zero_iff_mem.mpr hΨF'
+  simp [algebraicIndependent_iff.mp hy_ind F hyF]
 
 /-- Noether normalisation. Let `g` be a non-zero tuple, indexed by a finite type `ι`, in a field `L`
 over a field `k` of characteristic zero. Then there are linear forms `Λ₀, …, Λ_d` over `k` with
@@ -301,39 +280,52 @@ contains the values `Λ_j(v)`. -/
 lemma exists_isNoetherNormalization [CharZero k] [Finite ι] (hg : g ≠ 0) :
     ∃ (d : ℕ) (Λ : Fin (d + 1) → homogeneousSubmodule ι k 1),
       evalForms Λ g 0 ≠ 0 ∧ ∀ u : Lˣ, IsNoetherNormalization (k := k) (d := d) Λ (u • g) := by
-  -- Start from the coordinates, linear forms without a non-trivial common zero on the cone of
-  -- `g`. While the values at `g` satisfy a homogeneous relation, one form can be dropped; once
-  -- they satisfy none, the forms are a Noether normalisation.
-  obtain ⟨n, Λ, h_base⟩ :
-      ∃ (n : ℕ) (Λ : Fin n → homogeneousSubmodule ι k 1),
-        ∀ {K : Type} [Field K] [Algebra k K] (v : ι → K), IsHomogeneousSolution k g v →
-          (∀ j : Fin n, (Λ j).val.aeval v = (0 : K)) → v = 0 := by
-    refine ⟨Nat.card ι, fun j ↦ ⟨X ((equivFin ι).symm j), isHomogeneous_X k _⟩,
-      fun v _ h_zero ↦ funext fun i ↦ ?_⟩
-    simpa using h_zero (equivFin ι i)
-  induction n with
-  | zero => cases hg (h_base g .refl nofun)
-  | succ n ih =>
-    by_cases h_ind : IsHomogeneousSolution k (evalForms Λ g) (X (R := k))
-    · -- no relation: in particular `X 0` is none, so `Λ 0` does not vanish at `g`
-      have h_ne : evalForms Λ g 0 ≠ 0 := by simpa using h_ind (isHomogeneous_X k 0)
-      refine ⟨n, Λ, h_ne, fun u ↦ ⟨fun m F hF h_rel ↦ h_ind hF ?_, fun φ p v hv ↦ ?_⟩⟩
-      · -- no relation at `u • g` either: it would be one at `g`, up to a power of `u`
-        simpa [u.smul_def, aeval_smul_of_isHomogeneous hF] using h_rel
-      · -- a point of the cone of `u • g` lies on the cone of `g`
-        have hv_g : IsHomogeneousSolution k g v := by grind [IsHomogeneousSolution, Units.smul_def]
-        exact isIntegralElem_of_no_common_zero h_base φ p v hv_g
-    · obtain ⟨m, f, hf, h_rel, hf₀⟩ : ∃ (m : ℕ) (f : MvPolynomial (Fin (n + 1)) k),
-          f.IsHomogeneous m ∧ aeval (evalForms Λ g) f = 0 ∧ f ≠ 0 := by
-        simpa [IsHomogeneousSolution, aeval_X_left_apply] using h_ind
-      -- `k` is infinite, so the non-zero polynomial `f * X 0` has a non-zero value
-      obtain ⟨a, ha⟩ : ∃ a : Fin (n + 1) → k, MvPolynomial.eval a (f * X 0) ≠ 0 := by
-        by_contra! h_all
-        exact mul_ne_zero hf₀ (X_ne_zero 0) (MvPolynomial.funext fun a ↦ by simpa using h_all a)
-      obtain ⟨hfa, ha₀⟩ : MvPolynomial.eval a f ≠ 0 ∧ a 0 ≠ 0 := by simpa [not_or] using ha
-      -- eliminate `Λ 0`: the `n` new forms still have no non-trivial common zero on the cone
-      exact ih (fun j ↦ Λ j.succ - (a j.succ / a 0) • Λ 0) fun x hx h_zero ↦
-        h_base x hx (aeval_eq_zero_of_eliminated_forms hf h_rel hfa ha₀ hx h_zero)
+  -- Apply linear Noether normalisation (`TauCeti.exists_linear_normalization_of_finite`) to the
+  -- homogeneous coordinate ring `Q = k[ι] / ker Ψ` of the cone of `g`, cut out by `X • g` in
+  -- `RatFunc L`.
+  let Ψ : MvPolynomial ι k →ₐ[k] RatFunc L := coneEval k g
+  have hΨ_prime : (ker Ψ).IsPrime := ker_isPrime Ψ
+  let Q : Type := MvPolynomial ι k ⧸ ker Ψ
+  cases nonempty_fintype ι
+  let x : ι → Q := fun i ↦ Quotient.mkₐ k (ker Ψ) (X i)
+  have haeval : aeval (R := k) x = Quotient.mkₐ k (ker Ψ) := algHom_ext fun i ↦ aeval_X x i
+  have hx_surj : Surjective (aeval (R := k) x) := by
+    rw [haeval]
+    exact Quotient.mkₐ_surjective k (ker Ψ)
+  obtain ⟨d', -, C, hy_ind, hy_fin, -⟩ :=
+    TauCeti.exists_linear_normalization_of_finite x (.of_surjective _ hx_surj)
+  let y : Fin d' → Q := fun l ↦ ∑ j, C l j • x j
+  -- The dimension `d'` is positive: since `g ≠ 0`, `Q` cannot be finite over `k[Fin 0]`.
+  have hd' : d' ≠ 0 := dim_ne_zero_of_finite_cone hg y hy_fin
+  obtain ⟨d, rfl⟩ := Nat.exists_eq_succ_of_ne_zero hd'
+  let Λ : Fin (d + 1) → homogeneousSubmodule ι k 1 := fun l ↦
+    ⟨∑ j, C l j • X j, sum_mem fun j _ ↦ Submodule.smul_mem _ _ (isHomogeneous_X k _)⟩
+  have hy_eq : y = fun l ↦ Quotient.mkₐ k (ker Ψ) (Λ l).val := funext fun l ↦ by
+    simp only [y, Λ, x, map_sum, map_smul]
+  -- Algebraic independence of `y` in `Q` means the `Λ l (g)` satisfy no homogeneous relation.
+  have hy_ind' : AlgebraicIndependent k fun l ↦ Quotient.mkₐ k (ker Ψ) (Λ l).val := by
+    rw [← hy_eq]
+    exact hy_ind
+  have h_ind : IsHomogeneousSolution k (evalForms Λ g) (X (R := k)) :=
+    isHomogeneousSolution_evalForms_of_algebraicIndependent hy_ind'
+  -- no relation: in particular `X 0` is none, so `Λ 0` does not vanish at `g`
+  have h_ne : evalForms Λ g 0 ≠ 0 := by simpa using h_ind (isHomogeneous_X k 0)
+  refine ⟨d, Λ, h_ne, fun u ↦ ⟨fun m F hF h_rel ↦ h_ind hF ?_, fun φ p v hv h_val i ↦ ?_⟩⟩
+  · -- no relation at `u • g` either: it would be one at `g`, up to a power of `u`
+    simpa [u.smul_def, hF.aeval_smul_of_algebra] using h_rel
+  · -- a point of the cone of `u • g` lies on the cone of `g`, so evaluation at `v` factors
+    -- through `Q`, carrying integrality over `k[y]` to `φ`
+    have hv_g : IsHomogeneousSolution k g v := fun n P hP hPg ↦
+      hv hP (by simp [u.smul_def, hP.aeval_smul_of_algebra, hPg])
+    have h_ker (P : MvPolynomial ι k) (hP : P ∈ ker Ψ) : aeval v P = 0 :=
+      hv_g.aeval_eq_zero_of_transcendental RatFunc.transcendental_X hP
+    let ev : Q →ₐ[k] _ := Quotient.liftₐ (ker Ψ) (aeval v) h_ker
+    have hev_comp : ev.comp (aeval y) = φ.comp (aeval p) := algHom_ext fun l ↦ by
+      rw [AlgHom.comp_apply, aeval_X, hy_eq, AlgHom.comp_apply, aeval_X]
+      exact congrFun h_val l
+    have hev_x : ev (x i) = v i := aeval_X v i
+    rw [← hev_x]
+    exact isIntegralElem_of_comp_aeval_eq (hy_fin.to_isIntegral (x i)) φ p ev hev_comp
 
 /-- Let `A` be the ring of invariants of the finite group of `A`-automorphisms of `B`. Two maps
 of `k`-algebras from `B` to a field (`k` of characteristic zero) that agree on `A` differ by such an
@@ -342,29 +334,18 @@ lemma exists_algEquiv_of_comp_eq [CharZero k] [Algebra A B] [IsScalarTower k A B
     (hinv : Algebra.IsInvariant A B Gal(B/A)) {χ ψ : B →ₐ[k] L}
     (h_agree : χ.comp (toAlgHom k A B) = ψ.comp (toAlgHom k A B)) :
     ∃ τ : Gal(B/A), ∀ a : B, ψ a = χ (τ a) := by
-  -- A vector space over the infinite field `k` is not a finite union of proper subspaces, so it
-  -- is enough to find, for each `a`, some `τ` with `ψ a = χ (τ a)`.
-  suffices hcover : ∀ a : B, ∃ τ : Gal(B/A), ψ a = χ (τ a) by
-    have h_mem (a : B) :
-        a ∈ ⋃ τ : Gal(B/A), ((ψ.equalizer (χ.comp (τ.restrictScalars k))).toSubmodule : Set B) := by
-      simpa using hcover a
-    simpa [Submodule.eq_top_iff'] using Subspace.exists_eq_top_of_iUnion_eq_univ
-      (p := fun τ : Gal(B/A) ↦ (ψ.equalizer (χ.comp (τ.restrictScalars k))).toSubmodule)
-      (Set.eq_univ_of_forall h_mem)
-  intro a
-  -- The polynomial `∏ τ, (X - τ a)` comes from some `P` over `A`.
-  obtain ⟨P, hP : P.map (algebraMap A B) = MulSemiringAction.charpoly Gal(B/A) a⟩ :
-    MulSemiringAction.charpoly (B ≃ₐ[A] B) a ∈ Polynomial.lifts (algebraMap A B) :=
-    hinv.charpoly_mem_lifts (b := a)
-  have hroot (θ : B →ₐ[k] L) :
-      P.eval₂ (θ.comp (toAlgHom k A B)).toRingHom (ψ a) = 0 ↔ ∃ τ : Gal(B/A), ψ a = θ (τ a) := by
-    rw [show (θ.comp (toAlgHom k A B)).toRingHom = θ.toRingHom.comp (algebraMap A B) from rfl,
-      ← P.eval₂_map, hP, MulSemiringAction.charpoly_eq, Polynomial.eval₂_finsetProd,
-      prod_eq_zero_iff]
-    simp [sub_eq_zero]
-  -- `ψ a` is a root of the image of `P` under `ψ`, which is also its image under `χ`.
-  rw [← hroot χ, h_agree, hroot ψ]
-  exact ⟨1, rfl⟩
+  -- Two ring maps from `B` to the field `L` that agree on the invariant subring `A` have conjugate
+  -- kernels above the same prime of `A`, hence differ by an element `τ` of the finite group
+  -- `Gal(B/A)` (`TauCeti.Algebra.IsInvariant.exists_comp_eq_of_comp_algebraMap_eq`).
+  -- Register `hinv` as an instance and pass the agreement on `A` as a `RingHom` equality.
+  have h_inv : Algebra.IsInvariant A B Gal(B/A) := hinv
+  have h_ring : χ.toRingHom.comp (algebraMap A B) = ψ.toRingHom.comp (algebraMap A B) :=
+    congrArg AlgHom.toRingHom h_agree
+  obtain ⟨τ, hτ⟩ : ∃ τ : Gal(B/A),
+      χ.toRingHom.comp (MulSemiringAction.toRingHom Gal(B/A) B τ) = ψ.toRingHom :=
+    TauCeti.Algebra.IsInvariant.exists_comp_eq_of_comp_algebraMap_eq
+      A Gal(B/A) χ.toRingHom ψ.toRingHom h_ring
+  exact ⟨τ, fun a ↦ (RingHom.congr_fun hτ a).symm⟩
 
 /-- Let `t` be transcendental over `L`, `j : B → Ω` a map of `k`-algebras with zero kernel, and `b`
 a tuple over `B` with `j ∘ b = t • w` for a tuple `w` of elements of `Ω` integral over `L`. Every
@@ -738,8 +719,8 @@ lemma IsCoordsWithUnit.exists_universal_chart (hξ : IsCoordsWithUnit L ξ g)
       ∃ φ : MvPolynomial ι k →ₐ[k] C,
         w i • φ ∘ X = w ∧ ∀ P, Associated ((homog P).aeval w) (φ P) := by
     refine ⟨aeval (u.unit⁻¹.val • w), by simp [← mul_assoc, funext_iff], fun P ↦ ?_⟩
-    simp [← h_chart P, aeval_smul_of_isHomogeneous (h_homog_deg _), associated_unit_mul_right,
-      IsUnit.pow]
+    simp [← h_chart P, (h_homog_deg _).aeval_smul_of_algebra, smul_eq_mul,
+      associated_unit_mul_right, IsUnit.pow]
   -- (`@` keeps `C` and `w` implicit in the chosen functions)
   choose φ hφX hφG using @h_eval
   -- `D = k[X] / ker (φ hgi)` embeds in `F`, so `ξ` descends to `y` with coordinates `X` mod kernel.
