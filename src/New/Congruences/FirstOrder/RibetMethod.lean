@@ -331,6 +331,25 @@ lemma Selmer.det_comp_map_eq_mul_prod {R A ι r : Type*} [CommRing R] [Fintype �
     ext1 (a | a) (b | b) <;> simp [blockEquiv', hχ, blockDiagonal, diagonal]
   rw [← det_submatrix_equiv_self blockEquiv', h_blocks, det_fromBlocks_zero₂₁, det_blockDiagonal]
 
+/-- Let `u x` (`x : Y`) be representations of `O[G]`, and let `κ : O → S` send an element of `O` to
+the constant function. If the coefficients of the characteristic polynomials of the group elements,
+as functions `Y → L` of `x`, lie in the subalgebra `S`, then so does the determinant of every
+`w : O[G]`. -/
+lemma Selmer.det_mem_of_coeff_mem (u : Y → O[G] →ₐ[O] Matrix σ σ O) (κ : O →+* S)
+    (hκ : (algebraMap S (Y → L)).comp κ = algebraMap O (Y → L))
+    (h_coeff : ∀ (g : G) (k : ℕ),
+      (fun x : Y ↦ ((u x (.single g 1)).map (algebraMap O L)).charpoly.coeff k) ∈ S)
+    (w : O[G]) :
+    (fun x : Y ↦ algebraMap O L (u x w).det) ∈ S := by
+  -- The determinant of the lift `ρ` to `S[G]` lies in `S`, like its characteristic polynomials.
+  obtain ⟨ρ, hρ, h_charpoly⟩ := exists_family_algHom_charpoly_mem u κ hκ h_coeff
+  have h_det : (fun x : Y ↦ algebraMap O L (u x w).det) = (ρ (mapRingHom G κ w)).det := by
+    ext x
+    simp [hρ, det_apply']
+  obtain ⟨-, D, ⟨hD, -, -⟩⟩ := exists_adjugate_of_charpoly_mem ρ h_charpoly (mapRingHom G κ w)
+  rw [h_det, hD, S.algebraMap_apply]
+  exact D.property
+
 /-- The elements of `Λ` whose traces against every element of `Λ`, through `ρ`, lie in `𝒥`. They
 form a two-sided ideal, as traces are cyclic. -/
 def Selmer.traceIdeal (ρ : Λ →ₐ[R] Matrix σ σ L) (𝒥 : Submodule R L) : TwoSidedIdeal Λ :=
