@@ -17,9 +17,9 @@ the kernel of `φ_w - 1` for the twisted action. At `Y = 0` it does the same for
 
 * `New.Selmer.sub_one_smul_eq_of_tame`: the relation.
 * `New.Selmer.selmerOnLine`: the Selmer module of the twist at a point of the line.
-* `New.Selmer.IsTiedPrimes.relLength_tied_le`: the failure to be tied at the primes other than the
+* `New.Selmer.LineTiedSetup.relLength_tied_le`: the failure to be tied at the primes other than the
   first is at most `v(P¹(y))`, where `P¹ = New.Selmer.tiePolynomial`.
-* `New.Selmer.IsTiedPrimes.relLength_tieRelations_le_sum_addVal_det`: the cost of dropping the ties
+* `New.Selmer.LineTiedSetup.relLength_tieRelations_le_sum_addVal_det`: the cost of dropping the ties
   at the first prime and its conjugate, at the point `0`.
 
 Letters: `J` is the set of all auxiliary primes, `P₀ ∈ J` is the first prime `𝔮₀`, and `d` attaches
@@ -58,12 +58,13 @@ open Matrix.Module
 
 variable {E O n B : Type} [Field E] [EmbeddedNumberField E] [CommRing O] [Fintype n] [DecidableEq n]
   [AddCommGroup B] [Module O B] {ρ : Gal(Ω/E) →* Matrix n n O} {c : Gal(Ω/E) → n → B}
+  (hc : ∀ g h : Gal(Ω/E), c (g * h) = c g + ρ g • c h)
+include hc
 
 /-- If `g` acts through `ρ` by the scalar `α`, then the affine action `u ↦ c(g) + g u` of the
 cocycle `c` has `k`-th iterate `u ↦ α ^ k u + ∑ i < k, α ^ i c(g)` at `g`. At `u = 0` this says
 `c(g ^ k) = ∑ i < k, α ^ i c(g)`. -/
-lemma affineAction_pow_apply (hc : ∀ g h : Gal(Ω/E), c (g * h) = c g + ρ g • c h)
-    {g : Gal(Ω/E)} {α : O} (hg : ρ g = α • 1) (k : ℕ) (u : n → B) :
+lemma affineAction_pow_apply {g : Gal(Ω/E)} {α : O} (hg : ρ g = α • 1) (k : ℕ) (u : n → B) :
     (affineAction hc g ^ k) u = α ^ k • u + (∑ i ∈ range k, α ^ i) • c g := by
   induction k with
   | zero => simp
@@ -75,9 +76,8 @@ lemma affineAction_pow_apply (hc : ∀ g h : Gal(Ω/E), c (g * h) = c g + ρ g �
 /-- If `g` acts through `ρ` by the scalar `α` and `∑ i < k, α ^ i = 0`, then the affine action
 `u ↦ c(g) + g u` of the cocycle `c` at `g` has `k`-th power `1`: the element `g ^ k` acts trivially
 and `c` vanishes at it. -/
-lemma affineAction_pow_eq_one (hc : ∀ g h : Gal(Ω/E), c (g * h) = c g + ρ g • c h)
-    {g : Gal(Ω/E)} {α : O} (hg : ρ g = α • 1) {k : ℕ} (hα : ∑ i ∈ range k, α ^ i = 0) :
-    affineAction hc g ^ k = 1 := by
+lemma affineAction_pow_eq_one {g : Gal(Ω/E)} {α : O} (hg : ρ g = α • 1) {k : ℕ}
+    (hα : ∑ i ∈ range k, α ^ i = 0) : affineAction hc g ^ k = 1 := by
   have h_pow : α ^ k = 1 := by rw [← sub_eq_zero, ← geom_sum_mul, hα, zero_mul]
   exact Equiv.ext fun u ↦ by simp [affineAction_pow_apply hc hg, hα, h_pow]
 
@@ -86,8 +86,8 @@ let `ρ` be trivial on the elements of inertia at `A` near `1`. Each `g` acts by
 `u ↦ c(g) + ρ(g) u` (`affineAction`). Suppose that this map has `q`-th power `1` for every `g` in
 inertia at `A`, with `q` prime to `A`. Then the affine maps of a Frobenius element `φ` at `A` of
 norm `k ≡ 1` modulo `q` and of an element `γ` of inertia at `A` commute. -/
-lemma commute_affineAction (hc : ∀ g h : Gal(Ω/E), c (g * h) = c g + ρ g • c h)
-    {A : ClosurePlace} {v : FinPlace E} (hA : IsPlaceOver A v) (hc_lc : IsLocallyConstant c)
+lemma commute_affineAction {A : ClosurePlace} {v : FinPlace E} (hA : IsPlaceOver A v)
+    (hc_lc : IsLocallyConstant c)
     (h_open : ∀ᶠ g : Gal(Ω/E) in nhds 1, g ∈ inertiaGroup Gal(Ω/E) A → ρ g = 1) {q k : ℕ}
     (hq : A.valuation (q : ℕ) = 1)
     (h_pow : ∀ g ∈ inertiaGroup Gal(Ω/E) A, affineAction hc g ^ q = 1) (hk : k ≡ 1 [MOD q])
@@ -106,8 +106,8 @@ lemma commute_affineAction (hc : ∀ g h : Gal(Ω/E), c (g * h) = c g + ρ g •
 
 /-- If the affine maps `u ↦ c(g) + g u` of the cocycle `c` at `g = φ` and `g = γ` commute, then
 `c(γ φ) = c(φ γ)`, which is `(φ - 1) c(γ) = (γ - 1) c(φ)` by the cocycle rule. -/
-lemma sub_one_smul_eq_of_commute (hc : ∀ g h : Gal(Ω/E), c (g * h) = c g + ρ g • c h)
-    {φ γ : Gal(Ω/E)} (h_comm : Commute (affineAction hc φ) (affineAction hc γ)) :
+lemma sub_one_smul_eq_of_commute {φ γ : Gal(Ω/E)}
+    (h_comm : Commute (affineAction hc φ) (affineAction hc γ)) :
     (ρ φ - 1) • c γ = (ρ γ - 1) • c φ := by
   have h_swap : c φ + ρ φ • c γ = c γ + ρ γ • c φ := by
     simpa [affineAction_apply] using DFunLike.congr_fun h_comm.eq 0
@@ -116,9 +116,8 @@ lemma sub_one_smul_eq_of_commute (hc : ∀ g h : Gal(Ω/E), c (g * h) = c g + ρ
 
 /-- The relation `(φ - 1) c(γ) = (γ - 1) c(φ)` for a cocycle `c` passes from `φ` to `φ⁻¹` if `γ`
 acts by a scalar: multiply it by `-φ⁻¹` and use `c(φ⁻¹) = -φ⁻¹ c(φ)`. -/
-lemma inv_sub_one_smul_eq (hc : ∀ g h : Gal(Ω/E), c (g * h) = c g + ρ g • c h)
-    {φ γ : Gal(Ω/E)} {α : O} (hγ : ρ γ = α • 1) (h_rel : (ρ φ - 1) • c γ = (ρ γ - 1) • c φ) :
-    (ρ φ⁻¹ - 1) • c γ = (ρ γ - 1) • c φ⁻¹ := by
+lemma inv_sub_one_smul_eq {φ γ : Gal(Ω/E)} {α : O} (hγ : ρ γ = α • 1)
+    (h_rel : (ρ φ - 1) • c γ = (ρ γ - 1) • c φ) : (ρ φ⁻¹ - 1) • c γ = (ρ γ - 1) • c φ⁻¹ := by
   have h_inv : ρ φ⁻¹ * ρ φ = 1 := by rw [← map_mul, inv_mul_cancel, map_one]
   have h_comm : ρ φ⁻¹ * (ρ γ - 1) = (ρ γ - 1) * ρ φ⁻¹ := by simp [hγ, mul_sub, sub_mul]
   calc
@@ -132,8 +131,8 @@ lemma inv_sub_one_smul_eq (hc : ∀ g h : Gal(Ω/E), c (g * h) = c g + ρ g • 
 inertia near `1`, and let each inertial element act by a scalar `α` with `∑ i < q, α ^ i = 0`. If
 `φ` or `φ⁻¹` is a Frobenius element of norm `k ≡ 1` modulo `q` and `γ` is inertial, every locally
 constant cocycle `c` has `(φ - 1) c(γ) = (γ - 1) c(φ)`. -/
-lemma sub_one_smul_eq_of_tame (hc : ∀ g h : Gal(Ω/E), c (g * h) = c g + ρ g • c h)
-    {A : ClosurePlace} {v : FinPlace E} (hA : IsPlaceOver A v) (hc_lc : IsLocallyConstant c)
+lemma sub_one_smul_eq_of_tame {A : ClosurePlace} {v : FinPlace E} (hA : IsPlaceOver A v)
+    (hc_lc : IsLocallyConstant c)
     (h_open : ∀ᶠ g : Gal(Ω/E) in nhds 1, g ∈ inertiaGroup Gal(Ω/E) A → ρ g = 1) {q k : ℕ}
     (hq : A.valuation (q : ℕ) = 1)
     (h_scalar : ∀ g ∈ inertiaGroup Gal(Ω/E) A, ∃ α : O, ρ g = α • 1 ∧ ∑ i ∈ range q, α ^ i = 0)
@@ -156,10 +155,7 @@ section Line
 open Matrix.Module Module IsDiscreteValuationRing Polynomial
 
 variable {E ι O n : Type} [Field E] [EmbeddedNumberField E] [NumberField.IsCMField E]
-  [CommRing O] [Fintype n] [DecidableEq n]
-  {V : ι → Gal(Ω/E) → Prop} {W : Set Gal(Ω/E)} {S₀ J : Finset (FinPlace E)} {M N : ℕ}
-  {P₀ : FinPlace E} {ρ : Gal(Ω/E) →* Matrix n n O}
-  {d : FinPlace E → AuxPrimeData E (ℓ ^ N) × (ι → O)}
+  [CommRing O] [Fintype n] [DecidableEq n] {M N : ℕ} {ρ : Gal(Ω/E) →* Matrix n n O}
 
 open scoped Classical in
 /-- The direction of the line `X_{P₀} = Y`, `X_v = s_v Y` in the space with coordinates `X_v`,
@@ -310,6 +306,52 @@ lemma sub_one_smul_eq_of_isAuxPrimeDataAt {B : Type} [AddCommGroup B] [Module O 
       (inv_mem (conjGal_mem_inertiaGroup_iff.2 ha.tame_gen.left))
   · exact h_tame ha.isPlaceOver hv ha.notMem (.inl ha.isFrob) ha.tame_gen.left
 
+variable [ThePrime ℓ]
+
+/-- Setup for bounding the untied quotient along the line `X_{P₀} = Y`, `X_v = s_v Y`: a set `J`
+of tied auxiliary primes to level `ℓ ^ N` (`N ≠ 0`) with first prime `P₀`, data and slopes `d`,
+index `i`, and triviality of `ρ mod ℓ ^ M` on inertia outside `S₀` and where `V i` holds. -/
+structure LineTiedSetup (S₀ : Finset (FinPlace E)) (ρ : Gal(Ω/E) →* Matrix n n O)
+    (ι : Type) where
+  V : ι → Gal(Ω/E) → Prop
+  W : Set Gal(Ω/E)
+  M : ℕ
+  N : ℕ
+  P₀ : FinPlace E
+  J : Finset (FinPlace E)
+  d : FinPlace E → AuxPrimeData E (ℓ ^ N) × (ι → O)
+  i : ι
+  hp : IsTiedPrimes ℓ S₀ V W N P₀ J d
+  hN : N ≠ 0
+  h_unr : ∀ g ∈ inertiaAbove S₀ᶜ, reduceModPow ℓ M ρ g = 1
+  hV : ∀ g : Gal(Ω/E), V i g → reduceModPow ℓ M ρ g = 1
+
+namespace LineTiedSetup
+
+variable {S₀ : Finset (FinPlace E)} (U : LineTiedSetup (ℓ := ℓ) S₀ ρ ι)
+
+/-- The auxiliary characters `λ_v` attached to `v ∈ U.J`. -/
+abbrev lam (v : U.J) : Gal(Ω/E) →* Multiplicative (ZMod (ℓ ^ U.N)) := (U.d v).1.character
+
+/-- The direction vector of the line for index `U.i`. -/
+abbrev dir : U.J → O := lineDirection U.P₀ U.J U.d U.i
+
+/-- The Selmer module on the line at parameter `y` for the setup `U`. -/
+abbrev selmer {O' : Type} [CommRing O'] (e : O →+* O') (y : O') (S : Set (FinPlace E))
+    (L : Set (Gal(Ω/E) →₀ Matrix n n O)) : Submodule O' (Gal(Ω/E) → n → QuotSpan (ℓ ^ U.M : O')) :=
+  selmerOnLine ℓ U.M ρ U.P₀ U.J U.d U.i e y S L
+
+open scoped Classical
+
+/-- The tie polynomial `P¹(Y)` over the primes `J \ {P₀}` and their conjugates. -/
+abbrev tiePoly : O[X] := tiePolynomial ρ (U.J.erase U.P₀) U.d
+
+section Eval
+
+variable {O' : Type} [CommRing O'] (e : O →+* O') {y : O'}
+  (h_geom_sum : ∀ α : O', y ∣ α - 1 → (ℓ ^ U.M : O') ∣ ∑ j ∈ range (ℓ ^ U.N), α ^ j)
+include h_geom_sum
+
 /-- Let `J` be a finite set of primes of the CM field `E` that lie, with their conjugates, outside
 `S₀`, and let `d` attach to each `u ∈ J` a Frobenius element `φ_u`, a tame generator `γ_u` of
 inertia and a character `λ_u` to `ℤ / ℓ ^ N`. This is the part of `hp` (`IsTiedPrimes`) that is
@@ -322,46 +364,41 @@ let `z` be a locally constant cocycle in `(O' / ℓ ^ M) ^ n` for this twist, un
 and obeying the linear relations `L` (`selmerAtPoint`). Then `(φ_w - 1) z(γ_w) = (γ_w - 1) z(φ_w)`
 for `w` a prime `v` of `J` (`b = true`) or its conjugate (`b = false`), where `φ_w`, `γ_w` are
 `φ_v`, `γ_v` or their conjugate inverses (`idOrConjInv`). -/
-lemma IsTiedPrimes.frob_sub_one_smul_eq [ThePrime ℓ] (hp : IsTiedPrimes ℓ S₀ V W N P₀ J d)
-    (h_unr : ∀ g ∈ inertiaAbove S₀ᶜ, reduceModPow ℓ M ρ g = 1) {O' : Type} [CommRing O']
-    (e : O →+* O') {y : O'}
-    (h_geom_sum : ∀ α : O', y ∣ α - 1 → (ℓ ^ M : O') ∣ ∑ j ∈ range (ℓ ^ N), α ^ j)
-    {x : J → O'} (hx_dvd : ∀ w : J, y ∣ x w)
-    {S : Set (FinPlace E)} {L : Set (Gal(Ω/E) →₀ Matrix n n O)}
-    {z : Gal(Ω/E) → n → QuotSpan (ℓ ^ M : O')}
-    (hz : z ∈ selmerAtPoint ℓ M (fun v : J ↦ (d v).1.character) ρ S L e x) (v : J) (b : Bool) :
-    (pointTwist (fun u : J ↦ (d u).1.character) x e ρ (idOrConjInv b (d v).1.frob) - 1) •
-        z (idOrConjInv b (d v).1.tameGenerator) =
-      (pointTwist (fun u : J ↦ (d u).1.character) x e ρ (idOrConjInv b (d v).1.tameGenerator) - 1) •
-        z (idOrConjInv b (d v).1.frob) := by
+lemma frob_sub_one_smul_eq {x : U.J → O'} (hx_dvd : ∀ w : U.J, y ∣ x w) {S : Set (FinPlace E)}
+    {L : Set (Gal(Ω/E) →₀ Matrix n n O)} {z : Gal(Ω/E) → n → QuotSpan (ℓ ^ U.M : O')}
+    (hz : z ∈ selmerAtPoint ℓ U.M U.lam ρ S L e x) (v : U.J) (b : Bool) :
+    (pointTwist U.lam x e ρ (idOrConjInv b (U.d v).1.frob) - 1) •
+        z (idOrConjInv b (U.d v).1.tameGenerator) =
+      (pointTwist U.lam x e ρ (idOrConjInv b (U.d v).1.tameGenerator) - 1) •
+        z (idOrConjInv b (U.d v).1.frob) := by
   -- Modulo `ℓ ^ M` the twist is a representation `R`. Inertia off `S₀` acts by scalars `≡ 1`
   -- modulo `y`, and trivially near the identity.
-  let B : Type := QuotSpan (ℓ ^ M : O')
-  let lam (w : J) : Gal(Ω/E) →* Multiplicative (ZMod (ℓ ^ N)) := (d w).1.character
-  have h_sum {α : O'} (hα : y ∣ α - 1) : ∑ j ∈ range (ℓ ^ N), algebraMap O' B α ^ j = 0 := by
+  let B : Type := QuotSpan (ℓ ^ U.M : O')
+  have h_sum {α : O'} (hα : y ∣ α - 1) : ∑ j ∈ range (ℓ ^ U.N), algebraMap O' B α ^ j = 0 := by
     simpa [B] using (Ideal.Quotient.eq_zero_iff_dvd _ _).2 (h_geom_sum α hα)
-  have hx_pow (w : J) : algebraMap O' B (1 + x w) ^ ℓ ^ N = 1 := by
+  have hx_pow (w : U.J) : algebraMap O' B (1 + x w) ^ ℓ ^ U.N = 1 := by
     rw [← sub_eq_zero, ← geom_sum_mul, h_sum (by simp [hx_dvd]), zero_mul]
   obtain ⟨R, hR_smul, hR_scalar⟩ : ∃ R : Gal(Ω/E) →* Matrix n n B,
-      (∀ (g : Gal(Ω/E)) (u : n → B), R g • u = pointTwist lam x e ρ g • u) ∧
-      ∀ g : Gal(Ω/E), reduceModPow ℓ M ρ g = 1 →
-        R g = algebraMap O' B (MvPolynomial.eval x (universalChar lam g)) • 1 :=
-    exists_monoidHom_smul_eq_pointTwist_smul lam e hx_pow
+      (∀ (g : Gal(Ω/E)) (u : n → B), R g • u = pointTwist U.lam x e ρ g • u) ∧
+      ∀ g : Gal(Ω/E), reduceModPow ℓ U.M ρ g = 1 →
+        R g = algebraMap O' B (MvPolynomial.eval x (universalChar U.lam g)) • 1 :=
+    exists_monoidHom_smul_eq_pointTwist_smul U.lam e hx_pow
   obtain ⟨hz_cocycle, -, -, hz_lc⟩ := mem_selmerModule_iff.1 hz
   have hc (g g' : Gal(Ω/E)) : z (g * g') = z g + R g • z g' := by rw [hR_smul, hz_cocycle]
   have h_open : ∀ᶠ g : Gal(Ω/E) in nhds 1, g ∈ inertiaAbove S₀ᶜ → R g = 1 := by
-    have h_near : ∀ᶠ g : Gal(Ω/E) in nhds 1, ∀ u : J, lam u g = lam u 1 :=
-      Filter.eventually_all.2 fun u ↦ (hp.isAuxPrimeDataAt u u.2).isLocallyConstant.eventually_eq 1
+    have h_near : ∀ᶠ g : Gal(Ω/E) in nhds 1, ∀ u : U.J, U.lam u g = U.lam u 1 :=
+      Filter.eventually_all.2 fun u ↦
+        (U.hp.isAuxPrimeDataAt u u.2).isLocallyConstant.eventually_eq 1
     filter_upwards [h_near] with g hg hg_inertia
-    simp [hR_scalar g (h_unr g hg_inertia), eval_universalChar, hg]
+    simp [hR_scalar g (U.h_unr g hg_inertia), eval_universalChar, hg]
   have h_scalar (g : Gal(Ω/E)) (hg : g ∈ inertiaAbove S₀ᶜ) :
-      ∃ α : B, R g = α • 1 ∧ ∑ j ∈ range (ℓ ^ N), α ^ j = 0 :=
-    ⟨_, hR_scalar g (h_unr g hg), h_sum (dvd_eval_universalChar_sub_one lam hx_dvd g)⟩
-  obtain ⟨hv_off, -, -, hv_star_off⟩ := hp.auxiliary v v.property
+      ∃ α : B, R g = α • 1 ∧ ∑ j ∈ range (ℓ ^ U.N), α ^ j = 0 :=
+    ⟨_, hR_scalar g (U.h_unr g hg), h_sum (dvd_eval_universalChar_sub_one U.lam hx_dvd g)⟩
+  obtain ⟨hv_off, -, -, hv_star_off⟩ := U.hp.auxiliary v v.property
   -- Tame inertia at `v` or at its conjugate, both off `S₀`, gives the relation for `R`.
   simpa only [sub_smul, one_smul, hR_smul] using
-    sub_one_smul_eq_of_isAuxPrimeDataAt hc hz_lc h_open h_scalar (hp.isAuxPrimeDataAt v v.property)
-      hv_off hv_star_off b
+    sub_one_smul_eq_of_isAuxPrimeDataAt hc hz_lc h_open h_scalar
+      (U.hp.isAuxPrimeDataAt v v.property) hv_off hv_star_off b
 
 /-- Let `J` be a finite set of primes of the CM field `E` that lie, with their conjugates, outside
 `S₀`. Let `d` attach to each `v ∈ J` a Frobenius element `φ_v`, a tame generator `γ_v` of inertia, a
@@ -377,58 +414,51 @@ unramified outside `S` and obeying the linear relations `L` (`selmerOnLine`). Th
 `(1 + y) e(ρ(φ_w)) - 1` kills `z(γ_w) - e(s_v) z(φ_w)`. Here `w` is a prime `v` of `J` (`b = true`)
 or its conjugate (`b = false`), where `φ_w`, `γ_w` are `φ_v`, `γ_v` or their conjugate inverses
 (`idOrConjInv`), and `v` may be `P₀` only if `y = 0`. -/
-lemma IsTiedPrimes.frob_sub_one_smul_tie_eq_zero_of_selmerOnLine [ThePrime ℓ]
-    (hp : IsTiedPrimes ℓ S₀ V W N P₀ J d) (hN : N ≠ 0) (i : ι)
-    (h_unr : ∀ g ∈ inertiaAbove S₀ᶜ, reduceModPow ℓ M ρ g = 1)
-    (h_triv_of_V : ∀ g : Gal(Ω/E), V i g → reduceModPow ℓ M ρ g = 1) {O' : Type} [CommRing O']
-    (e : O →+* O') {y : O'}
-    (h_geom_sum : ∀ α : O', y ∣ α - 1 → (ℓ ^ M : O') ∣ ∑ j ∈ range (ℓ ^ N), α ^ j)
-    {S : Set (FinPlace E)} {L : Set (Gal(Ω/E) →₀ Matrix n n O)}
-    {z : Gal(Ω/E) → n → QuotSpan (ℓ ^ M : O')}
-    (hz : z ∈ selmerOnLine ℓ M ρ P₀ J d i e y S L) (v : J)
-    (hy_zero_of_eq_first : ↑v = P₀ → y = 0) (b : Bool) :
-    ((1 + y) • (ρ (idOrConjInv b (d v).1.frob)).map e - 1) •
-      (z (idOrConjInv b (d v).1.tameGenerator) - e ((d v).2 i) • z (idOrConjInv b (d v).1.frob)) =
-        0 := by
-  let x (w : J) : O' := e (lineDirection P₀ J d i w) * y
-  let lam (w : J) : Gal(Ω/E) →* Multiplicative (ZMod (ℓ ^ N)) := (d w).1.character
-  let φ : Gal(Ω/E) := idOrConjInv b (d v).1.frob
-  let γ : Gal(Ω/E) := idOrConjInv b (d v).1.tameGenerator
+lemma frob_sub_one_smul_tie_eq_zero_of_selmerOnLine {S : Set (FinPlace E)}
+    {L : Set (Gal(Ω/E) →₀ Matrix n n O)} {z : Gal(Ω/E) → n → QuotSpan (ℓ ^ U.M : O')}
+    (hz : z ∈ U.selmer e y S L) (v : U.J) (hy_zero_of_eq_first : ↑v = U.P₀ → y = 0) (b : Bool) :
+    ((1 + y) • (ρ (idOrConjInv b (U.d v).1.frob)).map e - 1) •
+      (z (idOrConjInv b (U.d v).1.tameGenerator) -
+        e ((U.d v).2 U.i) • z (idOrConjInv b (U.d v).1.frob)) = 0 := by
+  let x (w : U.J) : O' := e (U.dir w) * y
+  let φ : Gal(Ω/E) := idOrConjInv b (U.d v).1.frob
+  let γ : Gal(Ω/E) := idOrConjInv b (U.d v).1.tameGenerator
   -- We have `ψ_x(γ) = 1 + s y` and `ψ_x(φ) = 1 + y`. At the first prime `y = 0`, and both values
   -- are `1`.
-  have hψγ : MvPolynomial.eval x (universalChar lam γ) = 1 + e ((d v).2 i) * y := by
-    by_cases hvP : ↑v = P₀
+  have hψγ : MvPolynomial.eval x (universalChar U.lam γ) = 1 + e ((U.d v).2 U.i) * y := by
+    by_cases hvP : ↑v = U.P₀
     · simp [universalChar, x, hy_zero_of_eq_first hvP]
-    · simp [γ, lam, hp.universalChar_tame_gen hN v, x, lineDirection, hvP]
-  have hψφ : MvPolynomial.eval x (universalChar lam φ) = 1 + y := by
-    by_cases hvP : ↑v = P₀
+    · simp [γ, U.hp.universalChar_tame_gen U.hN v, x, dir, lineDirection, hvP]
+  have hψφ : MvPolynomial.eval x (universalChar U.lam φ) = 1 + y := by
+    by_cases hvP : ↑v = U.P₀
     · simp [universalChar, x, hy_zero_of_eq_first hvP]
-    · simp [φ, lam, hp.universalChar_frob hN v.property hvP, x, lineDirection]
-  have h_trivial {g : Gal(Ω/E)} (hg : reduceModPow ℓ M ρ g = 1) (u : n → QuotSpan (ℓ ^ M : O')) :
-      (ρ g).map e • u = u := by
+    · simp [φ, U.hp.universalChar_frob U.hN v.property hvP, x, dir, lineDirection]
+  have h_trivial {g : Gal(Ω/E)} (hg : reduceModPow ℓ U.M ρ g = 1)
+      (u : n → QuotSpan (ℓ ^ U.M : O')) : (ρ g).map e • u = u := by
     simpa using map_smul_eq_of_reduceModPow_eq (hg.trans (map_one _).symm) e u
-  obtain ⟨hv_off, -, -, hv_star_off⟩ := hp.auxiliary v v.property
-  have hγ : reduceModPow ℓ M ρ γ = 1 :=
-    have hd : IsAuxPrimeDataAt (placesDividing E ℓ) v (d v).1 := hp.isAuxPrimeDataAt v v.property
-    h_unr γ (idOrConjInv_mem_inertiaAbove hd.isPlaceOver hd.tame_gen.left
+  obtain ⟨hv_off, -, -, hv_star_off⟩ := U.hp.auxiliary v v.property
+  have hγ : reduceModPow ℓ U.M ρ γ = 1 :=
+    have hd : IsAuxPrimeDataAt (placesDividing E ℓ) v (U.d v).1 :=
+      U.hp.isAuxPrimeDataAt v v.property
+    U.h_unr γ (idOrConjInv_mem_inertiaAbove hd.isPlaceOver hd.tame_gen.left
       ⟨hv_off, hv_star_off⟩ b)
   let Φ : Matrix n n O' := (1 + y) • (ρ φ).map e
-  have hγ_act (u : n → QuotSpan (ℓ ^ M : O')) :
-      pointTwist lam x e ρ γ • u = (1 + e ((d v).2 i) * y) • u := by
+  have hγ_act (u : n → QuotSpan (ℓ ^ U.M : O')) :
+      pointTwist U.lam x e ρ γ • u = (1 + e ((U.d v).2 U.i) * y) • u := by
     rw [pointTwist, hψγ, smul_assoc, h_trivial hγ]
-  have hφ_twist : pointTwist lam x e ρ φ = Φ := by rw [pointTwist, hψφ]
-  have h_commute : (Φ - 1) • z γ = (e ((d v).2 i) * y) • z φ := by
-    have h_eq : (pointTwist lam x e ρ φ - 1) • z γ = (pointTwist lam x e ρ γ - 1) • z φ :=
-      hp.frob_sub_one_smul_eq h_unr e h_geom_sum (fun w : J ↦ dvd_mul_left y _) hz v b
+  have hφ_twist : pointTwist U.lam x e ρ φ = Φ := by rw [pointTwist, hψφ]
+  have h_commute : (Φ - 1) • z γ = (e ((U.d v).2 U.i) * y) • z φ := by
+    have h_eq : (pointTwist U.lam x e ρ φ - 1) • z γ = (pointTwist U.lam x e ρ γ - 1) • z φ :=
+      U.frob_sub_one_smul_eq e h_geom_sum (fun w : U.J ↦ dvd_mul_left y _) hz v b
     simpa [hφ_twist, sub_smul, hγ_act, add_smul] using h_eq
   -- Moreover `s (φ - 1)` acts on `z φ` as `s y`, as `γ - 1` does: if `s ≠ 0` then `ρ(φ) ≡ 1`
   -- modulo `ℓ ^ M`.
-  have h_slope : (e ((d v).2 i) * y) • z φ = e ((d v).2 i) • (Φ - 1) • z φ := by
-    by_cases hs : (d v).2 i = 0
+  have h_slope : (e ((U.d v).2 U.i) * y) • z φ = e ((U.d v).2 U.i) • (Φ - 1) • z φ := by
+    by_cases hs : (U.d v).2 U.i = 0
     · simp [hs]
     · simp [Φ, sub_smul, add_smul, mul_smul,
-        h_trivial (h_triv_of_V φ (hp.apply_idOrConjInv_of_slope_ne_zero v.property hs b))]
-  change (Φ - 1) • (z γ - e ((d v).2 i) • z φ) = 0
+        h_trivial (U.hV φ (U.hp.apply_idOrConjInv_of_slope_ne_zero v.property hs b))]
+  change (Φ - 1) • (z γ - e ((U.d v).2 U.i) • z φ) = 0
   rw [smul_sub, h_commute, smul_comm, h_slope, sub_self]
 
 /-- Let `J` be a finite set of primes of the CM field `E` that lie, with their conjugates, outside
@@ -446,27 +476,20 @@ unramified outside `S` and obeying the linear relations `L` (`selmerOnLine`). Le
 `γ_w` are `φ_v`, `γ_v` or conjugate inverses (`idOrConjInv`). The quotient by the cocycles with
 `z(γ_w) = e(s_v) z(φ_w)` for all `w` (`tieRelations`) has length (`relLength`) at most the sum of
 the lengths of the kernels of the `(1 + y) e(ρ(φ_w)) - 1` on `(O' / ℓ ^ M) ^ n`. -/
-lemma IsTiedPrimes.relLength_tied_le_sum_ker [ThePrime ℓ]
-    (hp : IsTiedPrimes ℓ S₀ V W N P₀ J d) (hN : N ≠ 0)
-    (i : ι) (h_unr : ∀ g ∈ inertiaAbove S₀ᶜ, reduceModPow ℓ M ρ g = 1)
-    (h_triv_of_V : ∀ g : Gal(Ω/E), V i g → reduceModPow ℓ M ρ g = 1) {O' : Type} [CommRing O']
-    (e : O →+* O') {y : O'}
-    (h_geom_sum : ∀ α : O', y ∣ α - 1 → (ℓ ^ M : O') ∣ ∑ j ∈ range (ℓ ^ N), α ^ j)
-    (S : Set (FinPlace E)) (L : Set (Gal(Ω/E) →₀ Matrix n n O))
-    {I : Finset (FinPlace E)} (hI : I ⊆ J) (hy_zero_of_first_mem : P₀ ∈ I → y = 0) :
-    relLength (selmerOnLine ℓ M ρ P₀ J d i e y S L)
-        (selmerOnLine ℓ M ρ P₀ J d i e y S (L ∪ tieRelations I d i)) ≤
+lemma relLength_tied_le_sum_ker (S : Set (FinPlace E)) (L : Set (Gal(Ω/E) →₀ Matrix n n O))
+    {I : Finset (FinPlace E)} (hI : I ⊆ U.J) (hy_zero_of_first_mem : U.P₀ ∈ I → y = 0) :
+    relLength (U.selmer e y S L) (U.selmer e y S (L ∪ tieRelations I U.d U.i)) ≤
       ∑ v : I, ∑ b : Bool, length O' (LinearMap.ker
-        (((1 + y) • (ρ (idOrConjInv b (d v).1.frob)).map e - 1) • 1 :
-          End O' (n → QuotSpan (ℓ ^ M : O')))) := by
-  let B : Type := QuotSpan (ℓ ^ M : O')
+        (((1 + y) • (ρ (idOrConjInv b (U.d v).1.frob)).map e - 1) • 1 :
+          End O' (n → QuotSpan (ℓ ^ U.M : O')))) := by
+  let B : Type := QuotSpan (ℓ ^ U.M : O')
   let Sel (L' : Set (Gal(Ω/E) →₀ Matrix n n O)) : Submodule O' (Gal(Ω/E) → n → B) :=
-    selmerOnLine ℓ M ρ P₀ J d i e y S L'
-  let φ (p : I × Bool) : Gal(Ω/E) := idOrConjInv p.2 (d p.1).1.frob
-  let γ (p : I × Bool) : Gal(Ω/E) := idOrConjInv p.2 (d p.1).1.tameGenerator
+    U.selmer e y S L'
+  let φ (p : I × Bool) : Gal(Ω/E) := idOrConjInv p.2 (U.d p.1).1.frob
+  let γ (p : I × Bool) : Gal(Ω/E) := idOrConjInv p.2 (U.d p.1).1.tameGenerator
   let tie (p : I × Bool) : (Gal(Ω/E) → n → B) →ₗ[O'] n → B :=
-    LinearMap.proj (γ p) - e ((d p.1).2 i) • LinearMap.proj (φ p)
-  have h_tied : Sel L ⊓ ⨅ p, (tie p).ker ≤ Sel (L ∪ tieRelations I d i) := by
+    LinearMap.proj (γ p) - e ((U.d p.1).2 U.i) • LinearMap.proj (φ p)
+  have h_tied : Sel L ⊓ ⨅ p, (tie p).ker ≤ Sel (L ∪ tieRelations I U.d U.i) := by
     rintro z ⟨hz, hz_tie⟩
     obtain ⟨h_cocycle, h_unram, hL, h_lc⟩ := mem_selmerModule_iff.1 hz
     refine mem_selmerModule_iff.2 ⟨h_cocycle, h_unram, mem_obeying.2 ?_, h_lc⟩
@@ -475,21 +498,20 @@ lemma IsTiedPrimes.relLength_tied_le_sum_ker [ThePrime ℓ]
     · simpa [tie, mapRel, Finsupp.mapRange_sub', Matrix.map_smul'] using
         (Submodule.mem_iInf _).1 hz_tie p
   calc
-    relLength (Sel L) (Sel (L ∪ tieRelations I d i)) ≤ relLength (Sel L) (⨅ p, (tie p).ker) :=
+    relLength (Sel L) (Sel (L ∪ tieRelations I U.d U.i)) ≤ relLength (Sel L) (⨅ p, (tie p).ker) :=
       relLength_le_of_mapsTo LinearMap.id (fun _ hz ↦ hz) fun z hz hz' ↦ h_tied ⟨hz, hz'⟩
     _ ≤ ∑ p : I × Bool, relLength (Sel L) (tie p).ker := relLength_iInf_le _ _
     _ = ∑ v : I, ∑ b : Bool, relLength (Sel L) (tie (v, b)).ker := Fintype.sum_prod_type _
     _ ≤ _ := sum_le_sum fun v _ ↦ sum_le_sum fun b _ ↦ by
       -- The image of `Sel L` under `tie (v, b)` lies in the kernel.
-      have hy_zero_of_eq_first (h_first : ↑v = P₀) : y = 0 :=
+      have hy_zero_of_eq_first (h_first : ↑v = U.P₀) : y = 0 :=
         hy_zero_of_first_mem (by simp [← h_first])
       rw [relLength_ker]
       refine length_mono ?_
       rintro _ ⟨z, hz, rfl⟩
-      exact hp.frob_sub_one_smul_tie_eq_zero_of_selmerOnLine hN i h_unr h_triv_of_V e h_geom_sum hz
-        ⟨v, hI v.property⟩ hy_zero_of_eq_first b
+      exact U.frob_sub_one_smul_tie_eq_zero_of_selmerOnLine e h_geom_sum hz ⟨v, hI v.property⟩
+        hy_zero_of_eq_first b
 
-open scoped Classical in
 /-- Let `J` be a finite set of primes of the CM field `E` that lie, with their conjugates, outside
 `S₀`. Let `d` attach to each `v ∈ J` a Frobenius element `φ_v`, a tame generator `γ_v` of inertia, a
 character to `ℤ / ℓ ^ N` and a slope `s_v = (d v).2 i` in `O` for the index `i : ι`. The hypothesis
@@ -504,27 +526,21 @@ unramified outside `S` and obeying the linear relations `L` (`selmerOnLine`). Ad
 `z(γ_w) = e(s_v) z(φ_w)` for `w` a prime `v ≠ P₀` of `J` or its conjugate (`tieRelations`) lowers
 the length by at most the normalised valuation `addVal` of `tiePolynomial ρ (J.erase P₀) d`, with
 coefficients mapped by `e`, evaluated at `y`. -/
-lemma IsTiedPrimes.relLength_tied_le [ThePrime ℓ]
-    (hp : IsTiedPrimes ℓ S₀ V W N P₀ J d) (hN : N ≠ 0) (i : ι)
-    (h_unr : ∀ g ∈ inertiaAbove S₀ᶜ, reduceModPow ℓ M ρ g = 1)
-    (h_triv_of_V : ∀ g : Gal(Ω/E), V i g → reduceModPow ℓ M ρ g = 1) {O' : Type} [CommRing O']
-    [DVR O'] (e : O →+* O') {y : O'}
-    (h_geom_sum : ∀ α : O', y ∣ α - 1 → (ℓ ^ M : O') ∣ ∑ j ∈ range (ℓ ^ N), α ^ j)
-    (S : Set (FinPlace E)) (L : Set (Gal(Ω/E) →₀ Matrix n n O)) :
-    relLength (selmerOnLine ℓ M ρ P₀ J d i e y S L)
-        (selmerOnLine ℓ M ρ P₀ J d i e y S (L ∪ tieRelations (J.erase P₀) d i)) ≤
-      addVal O' ((tiePolynomial ρ (J.erase P₀) d).eval₂ e y) := by
-  let Φ (v : J.erase P₀) (b : Bool) : Matrix n n O' :=
-    (1 + y) • (ρ (idOrConjInv b (d v).1.frob)).map e - 1
-  calc
-    _ ≤ ∑ v, ∑ b, length O' (LinearMap.ker (Φ v b • 1 : End O' (n → QuotSpan (ℓ ^ M : O')))) :=
-      hp.relLength_tied_le_sum_ker hN i h_unr h_triv_of_V e h_geom_sum S L (J.erase_subset P₀)
-        fun h ↦ absurd h (J.notMem_erase P₀)
+lemma relLength_tied_le [DVR O'] (S : Set (FinPlace E)) (L : Set (Gal(Ω/E) →₀ Matrix n n O)) :
+    relLength (U.selmer e y S L) (U.selmer e y S (L ∪ tieRelations (U.J.erase U.P₀) U.d U.i)) ≤
+      addVal O' (U.tiePoly.eval₂ e y) := by
+  let Φ (v : U.J.erase U.P₀) (b : Bool) : Matrix n n O' :=
+    (1 + y) • (ρ (idOrConjInv b (U.d v).1.frob)).map e - 1
+  calc _ ≤ ∑ v, ∑ b, length O' (LinearMap.ker (Φ v b • 1 : End O' (n → QuotSpan (ℓ ^ U.M : O')))) :=
+        U.relLength_tied_le_sum_ker e h_geom_sum S L (U.J.erase_subset U.P₀)
+          fun h ↦ absurd h (U.J.notMem_erase U.P₀)
     _ ≤ ∑ v, ∑ b, addVal O' (Φ v b).det :=
-      sum_le_sum fun v _ ↦ sum_le_sum fun b _ ↦ length_ker_le_addVal_det (Φ v b) _
-    _ = addVal O' ((tiePolynomial ρ (J.erase P₀) d).eval₂ e y) := by
-      simp only [tiePolynomial, eval₂_finsetProd, eval₂_shiftedDet, addVal_prod,
-        Fintype.sum_prod_type, Φ]
+        sum_le_sum fun v _ ↦ sum_le_sum fun b _ ↦ length_ker_le_addVal_det (Φ v b) _
+    _ = addVal O' (U.tiePoly.eval₂ e y) := by
+        simp only [tiePoly, tiePolynomial, eval₂_finsetProd, eval₂_shiftedDet, addVal_prod,
+          Fintype.sum_prod_type, Φ]
+
+end Eval
 
 /-- Release of the first prime. Let `J` be a finite set of primes of the CM field `E` that lie, with
 their conjugates, outside `S₀`. Let `d` attach to each `v ∈ J` a Frobenius element, a tame generator
@@ -540,38 +556,37 @@ Let `ρ` modulo `ℓ ^ M` be trivial on inertia outside `S₀` and at the elemen
 relations `tieRelations {P₀} d i` say `z(γ₀) = 0 = z(γ₀^{-c})` for the tame generator `γ₀` at `P₀`.
 Adding them lowers the length by at most `∑ v(det (ρ(g) - 1))`, over `g = g₀, g₀^{-c}` (`relLength`
 is the length of the quotient, `v = addVal` the normalised valuation). -/
-lemma IsTiedPrimes.relLength_tieRelations_le_sum_addVal_det [ThePrime ℓ] [DVR O]
-    (hp : IsTiedPrimes ℓ S₀ V W N P₀ J d) (hN : N ≠ 0)
-    (i : ι) (h_unr : ∀ g ∈ inertiaAbove S₀ᶜ, reduceModPow ℓ M ρ g = 1)
-    (h_triv_of_V : ∀ g : Gal(Ω/E), V i g → reduceModPow ℓ M ρ g = 1) (hMN : M ≤ N) {g₀ : Gal(Ω/E)}
-    (h_frob_first : ∀ b : Bool, reduceModPow ℓ M ρ (idOrConjInv b (d P₀).1.frob) =
-      reduceModPow ℓ M ρ (idOrConjInv b g₀))
+lemma relLength_tieRelations_le_sum_addVal_det [DVR O] (hMN : U.M ≤ U.N) {g₀ : Gal(Ω/E)}
+    (h_frob_first : ∀ b : Bool, reduceModPow ℓ U.M ρ (idOrConjInv b (U.d U.P₀).1.frob) =
+      reduceModPow ℓ U.M ρ (idOrConjInv b g₀))
     (S : Set (FinPlace E)) (L : Set (Gal(Ω/E) →₀ Matrix n n O)) :
-    relLength (selmerModule ρ S L (QuotSpan (ℓ ^ M : O)))
-        (selmerModule ρ S (L ∪ tieRelations {P₀} d i) (QuotSpan (ℓ ^ M : O))) ≤
+    relLength (selmerModule ρ S L (QuotSpan (ℓ ^ U.M : O)))
+        (selmerModule ρ S (L ∪ tieRelations {U.P₀} U.d U.i) (QuotSpan (ℓ ^ U.M : O))) ≤
       ∑ b : Bool, addVal O (ρ (idOrConjInv b g₀) - 1).det := by
-  have h_geom_sum (α : O) (hα : 0 ∣ α - 1) : (ℓ ^ M : O) ∣ ∑ j ∈ range (ℓ ^ N), α ^ j := by
+  have h_geom_sum (α : O) (hα : 0 ∣ α - 1) : (ℓ ^ U.M : O) ∣ ∑ j ∈ range (ℓ ^ U.N), α ^ j := by
     obtain rfl : α = 1 := sub_eq_zero.1 (zero_dvd_iff.1 hα)
     simpa using pow_dvd_pow (ℓ : O) hMN
-  let K (A : Matrix n n O) : Submodule O (n → QuotSpan (ℓ ^ M : O)) :=
-    LinearMap.ker ((A - 1) • 1 : End O (n → QuotSpan (ℓ ^ M : O)))
+  let K (A : Matrix n n O) : Submodule O (n → QuotSpan (ℓ ^ U.M : O)) :=
+    LinearMap.ker ((A - 1) • 1 : End O (n → QuotSpan (ℓ ^ U.M : O)))
   let Φ (b : Bool) : Matrix n n O :=
-    (1 + 0 : O) • (ρ (idOrConjInv b (d P₀).1.frob)).map (RingHom.id O)
+    (1 + 0 : O) • (ρ (idOrConjInv b (U.d U.P₀).1.frob)).map (RingHom.id O)
   have h_ker (b : Bool) : K (Φ b) ≤ K (ρ (idOrConjInv b g₀)) := by
     intro u hu
-    have h_eq : ρ (idOrConjInv b (d P₀).1.frob) • u = ρ (idOrConjInv b g₀) • u := by
+    have h_eq : ρ (idOrConjInv b (U.d U.P₀).1.frob) • u = ρ (idOrConjInv b g₀) • u := by
       simpa using map_smul_eq_of_reduceModPow_eq (h_frob_first b) (RingHom.id O) u
     simpa [K, Φ, sub_smul, h_eq] using hu
   calc
     _ ≤ ∑ b : Bool, length O (K (Φ b)) := by
       -- At `y = 0`, where the point of the line is `0`, the two tie maps take their values in the
       -- kernels of `ρ(φ₀) - 1` and `ρ(φ₀^{-c}) - 1`.
-      simpa [K, Φ, selmerOnLine_zero] using
-        hp.relLength_tied_le_sum_ker hN i h_unr h_triv_of_V (RingHom.id O) h_geom_sum S L
-          (singleton_subset_iff.2 hp.first_mem) fun _ ↦ rfl
+      simpa [K, Φ, selmer, selmerOnLine_zero] using
+        U.relLength_tied_le_sum_ker (RingHom.id O) h_geom_sum S L
+          (singleton_subset_iff.2 U.hp.first_mem) fun _ ↦ rfl
     _ ≤ ∑ b : Bool, length O (K (ρ (idOrConjInv b g₀))) :=
       sum_le_sum fun b _ ↦ length_mono (h_ker b)
     _ ≤ _ := sum_le_sum fun b _ ↦ length_ker_le_addVal_det _ _
+
+end LineTiedSetup
 
 end Line
 

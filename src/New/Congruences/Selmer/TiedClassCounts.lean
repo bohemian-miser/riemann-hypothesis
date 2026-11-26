@@ -110,7 +110,8 @@ lemma length_classes_erase_le (T : SelmerDatum ℓ S₀ g₀ O n)
       (T.reductionModule (dvd_refl ((ℓ : O) ^ M))).π₁) ≤ T.β := by
   rw [← T.length_tiedSelmer_eq_length_map_π₁ dvd_rfl h_primes hV subset_rfl] at h_tied
   rw [← T.length_tiedSelmer_eq_length_map_π₁ dvd_rfl h_primes hV (erase_subset P₀ J)]
-  exact T.length_tiedSelmer_erase_le h_primes hMN i hV h_first h_tied
+  exact T.length_tiedSelmer_erase_le ⟨V, W, M, N, P₀, J, d, i, h_primes, Nat.ne_zero_of_lt hMN,
+    fun _ ↦ T.reduceModPow_eq_one, hV⟩ hMN.le h_first h_tied
 
 open scoped Classical in
 /-- `New.Selmer.SelmerDatum.exists_boundsSelmer_ellVal_eval_le` with its hypothesis on classes: if
@@ -133,7 +134,8 @@ theorem exists_boundsSelmer_ellVal_eval_le_of_length_classes_le {O : CoeffRing �
       BoundsSelmer ℓ M (fun v : J ↦ (d v).1.character) T.ρ (unionWithConj T.places J)
         T.classRelations P := by
   rw [← T.length_tiedSelmer_eq_length_map_π₁ dvd_rfl h_primes hV (erase_subset P₀ J)] at h_tied
-  exact T.exists_boundsSelmer_ellVal_eval_le h_primes hN₀ i hV h_tied hs₀ hr hN
+  exact T.exists_boundsSelmer_ellVal_eval_le ⟨V, W, M, N, P₀, J, d, i, h_primes, hN₀,
+    fun _ ↦ T.reduceModPow_eq_one, hV⟩ h_tied hs₀ hr hN
 
 end SelmerDatum
 

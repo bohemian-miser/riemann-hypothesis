@@ -468,11 +468,12 @@ lemma length_tiedSelmer_le_of_isUnit (hJ : IsTiedPrimes ℓ S₀ V W N P₀ J x)
     length O (T.tiedSelmer J J x i a) ≤ T.globalTerm + T.placesTerm := by
   obtain ⟨z, hz, hz_unit⟩ := h_unit
   -- Counting compares `Sel(J)` with its dual, and reciprocity bounds the dual.
-  obtain ⟨A, R, h_count⟩ := T.exists_length_tiedSelmer_le hJ hV hN ha
+  let C : TiedSelmerContext T ι := ⟨V, W, M, N, a, P₀, J, x, i, hJ, hV, hN, ha⟩
+  obtain ⟨A, R, h_count⟩ := C.exists_length_tiedSelmer_le
   calc length O (T.tiedSelmer J J x i a)
-    _ ≤ length O (T.dualSelmer hJ hV hN ha A R) + T.placesTerm := h_count
+    _ ≤ length O (DualSelmerContext.mk C A R).dualSelmer + T.placesTerm := h_count
     _ ≤ T.globalTerm + T.placesTerm := add_le_add_left
-      (T.length_dualSelmer_le hJ hV hN ha A R hz hz_unit
+      ((DualSelmerContext.mk C A R).length_dualSelmer_le hz hz_unit
         fun P l hl ↦ h_le_frobInTameImage P l hl hz) _
 
 /-- Let `IsTiedPrimes ℓ S₀ V W N P₀ J x` hold: primes outside `S₀` with data and slopes to level

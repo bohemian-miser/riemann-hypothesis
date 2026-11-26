@@ -110,20 +110,22 @@ open Finset Filter Module MvPolynomial Subalgebra
 
 open scoped NNReal ENNReal NNRat
 
-section Choice
-
 variable {ℓ : ℕ} [ThePrime ℓ] {E : Type} [Field E] [EmbeddedNumberField E] [NumberField.IsCMField E]
   {S₀ : Finset (FinPlace E)} {g₀ : Gal(Ω/E)}
 
 namespace SelmerDatum
+
+section Twisted
+
+variable {O O' n : Type} [CommRing O] [PadicIntegerRing O ℓ] [CommRing O'] [Fintype n]
+  [DecidableEq n]
 
 /-- The Selmer group `Sel_Q(T ψ)` modulo `a` of a Selmer datum `T`, for a character `ψ` with values
 in a ring `O'` over `O` (by the map `e`): the cocycles in `T ψ ⊗ O' / a` that vanish at the element
 `γ_* = T.γ`, are unramified outside `S ∪ Q ∪ Q̄`, where `S = T.places`, and satisfy the
 local conditions of `T`. If `ψ(γ_*) = 1`, each class has exactly one cocycle that vanishes at
 `γ_*`. -/
-def twistedSelmer {O O' n : Type} [CommRing O] [PadicIntegerRing O ℓ] [CommRing O'] [Fintype n]
-    [DecidableEq n] (T : SelmerDatum ℓ S₀ g₀ O n) (Q : Finset (FinPlace E)) (e : O →+* O')
+def twistedSelmer (T : SelmerDatum ℓ S₀ g₀ O n) (Q : Finset (FinPlace E)) (e : O →+* O')
     (ψ : Gal(Ω/E) →* O') (a : O') : Submodule O' (Gal(Ω/E) → n → QuotSpan a) :=
   selmerModule (twistRep e ψ T.ρ) (unionWithConj T.places Q) (mapRel e '' T.classRelations)
     (QuotSpan a)
@@ -132,33 +134,38 @@ def twistedSelmer {O O' n : Type} [CommRing O] [PadicIntegerRing O ℓ] [CommRin
 `ψ` with values in a discrete valuation ring `O'` over `O` (by the map `e`): the cocycles in
 `T ψ ⊗ Frac(O') / O'` that vanish at `γ_* = T.γ`, are unramified outside `S ∪ Q ∪ Q̄`,
 where `S = T.places`, and satisfy the local conditions of `T`. -/
-def divisibleSelmer {O O' n : Type} [CommRing O] [PadicIntegerRing O ℓ] [CommRing O']
-    [Fintype n] [DecidableEq n] (T : SelmerDatum ℓ S₀ g₀ O n) (Q : Finset (FinPlace E))
+def divisibleSelmer (T : SelmerDatum ℓ S₀ g₀ O n) (Q : Finset (FinPlace E))
     (e : O →+* O') (ψ : Gal(Ω/E) →* O') : Submodule O' (Gal(Ω/E) → n → DivisibleQuot O') :=
   selmerModule (twistRep e ψ T.ρ) (unionWithConj T.places Q) (mapRel e '' T.classRelations)
     (DivisibleQuot O')
 
 /-- The length over `O'` of the Selmer group `Sel_Q(T ψ)` with coefficients in `Frac(O') / O'`. -/
-def divisibleLength {O O' n : Type} [CommRing O] [PadicIntegerRing O ℓ] [CommRing O']
-    [Fintype n] [DecidableEq n] (T : SelmerDatum ℓ S₀ g₀ O n) (Q : Finset (FinPlace E))
+def divisibleLength (T : SelmerDatum ℓ S₀ g₀ O n) (Q : Finset (FinPlace E))
     (e : O →+* O') (ψ : Gal(Ω/E) →* O') : ℕ∞ :=
   length O' (T.divisibleSelmer Q e ψ)
+
+end Twisted
+
+section Bound
+
+variable {O : CoeffRing ℓ} {n : Type} [Fintype n] [DecidableEq n]
 
 /-- For all large coefficient rings `O' ⊇ O`, the character `ψ` has values in `O'` and the group
 `Sel_Q(T ψ)` with coefficients in `Frac(O') / O'` has length at most `b`, normalised by
 `len O' / ℓ = 1`. -/
-def TwistedLengthLe {O : CoeffRing ℓ} {n : Type} [Fintype n] [DecidableEq n]
-    (T : SelmerDatum ℓ S₀ g₀ O.val n) (Q : Finset (FinPlace E)) (ψ : Gal(Ω/E) →* PadicAlgCl ℓ)
-    (b : ℝ≥0∞) : Prop :=
+def TwistedLengthLe (T : SelmerDatum ℓ S₀ g₀ O.val n) (Q : Finset (FinPlace E))
+    (ψ : Gal(Ω/E) →* PadicAlgCl ℓ) (b : ℝ≥0∞) : Prop :=
   ∀ᶠ O' : CoeffRing ℓ in atTop, ∃ hO : O ≤ O', ∃ ψ' : Gal(Ω/E) →* O'.val,
     (∀ g : Gal(Ω/E), (ψ' g : PadicAlgCl ℓ) = ψ g) ∧
     O'.normLength (T.divisibleLength Q (inclusion hO).toRingHom ψ') ≤ b
 
 /-- A bound for the length of the twisted Selmer group may be weakened. -/
-lemma TwistedLengthLe.mono {O : CoeffRing ℓ} {n : Type} [Fintype n] [DecidableEq n]
-    {T : SelmerDatum ℓ S₀ g₀ O.val n} {Q : Finset (FinPlace E)} {ψ : Gal(Ω/E) →* PadicAlgCl ℓ}
-    {b b' : ℝ≥0∞} (h : T.TwistedLengthLe Q ψ b) (hb : b ≤ b') : T.TwistedLengthLe Q ψ b' := by
+lemma TwistedLengthLe.mono {T : SelmerDatum ℓ S₀ g₀ O.val n} {Q : Finset (FinPlace E)}
+    {ψ : Gal(Ω/E) →* PadicAlgCl ℓ} {b b' : ℝ≥0∞} (h : T.TwistedLengthLe Q ψ b) (hb : b ≤ b') :
+    T.TwistedLengthLe Q ψ b' := by
   filter_upwards [h] with O' ⟨hO, ψ', hψ', h_le⟩ using ⟨hO, ψ', hψ', h_le.trans hb⟩
+
+end Bound
 
 end SelmerDatum
 
@@ -243,8 +250,9 @@ private lemma length_le_of_relLength_le {A M : Type*} [Ring A] [AddCommGroup M] 
 
 namespace SelmerDatum
 
-variable {ι n : Type} [Fintype n] [DecidableEq n] {V : ι → Gal(Ω/E) → Prop} {W : Set Gal(Ω/E)}
-  {J : Finset (FinPlace E)} {M N s₀ : ℕ} {P₀ : FinPlace E} {r : ℚ≥0}
+open scoped Classical
+
+variable {ι n : Type} [Fintype n] [DecidableEq n] {J : Finset (FinPlace E)} {M s₀ : ℕ} {r : ℚ≥0}
 
 /-- The action on the lattice of a Selmer datum `T`, reduced modulo `ℓ ^ M`, is trivial on the
 inertia groups above the places outside `S₀`. -/
@@ -254,7 +262,6 @@ lemma reduceModPow_eq_one {O : Type} [CommRing O] [PadicIntegerRing O ℓ]
   obtain ⟨v, hv, hg_v⟩ := hg
   simp [reduceModPow, T.unramified g ⟨v, fun h_mem ↦ hv (T.subset h_mem), hg_v⟩]
 
-open scoped Classical in
 /-- Let `J` be a set of tied primes (`IsTiedPrimes`): auxiliary primes with a first prime `P₀ ∈ J`,
 whose Frobenius element `(d P₀).1.frob` lies in `W`, and with Frobenius elements `φ_w`, tame
 generators `γ_w` and slopes given by `d`. Let `M < N`. Suppose that the elements with the property
@@ -263,29 +270,25 @@ inverse act modulo `ℓ ^ M` as `g₀` and `g₀^{-c}` (`idOrConjInv`). If the S
 tied at all primes of `J` has length at most `globalTerm + placesTerm`, then the group tied only at
 the primes other than `P₀` has length at most `β_T = globalTerm + placesTerm + firstPrimeTerm`. -/
 lemma length_tiedSelmer_erase_le {O : Type} [CommRing O] [PadicIntegerRing O ℓ]
-    (T : SelmerDatum ℓ S₀ g₀ O n) {d : FinPlace E → AuxPrimeData E (ℓ ^ N) × (ι → O)}
-    (h_primes : IsTiedPrimes ℓ S₀ V W N P₀ J d) (hMN : M < N) (i : ι)
-    (hV : ∀ g : Gal(Ω/E), V i g → reduceModPow ℓ M T.ρ g = 1)
-    (h_first : ∀ b : Bool, reduceModPow ℓ M T.ρ (idOrConjInv b (d P₀).1.frob) =
-      reduceModPow ℓ M T.ρ (idOrConjInv b g₀))
-    (h_tied : length O (T.tiedSelmer J J d i (ℓ ^ M)) ≤ T.globalTerm + T.placesTerm) :
-    length O (T.tiedSelmer J (J.erase P₀) d i (ℓ ^ M)) ≤ T.β := by
-  let Z := T.tiedSelmer J J d i (ℓ ^ M)
-  let Z₀ := T.tiedSelmer J (J.erase P₀) d i (ℓ ^ M)
+    (T : SelmerDatum ℓ S₀ g₀ O n) (U : LineTiedSetup (ℓ := ℓ) S₀ T.ρ ι) (hMN : U.M ≤ U.N)
+    (h_first : ∀ b : Bool, reduceModPow ℓ U.M T.ρ (idOrConjInv b (U.d U.P₀).1.frob) =
+      reduceModPow ℓ U.M T.ρ (idOrConjInv b g₀))
+    (h_tied : length O (T.tiedSelmer U.J U.J U.d U.i (ℓ ^ U.M)) ≤ T.globalTerm + T.placesTerm) :
+    length O (T.tiedSelmer U.J (U.J.erase U.P₀) U.d U.i (ℓ ^ U.M)) ≤ T.β := by
+  let Z := T.tiedSelmer U.J U.J U.d U.i (ℓ ^ U.M)
+  let Z₀ := T.tiedSelmer U.J (U.J.erase U.P₀) U.d U.i (ℓ ^ U.M)
   -- Dropping the ties at `P₀` and its conjugate costs at most `T.firstPrimeTerm`.
   have h_release : relLength Z₀ Z ≤ T.firstPrimeTerm := by
-    have h_ties : tieRelations (n := n) J d i =
-        tieRelations (J.erase P₀) d i ∪ tieRelations {P₀} d i := by
-      rw [← tieRelations_union, union_comm, ← insert_eq, insert_erase h_primes.first_mem]
+    have h_ties : tieRelations (n := n) U.J U.d U.i =
+        tieRelations (U.J.erase U.P₀) U.d U.i ∪ tieRelations {U.P₀} U.d U.i := by
+      rw [← tieRelations_union, union_comm, ← insert_eq, insert_erase U.hp.first_mem]
     simp only [Z₀, Z, tiedSelmer, h_ties, ← Set.union_assoc]
-    exact h_primes.relLength_tieRelations_le_sum_addVal_det (Nat.ne_zero_of_lt hMN) i
-      (fun _ hg ↦ T.reduceModPow_eq_one hg) hV hMN.le h_first (unionWithConj T.places J)
-      (T.classRelations ∪ tieRelations (J.erase P₀) d i)
+    exact U.relLength_tieRelations_le_sum_addVal_det hMN h_first (unionWithConj T.places U.J)
+      (T.classRelations ∪ tieRelations (U.J.erase U.P₀) U.d U.i)
   calc length O Z₀ ≤ T.firstPrimeTerm + (T.globalTerm + T.placesTerm) :=
         length_le_of_relLength_le h_release h_tied
     _ = T.β := by rw [β, localTerms, add_comm, add_assoc]
 
-open scoped Classical in
 /-- Let `O` be the ring of integers of a finite extension of `ℚ_ℓ` and `T` a Selmer datum: a lattice
 `O ^ n` with an action `ρ` of `Gal(Ω/E)`, unramified outside `T.places ⊆ S₀`, with the relations
 `T.classRelations`. Its number `β_T = T.β` is the sum of a global term, local terms at `T.places`
@@ -305,59 +308,52 @@ module of the characters `(d v).1.character` at all points (`BoundsSelmer`), and
 over the Frobenius elements `g = φ_v` of the primes `v` of `J` other than `P₀` and their conjugate
 inverses. -/
 lemma exists_boundsSelmer_and_eval_dvd {O : Type} [CommRing O] [PadicIntegerRing O ℓ]
-    (T : SelmerDatum ℓ S₀ g₀ O n) {d : FinPlace E → AuxPrimeData E (ℓ ^ N) × (ι → O)}
-    (h_primes : IsTiedPrimes ℓ S₀ V W N P₀ J d) (hN₀ : N ≠ 0) (i : ι)
-    (hV : ∀ g : Gal(Ω/E), V i g → reduceModPow ℓ M T.ρ g = 1)
-    (h_tied : length O (T.tiedSelmer J (J.erase P₀) d i (ℓ ^ M)) ≤ T.β) (hr : r ≤ 1)
-    (hN : M ≤ N * r) :
+    (T : SelmerDatum ℓ S₀ g₀ O n) (U : LineTiedSetup (ℓ := ℓ) S₀ T.ρ ι)
+    (h_tied : length O (T.tiedSelmer U.J (U.J.erase U.P₀) U.d U.i (ℓ ^ U.M)) ≤ T.β) (hr : r ≤ 1)
+    (hN : U.M ≤ U.N * r) :
     ∃ lineBound : O[X], addVal O (lineBound.coeff 0) ≤ T.β ∧
       ∀ (O' : Type) [CommRing O'] [DVR O'] [CharZero O'] (e : O →+* O') (f : O' →+* intQpBar ℓ)
         (y : O') (_hf_reflects : ∀ z z' : O', f z ∣ f z' → z ∣ z')
         (_hy_val : (r : ℝ≥0) ≤ ellVal (f y).val),
-        ∃ P : MvPolynomial J O,
-          BoundsSelmer ℓ M (fun v : J ↦ (d v).1.character) T.ρ (unionWithConj T.places J)
-            T.classRelations P ∧
-          MvPolynomial.eval (fun v : J ↦ f.comp e (lineDirection P₀ J d i v) * f y)
-              (P.map (f.comp e)) ∣
-            (lineBound.map (f.comp e)).eval (f y) *
-              ((tiePolynomial T.ρ (J.erase P₀) d).map (f.comp e)).eval (f y) := by
-  let lam (v : J) : Gal(Ω/E) →* Multiplicative (ZMod (ℓ ^ N)) := (d v).1.character
-  let S : Set (FinPlace E) := unionWithConj T.places J
-  let L₀ : Set (Gal(Ω/E) →₀ Matrix n n O) := T.classRelations ∪ tieRelations (J.erase P₀) d i
-  let a : J → O := lineDirection P₀ J d i
-  have h_lam (v : J) : IsLocallyConstant (lam v) :=
-    (h_primes.isAuxPrimeDataAt v v.property).isLocallyConstant
+        ∃ P : MvPolynomial U.J O,
+          BoundsSelmer ℓ U.M U.lam T.ρ (unionWithConj T.places U.J) T.classRelations P ∧
+          MvPolynomial.eval (fun v : U.J ↦ f.comp e (U.dir v) * f y) (P.map (f.comp e)) ∣
+            (lineBound.map (f.comp e)).eval (f y) * (U.tiePoly.map (f.comp e)).eval (f y) := by
+  let S : Set (FinPlace E) := unionWithConj T.places U.J
+  let L₀ : Set (Gal(Ω/E) →₀ Matrix n n O) :=
+    T.classRelations ∪ tieRelations (U.J.erase U.P₀) U.d U.i
+  have h_lam (v : U.J) : IsLocallyConstant (U.lam v) :=
+    (U.hp.isAuxPrimeDataAt v v.property).isLocallyConstant
   -- A polynomial `G` for the tied module that is sharp at `0`; `P⁰` is its restriction to the line.
-  obtain ⟨G, hG_sharp, hG_bound⟩ : ∃ G : MvPolynomial J O,
+  obtain ⟨G, hG_sharp, hG_bound⟩ : ∃ G : MvPolynomial U.J O,
       addVal O (G.eval₂ (.id O) fun _ ↦ 0) =
-        length O (selmerAtPoint ℓ M lam T.ρ S L₀ (.id O) fun _ ↦ 0) ∧
-      BoundsSelmer ℓ M lam T.ρ S L₀ G :=
-    exists_sharp_polynomial h_lam (T.isLocallyConstant M) (finite_toSet _) L₀ (.id O) fun _ ↦ 0
-  refine ⟨restrictToLine a G, ?_, fun O' _ _ _ e f y hf_reflects hy_val ↦ ?_⟩
-  · have h_zero : (restrictToLine a G).coeff 0 = G.eval₂ (.id O) fun _ ↦ 0 := by
-      simpa using eval₂_restrictToLine a G (.id O) 0
+        length O (selmerAtPoint ℓ U.M U.lam T.ρ S L₀ (.id O) fun _ ↦ 0) ∧
+      BoundsSelmer ℓ U.M U.lam T.ρ S L₀ G :=
+    exists_sharp_polynomial h_lam (T.isLocallyConstant U.M) (finite_toSet _) L₀ (.id O) fun _ ↦ 0
+  refine ⟨restrictToLine U.dir G, ?_, fun O' _ _ _ e f y hf_reflects hy_val ↦ ?_⟩
+  · have h_zero : (restrictToLine U.dir G).coeff 0 = G.eval₂ (.id O) fun _ ↦ 0 := by
+      simpa using eval₂_restrictToLine U.dir G (.id O) 0
     rwa [h_zero, hG_sharp, selmerAtPoint_zero]
   -- A polynomial `P` for the module without ties that is sharp at the point `x` of the line.
-  let x (v : J) : O' := e (a v) * y
+  let x (v : U.J) : O' := e (U.dir v) * y
   let Sel (L : Set (Gal(Ω/E) →₀ Matrix n n O)) :
-      Submodule O' (Gal(Ω/E) → n → QuotSpan (ℓ ^ M : O')) := selmerAtPoint ℓ M lam T.ρ S L e x
-  obtain ⟨P, hP_sharp, hP_bound⟩ : ∃ P : MvPolynomial J O,
+      Submodule O' (Gal(Ω/E) → n → QuotSpan (ℓ ^ U.M : O')) :=
+    selmerAtPoint ℓ U.M U.lam T.ρ S L e x
+  obtain ⟨P, hP_sharp, hP_bound⟩ : ∃ P : MvPolynomial U.J O,
       addVal O' (P.eval₂ e x) = length O' (Sel T.classRelations) ∧
-      BoundsSelmer ℓ M lam T.ρ S T.classRelations P :=
-    exists_sharp_polynomial h_lam (T.isLocallyConstant M) (finite_toSet _) T.classRelations e x
-  have h_norm (α : O') (hα : y ∣ α - 1) : (ℓ ^ M : O') ∣ ∑ j ∈ range (ℓ ^ N), α ^ j :=
+      BoundsSelmer ℓ U.M U.lam T.ρ S T.classRelations P :=
+    exists_sharp_polynomial h_lam (T.isLocallyConstant U.M) (finite_toSet _) T.classRelations e x
+  have h_norm (α : O') (hα : y ∣ α - 1) : (ℓ ^ U.M : O') ∣ ∑ j ∈ range (ℓ ^ U.N), α ^ j :=
     pow_dvd_geom_sum f hf_reflects hr hN (hy_val.trans (dvd_iff_ellVal_le.1 (map_dvd f hα)))
-  have h_untie : relLength (Sel T.classRelations) (Sel L₀) ≤
-      addVal O' ((tiePolynomial T.ρ (J.erase P₀) d).eval₂ e y) :=
-    h_primes.relLength_tied_le hN₀ i (fun _ ↦ T.reduceModPow_eq_one) hV e h_norm S T.classRelations
-  have h_dvd : P.eval₂ e x ∣
-      (restrictToLine a G).eval₂ e y * (tiePolynomial T.ρ (J.erase P₀) d).eval₂ e y := by
+  have h_untie : relLength (Sel T.classRelations) (Sel L₀) ≤ addVal O' (U.tiePoly.eval₂ e y) :=
+    U.relLength_tied_le e h_norm S T.classRelations
+  have h_dvd : P.eval₂ e x ∣ (restrictToLine U.dir G).eval₂ e y * U.tiePoly.eval₂ e y := by
     rw [← addVal_le_iff_dvd, addVal_mul, eval₂_restrictToLine, hP_sharp, add_comm]
     exact length_le_of_relLength_le h_untie (hG_bound O' e x)
   -- The claim is the image of `h_dvd` under `f`.
   refine ⟨P, hP_bound, ?_⟩
   simpa only [map_mul, Polynomial.hom_eval₂, MvPolynomial.eval₂_comp_left, Polynomial.eval_map,
-    MvPolynomial.eval_map, Function.comp_def, RingHom.comp_apply, x, a] using map_dvd f h_dvd
+    MvPolynomial.eval_map, Function.comp_def, RingHom.comp_apply, x] using _root_.map_dvd f h_dvd
 
 /-- Let `P` bound, at all points `x`, the length of the Selmer module `Sel(x)` modulo `ℓ ^ M` of the
 twist of `T` at `x`, unramified outside `S ∪ J ∪ J̄` and with the relations `T.classRelations`
@@ -383,7 +379,6 @@ lemma divisibleLength_pointChar_le {O : Type} [CommRing O] [PadicIntegerRing O �
   exact (length_selmerModule_divisibleQuot_le _ _ _ (NeZero.ne _)
     (h_level.trans_lt h_lt)).trans h_level
 
-open scoped Classical in
 /-- The choice of the polynomial `P` of a Selmer datum `T` over a coefficient ring `O`, the ring of
 integers of a finite Galois extension of `ℚ_ℓ`, included in `ℤ̄_ℓ` by `O.toIntQpBar`. The datum is
 a lattice `O ^ n` with Galois action, unramified outside `T.places ⊆ S₀`, with the relations
@@ -400,29 +395,26 @@ of the Selmer module of these characters at all points (`BoundsSelmer`), and
 Here `v = ellVal` has `v(ℓ) = 1`, and `normLength` multiplies the length `β_T` by the valuation of a
 uniformiser of `O`. -/
 theorem exists_boundsSelmer_ellVal_eval_le {O : CoeffRing ℓ} (T : SelmerDatum ℓ S₀ g₀ O.val n)
-    {d : FinPlace E → AuxPrimeData E (ℓ ^ N) × (ι → O.val)}
-    (h_primes : IsTiedPrimes ℓ S₀ V W N P₀ J d) (hN₀ : N ≠ 0) (i : ι)
-    (hV : ∀ g : Gal(Ω/E), V i g → reduceModPow ℓ M T.ρ g = 1)
-    (h_tied : length O.val (T.tiedSelmer J (J.erase P₀) d i (ℓ ^ M)) ≤ T.β)
-    (hs₀ : 2 * Fintype.card n * #J ≤ s₀) (hr : r ≤ 1) (hN : M ≤ N * r) :
-    ∃ (P : MvPolynomial J O.val) (x₀ : J → intQpBar ℓ),
-      (∀ v : J, (r : ℝ≥0) ≤ ellVal (x₀ v).val) ∧
+    (U : LineTiedSetup (ℓ := ℓ) S₀ T.ρ ι)
+    (h_tied : length O.val (T.tiedSelmer U.J (U.J.erase U.P₀) U.d U.i (ℓ ^ U.M)) ≤ T.β)
+    (hs₀ : 2 * Fintype.card n * #U.J ≤ s₀) (hr : r ≤ 1) (hN : U.M ≤ U.N * r) :
+    ∃ (P : MvPolynomial U.J O.val) (x₀ : U.J → intQpBar ℓ),
+      (∀ v : U.J, (r : ℝ≥0) ≤ ellVal (x₀ v).val) ∧
       ellVal (MvPolynomial.eval x₀ (P.map O.toIntQpBar)).val ≤
         O.normLength T.β + s₀ * (r : ℝ≥0) ∧
-      BoundsSelmer ℓ M (fun v : J ↦ (d v).1.character) T.ρ (unionWithConj T.places J)
-        T.classRelations P := by
+      BoundsSelmer ℓ U.M U.lam T.ρ (unionWithConj T.places U.J) T.classRelations P := by
   -- Take `x₀` on the line at a parameter `y` that is generic for `p₀ = P⁰` and `p₁ = P¹`: they
   -- attain their Gauss valuations of radius `r` at `y`. Then `v(P(x₀)) ≤ v_r(P⁰) + v_r(P¹)`.
   obtain ⟨lineBound, h_coeff_zero, h_bound_dvd⟩ :=
-    T.exists_boundsSelmer_and_eval_dvd h_primes hN₀ i hV h_tied hr hN
+    T.exists_boundsSelmer_and_eval_dvd U h_tied hr hN
   set p₀ : (intQpBar ℓ)[X] := lineBound.map O.toIntQpBar with hp₀
-  set p₁ : (intQpBar ℓ)[X] := (tiePolynomial T.ρ (J.erase P₀) d).map O.toIntQpBar with hp₁
+  set p₁ : (intQpBar ℓ)[X] := U.tiePoly.map O.toIntQpBar with hp₁
   have h_zero : ellVal (p₀.eval 0).val ≤ O.normLength T.β := by
     rw [← Polynomial.coeff_zero_eq_eval_zero, hp₀, Polynomial.coeff_map, CoeffRing.coe_toIntQpBar,
       ← CoeffRing.normLength_addVal]
     exact CoeffRing.normLength_mono h_coeff_zero
   have h_tie : gaussVal r p₁ ≤ s₀ * (r : ℝ≥0) :=
-    gaussVal_tiePolynomial_le T.ρ _ d O.toIntQpBar r
+    gaussVal_tiePolynomial_le T.ρ _ U.d O.toIntQpBar r
       ((Nat.mul_le_mul_left _ card_erase_le).trans hs₀)
   obtain ⟨y, hy, h_generic⟩ := exists_forall_ellVal_eval_eq_gaussVal r ![p₀, p₁]
   have hy₀ : ellVal (p₀.eval y).val = gaussVal r p₀ := h_generic 0
@@ -430,10 +422,9 @@ theorem exists_boundsSelmer_ellVal_eval_le {O : CoeffRing ℓ} (T : SelmerDatum 
   obtain ⟨O', hO, hy_mem⟩ := ((eventually_ge_atTop O).and (CoeffRing.eventually_mem y.2)).exists
   let y' : O'.val := ⟨y, hy_mem⟩
   have hy' : O'.toIntQpBar y' = y := rfl
-  let x₀ (v : J) : intQpBar ℓ := O.toIntQpBar (lineDirection P₀ J d i v) * y
-  obtain ⟨P, hP, h_dvd⟩ : ∃ P : MvPolynomial J O.val,
-      BoundsSelmer ℓ M (fun v : J ↦ (d v).1.character) T.ρ (unionWithConj T.places J)
-        T.classRelations P ∧
+  let x₀ (v : U.J) : intQpBar ℓ := O.toIntQpBar (U.dir v) * y
+  obtain ⟨P, hP, h_dvd⟩ : ∃ P : MvPolynomial U.J O.val,
+      BoundsSelmer ℓ U.M U.lam T.ρ (unionWithConj T.places U.J) T.classRelations P ∧
       MvPolynomial.eval x₀ (P.map O.toIntQpBar) ∣ p₀.eval y * p₁.eval y := by
     simpa only [CoeffRing.toIntQpBar_comp_inclusion, hy', ← hp₀, ← hp₁] using h_bound_dvd O'.val
       (inclusion hO).toRingHom O'.toIntQpBar y' O'.dvd_of_toIntQpBar_dvd (by rwa [hy'])
@@ -480,11 +471,6 @@ lemma twistedLengthLe_pointChar {O : CoeffRing ℓ} (T : SelmerDatum ℓ S₀ g�
     (CoeffRing.normLength_mono h_len).trans_eq h_val⟩
 
 end SelmerDatum
-
-end Choice
-
-variable {ℓ : ℕ} [ThePrime ℓ] {E : Type} [Field E] [EmbeddedNumberField E] [NumberField.IsCMField E]
-  {S₀ : Finset (FinPlace E)} {g₀ : Gal(Ω/E)}
 
 /-- For `g` near `g₀`, the element `g` (for `b = true`) or its conjugate inverse `g^{-c}` (for
 `b = false`) acts on the lattice of a Selmer datum `T` modulo `ℓ ^ M` as `g₀` or `g₀^{-c}` does. -/
@@ -604,12 +590,15 @@ lemma nonempty_twistPolynomials_of_isTiedPrimes (T : ∀ i : ι, SelmerDatum ℓ
   let lam (v : J) : Gal(Ω/E) →* Multiplicative (ZMod (ℓ ^ N)) := (d v).1.character
   have hr_one : r ≤ 1 := (le_mul_of_one_le_left zero_le (mod_cast hs₀)).trans hr.le
   have h_card {c' : ℕ} (hc' : c' ≤ c) : 2 * c' * #J ≤ s₀ := le_trans (by gcongr) h_card_le
+  let U (i : ι) : LineTiedSetup (ℓ := ℓ) S₀ (T i).ρ ι :=
+    ⟨_, W, M, N, P₀, J, d, i, h_primes, Nat.ne_zero_of_lt hMN,
+      fun _ ↦ (T i).reduceModPow_eq_one, fun _ h ↦ h⟩
   have h_datum (i : ι) : ∃ (P : MvPolynomial J O.val) (x : J → intQpBar ℓ),
       (∀ v : J, (r : ℝ≥0) ≤ ellVal (x v).val) ∧
       ellVal (eval x (P.map O.toIntQpBar)).val ≤ O.normLength (T i).β + s₀ * (r : ℝ≥0) ∧
       BoundsSelmer ℓ M lam (T i).ρ (unionWithConj (T i).places J) (T i).classRelations P :=
-    (T i).exists_boundsSelmer_ellVal_eval_le h_primes (Nat.ne_zero_of_lt hMN) i (fun _ hg ↦ hg)
-      ((T i).length_tiedSelmer_erase_le h_primes hMN i (fun _ hg ↦ hg) (h_frob_datum i) (h_tied i))
+    (T i).exists_boundsSelmer_ellVal_eval_le (U i)
+      ((T i).length_tiedSelmer_erase_le (U i) hMN.le (h_frob_datum i) (h_tied i))
       (h_card (h_rank i)) hr_one hN
   have h_system (k : κ) : ∃ x : J → intQpBar ℓ, (∀ v : J, (r : ℝ≥0) ≤ ellVal (x v).val) ∧
       ellVal (eval x (groupRingEval (universalChar lam) ((Y k).element J))).val ≤
