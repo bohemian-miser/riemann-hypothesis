@@ -26,9 +26,9 @@ Throughout, a *string* of a grading is the block of basis vectors outside the de
 `DoubleLiftData` records two successive steps `Y → Y' → Y''` where the first step makes the string
 one shorter and the second, unless the string is already empty, makes it shorter by one.
 
-* `New.Seesaw.zeroTermFin`: the finite part of the zero term. It obeys the law of the zero term for
-  finite points of the parabolic subgroup (`New.Seesaw.zeroTermFin_omega`) and is not zero at the
-  vacuum (`New.Seesaw.zeroTermFin_vacElem_ne_zero`).
+* `New.Seesaw.zeroTermFin`: the finite part of the zero term. When `B = i g + k c` is integral for
+  a finite unitary point `g`, it carries finite Heisenberg translates of the vacuum to multiples of
+  `ω (1, g)` applied to translated vacua (`New.Seesaw.exists_zeroTermFin_finHeisenbergOp_vacElem`).
 * `New.Seesaw.GradeZeroPart`, `New.Seesaw.GradeZeroPart.splitting`: the part of grade zero, and the
   splitting it gives.
 * `New.Seesaw.DoubleLiftData`: the part of grade zero of `V⁻ ⊕ V''` is `X⁻ ⊕ X''` plus hyperbolic
@@ -75,10 +75,10 @@ namespace New.Seesaw
   `zeroTermFin D` preserves the finite parts and computes `D.zeroTerm` on pure tensors.
 * `New.Seesaw.exists_zeroTermFin_finHeisenbergOp_add`: its values on the finite translates of the
   vacuum.
-* `New.Seesaw.mem_zeroTermLattice_iff_selfDualAddChar`,
-  `New.Seesaw.exists_zeroTermFin_vacElem_eq_sum`: the lattice `New.Seesaw.zeroTermLattice D` is
-  unimodular, and the value at the vacuum is a multiple of a sum of translates of the vacuum by
-  vectors of this lattice.
+* `New.Seesaw.exists_zeroTermFin_finHeisenbergOp_vacElem`: given an integral matrix `B = i g + k c`
+  for a finite unitary point `g`, its value on any finite Heisenberg translate of the vacuum
+  factors directly through the Weil operator `V₀.ω (1, g)` applied to the translate by `Bᴴ *ᵥ y`,
+  avoiding manual coset representatives of quotient lattices.
 
 `V.integrated v f` is the tensor of a real Fock vector `v` with `f`, `V.finHeisenbergOp x` the
 Heisenberg operator of a finite adelic vector `x`, `V.finitePart` the span of the
@@ -109,25 +109,6 @@ lemma zeroTermFin_eq (D : V.Splitting V₀ p) {g : G E s}
     (hg : g = (D.exists_isAdapted_and_frame_eq 1).choose) (f : 𝒮 V) :
     zeroTermFin D f = D.zeroTerm (V.ω g (V.projReal (V.ω (1, g⁻¹.2) f))) := by
   simp [zeroTermFin, hg, omega_integrated, rep_apply_apply, mk_one_one]
-
-/-- Let `D` be a splitting of `V` over `V₀`: dual isotropic frames `k`, `l` with columns indexed by
-`p` and an isometry of `V₀` onto their orthogonal complement. The finite part
-`zeroTermFin D : 𝒮 V → 𝒮 V₀` of the zero term along `k` does not vanish on `V.finitePart`, the span
-of the finite Heisenberg translates of the vacuum. -/
-lemma exists_zeroTermFin_ne_zero (D : V.Splitting V₀ p) :
-    ∃ f ∈ V.finitePart, zeroTermFin D f ≠ 0 := by
-  -- At `ω (1, g_f) vacElem` it is the zero term of `ω g vacElem`, a nonzero multiple of the vacuum.
-  set g : G E s := (D.exists_isAdapted_and_frame_eq 1).choose with hg_def
-  have hg : D.IsAdapted g 1 := (D.exists_isAdapted_and_frame_eq 1).choose_spec.1
-  obtain ⟨c, hc_ne, hc⟩ : ∃ c ≠ (0 : ℂ), ∀ x : p → 𝔸 E,
-      D.slice x (V.ω g V.vacElem) = (c * ‖vacuumFn x‖ ^ 2) • V₀.vacElem := by
-    simpa using hg.slice_omega_vacElem
-  refine ⟨V.ω (1, g.2) V.vacElem, omega_mem_finitePart _ vacElem_mem_finitePart, fun h_zero ↦ ?_⟩
-  have h_value : zeroTermFin D (V.ω (1, g.2) V.vacElem) = c • V₀.vacElem := by
-    rw [zeroTermFin_eq D hg_def, rep_apply_apply, ← slice_zero]
-    simp [mk_one_one, hc, vacuumFn]
-  have h_vac : V₀.vacElem = 0 := (smul_eq_zero.1 (h_value.symm.trans h_zero)).resolve_left hc_ne
-  simpa [h_vac] using V₀.dataInner_vacElem_vacElem
 
 unseal finitePart in
 /-- Let `D` be a splitting of `V` over `V₀`, with isotropic frame `k` indexed by `p`. The finite
@@ -256,17 +237,6 @@ noncomputable abbrev _root_.New.Space.Splitting.isotropicBasisFin (D : V.Splitti
     Matrix n p (𝔸f E) :=
   D.kAdelic.map snd
 
-/-- The lattice `L'` of `V₀ = I^⊥ / I`: the image of `L ∩ I^⊥`, where `L` is the standard lattice
-of `V` and `I` is spanned by the columns of `k = D.isotropicBasisFin`. A vector of `I^⊥` is written
-`i w + k b` with `i = D.iFin`, and `w` is its class. -/
-noncomputable def zeroTermLattice (D : V.Splitting V₀ p) : AddSubgroup (n₀ → 𝔸f E) where
-  carrier := {w : n₀ → 𝔸f E |
-    ∃ b : p → 𝔸f E, D.iFin *ᵥ w + D.isotropicBasisFin *ᵥ b ∈ stdLattice E n}
-  add_mem' := fun ⟨b, hb⟩ ⟨b', hb'⟩ ↦
-    ⟨b + b', by simpa [mulVec_add, add_add_add_comm] using add_mem hb hb'⟩
-  zero_mem' := ⟨0, by simp⟩
-  neg_mem' := fun ⟨b, hb⟩ ↦ ⟨-b, by simpa [mulVec_neg, add_comm] using neg_mem hb⟩
-
 section
 
 omit [WeilData E]
@@ -344,243 +314,62 @@ lemma exists_zeroTermFin_finHeisenbergOp_add (D : V.Splitting V₀ p) (w : n₀ 
   rw [h_shift, add_neg_cancel_right, map_smul,
     zeroTermFin_finHeisenbergOp_finFrameVector D b (finFrameVector_zero D w b).symm]
 
-/-- The finite part `zeroTermFin D` of the zero term along a splitting `D` does not vanish at the
-vacuum `V.vacElem`. -/
-lemma zeroTermFin_vacElem_ne_zero (D : V.Splitting V₀ p) : zeroTermFin D V.vacElem ≠ 0 := by
-  -- Otherwise it would vanish on all finite translates of the vacuum, which span the finite part.
-  intro h_zero
-  have h_translate (y : n → 𝔸f E) : zeroTermFin D (V.finHeisenbergOp y V.vacElem) = 0 := by
-    by_contra h_ne
-    obtain ⟨l, hl, w, b, rfl⟩ := exists_eq_add_of_zeroTermFin_ne_zero D h_ne
-    obtain ⟨ζ, -, hζ⟩ := exists_zeroTermFin_finHeisenbergOp_add D w b hl
-    simp [-zeroTermFin, hζ, h_zero] at h_ne
-  have h_le : V.finitePart ≤ LinearMap.ker (zeroTermFin D).toLinearMap := by
-    simpa [finitePart, Submodule.span_le, Set.range_subset_iff] using h_translate
-  obtain ⟨f, hf, hf_ne⟩ := exists_zeroTermFin_ne_zero D
-  exact hf_ne (h_le hf)
-
-/-- For a splitting `D` of `V` over `V₀`, the translations by vectors of the lattice
-`zeroTermLattice D` of `V₀` fix the value of the finite zero term `zeroTermFin D` at the vacuum. -/
-lemma finHeisenbergOp_zeroTermFin_vacElem (D : V.Splitting V₀ p) {x : n₀ → 𝔸f E}
-    (hx : x ∈ zeroTermLattice D) :
-    V₀.finHeisenbergOp x (zeroTermFin D V.vacElem) = zeroTermFin D V.vacElem := by
-  obtain ⟨b, hb⟩ := hx
-  rw [← zeroTermFin_finHeisenbergOp_finFrameVector D b (finFrameVector_zero D x b).symm,
-    finHeisenbergOp_vacElem hb]
-
-/-- Let `W` be a hermitian space over `E` with a point, `s` the signs of its form at the infinite
-places, and let `g` be in `Gf E n`, the finite adelic unitary group. Thus `(1, g)` is the adelic
-point with trivial infinite part and `W.ω (1, g)` is its Weil operator. Let `Λ = Ô ^ n` be the
-standard lattice and let the `r a` be representatives of `g Λ` modulo `g Λ ∩ Λ`. Then this operator
-sends the vacuum to a nonzero multiple of the sum of the finite Heisenberg translates of the vacuum
-by the `r a`. -/
-lemma exists_omega_vacElem_eq_sum (W : Space E n s) {g : Gf E n} {R : Type*} [Fintype R]
-    {r : R → n → 𝔸f E}
-    (hr_mem : ∀ a : R, r a ∈ (stdLattice E n).map (DistribSMul.toAddMonoidHom (n → 𝔸f E) g))
-    (hr_rep : ∀ z ∈ (stdLattice E n).map (DistribSMul.toAddMonoidHom (n → 𝔸f E) g),
-      ∃! a : R, z - r a ∈ stdLattice E n) :
-    ∃ c ≠ (0 : ℂ), W.ω (1, g) W.vacElem = c • ∑ a : R, W.finHeisenbergOp (r a) W.vacElem := by
-  -- Write `r a = g (x a)`. The `x a` represent `Λ` modulo `H = Λ ∩ g⁻¹ Λ`.
-  let H : AddSubgroup (stdLattice E n) :=
-    ((stdLattice E n).comap g.val.val.mulVecLin).addSubgroupOf (stdLattice E n)
-  have h_preimage : ∀ a : R, ∃ x : stdLattice E n, g.val.val *ᵥ x.val = r a := fun a ↦
-    let ⟨x, hx, h_eq⟩ := hr_mem a
-    ⟨⟨x, hx⟩, h_eq⟩
-  choose x hx using h_preimage
-  have h_class (a : R) (z : stdLattice E n) :
-      (x a : stdLattice E n ⧸ H) = z ↔ g.val.val *ᵥ z.val - r a ∈ stdLattice E n := by
-    rw [QuotientAddGroup.eq, ← hx, ← mulVec_sub, sub_eq_neg_add]
-    rfl
-  have h_bij : Function.Bijective fun a : R ↦ (x a : stdLattice E n ⧸ H) := by
-    refine (Function.bijective_iff_existsUnique _).2 fun q ↦ ?_
-    obtain ⟨z, rfl⟩ := QuotientAddGroup.mk_surjective q
-    simp only [h_class]
-    exact hr_rep _ ⟨z, z.property, rfl⟩
-  refine ⟨finMultiplier g / ‖finMultiplier g‖ ^ 2, by simp [finMultiplier_ne_zero], ?_⟩
-  rw [omega_vacElem_sum, ← finsum_comp _ h_bij, finsum_eq_sum_of_fintype]
-  simp only [W.finHeisenbergOp_mulVec_out_vacElem (x := x _) rfl, hx]
-
-section
-
-omit [WeilData E]
-
+omit [WeilData E] in
 /-- Let `i = D.iFin` be the embedding of `V₀` and `k = D.isotropicBasisFin` the isotropic frame. For
 `B = i g + k c` with `g` unitary, the adjoint of `B` sends `i w + k b` to `g⁻¹ w`. -/
 lemma conjTranspose_mulVec_iFin_add_isotropicBasisFin {D : V.Splitting V₀ p} {g : Gf E n₀}
-  {c : Matrix p n₀ (𝔸f E)}
-    {B : Matrix n n₀ (𝔸f E)} (hB_def : B = D.iFin * (g : Matrix n₀ n₀ (𝔸f E)) + D.isotropicBasisFin
-      * c)
+    {c : Matrix p n₀ (𝔸f E)} {B : Matrix n n₀ (𝔸f E)}
+    (hB_def : B = D.iFin * (g : Matrix n₀ n₀ (𝔸f E)) + D.isotropicBasisFin * c)
     (w : n₀ → 𝔸f E) (b : p → 𝔸f E) :
     Bᴴ *ᵥ (D.iFin *ᵥ w + D.isotropicBasisFin *ᵥ b) = (↑g⁻¹ : Matrix n₀ n₀ (𝔸f E)) *ᵥ w := by
   obtain ⟨h_perp, h_class⟩ : D.isotropicBasisFinᴴ *ᵥ D.finFrameVector 1 1 0 w b = 0 ∧
       D.iFinᴴ *ᵥ D.finFrameVector 1 1 0 w b = w :=
-        conjTranspose_isotropicBasisFin_iFin_mulVec_finFrameVector D 0 b w
+    conjTranspose_isotropicBasisFin_iFin_mulVec_finFrameVector D 0 b w
   rw [← finFrameVector_zero, hB_def, U.inv_val_eq_conjTranspose]
   simp [add_mulVec, ← mulVec_mulVec, h_perp, h_class]
 
-/-- Let `D` be a splitting of `V` over `V₀`, with finite parts `i = D.iFin` of the embedding of `V₀`
-and `k = D.isotropicBasisFin` of the isotropic frame. If `g` is unitary and `B = i g + k c` has
-entries in `Ô`, then `zeroTermLattice D` contains `g Ô ^ n₀`. -/
-lemma map_stdLattice_le_zeroTermLattice {D : V.Splitting V₀ p} {g : Gf E n₀}
+/-- Let `D : V.Splitting V₀ p` be a splitting, with `i = D.iFin` embedding `V₀` in `V` and
+`k = D.isotropicBasisFin` the isotropic frame. Suppose `B = i g + k c` has entries in `Ô` for a
+finite point `g` of the unitary group of `V₀`. Then `zeroTermFin D` sends the vacuum of `V` to a
+scalar multiple `C • V₀.ω (1, g) V₀.vacElem` of the `g`-moved vacuum of `V₀`, and sends every
+finite Heisenberg translate `V.finHeisenbergOp y V.vacElem` either to `0` or to a root of unity
+times `C • V₀.ω (1, g) (V₀.finHeisenbergOp (Bᴴ *ᵥ y) V₀.vacElem)`. -/
+lemma exists_zeroTermFin_finHeisenbergOp_vacElem {D : V.Splitting V₀ p} {g : Gf E n₀}
     {c : Matrix p n₀ (𝔸f E)} {B : Matrix n n₀ (𝔸f E)}
     (hB_def : B = D.iFin * (g : Matrix n₀ n₀ (𝔸f E)) + D.isotropicBasisFin * c)
-      (hB : IsIntMatrix (Ô E) B) :
-    (stdLattice E n₀).map (DistribSMul.toAddMonoidHom (n₀ → 𝔸f E) g) ≤ zeroTermLattice D := by
-  -- For `x` integral, `B x` is a lattice vector of class `g x`.
-  rintro _ ⟨x, hx, rfl⟩
-  refine ⟨c *ᵥ x, ?_⟩
-  change D.iFin *ᵥ (g : Matrix n₀ n₀ (𝔸f E)) *ᵥ x + D.isotropicBasisFin *ᵥ c *ᵥ x ∈ stdLattice E n
-  simpa only [hB_def, add_mulVec, ← mulVec_mulVec] using! hB.mulVec hx
-
-/-- Let `D` be a splitting of `V` over `V₀`, with finite parts `i = D.iFin` of the embedding of `V₀`
-and `k = D.isotropicBasisFin` of the isotropic frame. The lattice `zeroTermLattice D` consists of
-the `w` with `i w + k b ∈ Ô ^ n` for some `b`. If `g` is unitary and `B = i g + k c` has entries in
-`Ô`, then this lattice is `g Ô ^ n₀`: a vector `w` lies in it if and only if `g⁻¹ w ∈ Ô ^ n₀`. -/
-lemma mem_zeroTermLattice_iff {D : V.Splitting V₀ p} {g : Gf E n₀} {c : Matrix p n₀ (𝔸f E)}
-    {B : Matrix n n₀ (𝔸f E)} (hB_def : B = D.iFin * (g : Matrix n₀ n₀ (𝔸f E)) + D.isotropicBasisFin
-      * c)
-    (hB : IsIntMatrix (Ô E) B) {w : n₀ → 𝔸f E} :
-    w ∈ zeroTermLattice D ↔ (↑g⁻¹ : Matrix n₀ n₀ (𝔸f E)) *ᵥ w ∈ stdLattice E n₀ := by
-  constructor
-  · -- The integral matrix `Bᴴ` sends a lattice vector of class `w` to `g⁻¹ w`.
-    rintro ⟨b, hb⟩
-    simpa only [conjTranspose_mulVec_iFin_add_isotropicBasisFin hB_def w b] using!
-      hB.conjTranspose.mulVec hb
-  · exact fun hx ↦ map_stdLattice_le_zeroTermLattice hB_def hB ⟨_, hx, smul_inv_smul g w⟩
-
-end
-
-/-- Let `D` be a splitting of `V` over `V₀`, with finite parts `i = D.iFin` of the embedding of `V₀`
-and `k = D.isotropicBasisFin` of the isotropic frame, whose columns are indexed by `p`. There are a
-finite point `g` of the unitary group of `V₀` and a matrix `c` such that `i g + k c` has entries in
-`Ô`. -/
-lemma exists_isIntMatrix_iFin_mul_add_isotropicBasisFin_mul (D : V.Splitting V₀ p) :
-    ∃ (g : Gf E n₀) (c : Matrix p n₀ (𝔸f E)),
-      IsIntMatrix (Ô E) (D.iFin * (g : Matrix n₀ n₀ (𝔸f E)) + D.isotropicBasisFin * c) := by
-  -- Take `h` adapted to the splitting with `h⁻¹` a radical element times a Levi element. The lift
-  -- is the finite part of `h⁻¹ i`, a block of the adapted frame.
-  obtain ⟨c, b, a, g, h, h_adapted, h_one⟩ : ∃ (c : Matrix n₀ p (𝔸 E)) (b : Matrix p p (𝔸 E))
-      (a : GL p (𝔸 E)) (g : G E s₀) (h : G E s),
-      D.IsAdapted h 1 ∧ 1 = D.radicalElement c b * D.levi (a, g) * h :=
-    D.exists_eq_radicalElement_mul_levi_mul_isAdapted 1
-  have h_inv : D.radicalElement c b * D.levi (a, g) = h⁻¹ := eq_inv_of_mul_eq_one_left h_one.symm
-  set c' : Matrix p n₀ (𝔸 E) := cᴴ * stdForm E s₀ * g.adeleMatrix with hc'
-  have h_col : h⁻¹.adeleMatrix * D.iAdelic = D.iAdelic * g.adeleMatrix + D.kAdelic * c' := by
-    rw [← h_inv, G.adeleMatrix_mul, Matrix.mul_assoc, levi_mul_iAdelic,
-      ← Matrix.mul_assoc, radicalElement_mul_iAdelic, Matrix.add_mul, hc',
-        Matrix.mul_assoc D.kAdelic]
-  refine ⟨g.2, c'.map snd, fun i j ↦ ?_⟩
-  have h_entry : (D.iFin * (g.2 : Matrix n₀ n₀ (𝔸f E)) + D.isotropicBasisFin * c'.map snd) i j =
-      ((h⁻¹.adeleMatrix * D.iAdelic) i j).2 := by
-    rw [h_col]
-    simp [Matrix.mul_apply, Prod.snd_sum]
-  simpa [h_entry, frameAt, Matrix.mul_fromCols] using h_adapted.2 i (Sum.inr j)
-
-/-- The lattice `L' = zeroTermLattice D` is the image of the standard lattice of `V₀` under a finite
-point of the unitary group. -/
-lemma exists_zeroTermLattice_eq_map (D : V.Splitting V₀ p) :
-    ∃ g : Gf E n₀,
-      zeroTermLattice D = (stdLattice E n₀).map (DistribSMul.toAddMonoidHom (n₀ → 𝔸f E) g) := by
-  obtain ⟨g, c, hB⟩ := exists_isIntMatrix_iFin_mul_add_isotropicBasisFin_mul D
-  exact ⟨g, le_antisymm (fun w hw ↦ ⟨g⁻¹ • w, (mem_zeroTermLattice_iff rfl hB).1 hw,
-    smul_inv_smul g w⟩) (map_stdLattice_le_zeroTermLattice rfl hB)⟩
-
-/-- For a finite point `g` of the unitary group, the image `g Ô ^ n` of the standard lattice is its
-own dual: it consists of the `w` with `selfDualAddChar E (x* w) = 1` for all `x` in it. Here
-`selfDualAddChar E` is the character of the finite adeles for which `Ô` is self-dual. -/
-lemma mem_map_stdLattice_iff_selfDualAddChar (g : Gf E n) {w : n → 𝔸f E} :
-    w ∈ (stdLattice E n).map (DistribSMul.toAddMonoidHom (n → 𝔸f E) g) ↔
-      ∀ x ∈ (stdLattice E n).map (DistribSMul.toAddMonoidHom (n → 𝔸f E) g),
-        selfDualAddChar E (star x ⬝ᵥ w) = 1 := by
-  -- The standard lattice is its own dual, and `g` keeps the pairing.
-  obtain ⟨v, rfl⟩ : ∃ v : n → 𝔸f E, g • v = w := MulAction.surjective g w
-  have h_dot (y : n → 𝔸f E) : star (g • y) ⬝ᵥ g • v = star y ⬝ᵥ v := by
-    change star ((g : Matrix n n (𝔸f E)) *ᵥ y) ⬝ᵥ (g : Matrix n n (𝔸f E)) *ᵥ v = star y ⬝ᵥ v
-    simp [star_mulVec, ← dotProduct_mulVec, ← U.inv_val_eq_conjTranspose]
-  have h_mem : g • v ∈ (stdLattice E n).map (DistribSMul.toAddMonoidHom (n → 𝔸f E) g) ↔
-      v ∈ stdLattice E n :=
-    AddSubgroup.mem_map_iff_mem (MulAction.injective g)
-  rw [h_mem, mem_stdLattice_iff_selfDualAddChar]
-  simp [h_dot]
-
-/-- The lattice `L' = zeroTermLattice D` is unimodular: it consists of the `w` with
-`selfDualAddChar E (x* w) = 1` for all `x` in `L'`. -/
-lemma mem_zeroTermLattice_iff_selfDualAddChar (D : V.Splitting V₀ p) {w : n₀ → 𝔸f E} :
-    w ∈ zeroTermLattice D ↔ ∀ x ∈ zeroTermLattice D, selfDualAddChar E (star x ⬝ᵥ w) = 1 := by
-  obtain ⟨g, hg⟩ := exists_zeroTermLattice_eq_map D
-  simpa only [hg] using mem_map_stdLattice_iff_selfDualAddChar g
-
-/-- If `L' = zeroTermLattice D` contains the image of the standard lattice under a unitary element,
-the two lattices are equal, because each is its own dual. -/
-lemma zeroTermLattice_eq_map_of_le (D : V.Splitting V₀ p) {g : Gf E n₀}
-    (h_le : (stdLattice E n₀).map (DistribSMul.toAddMonoidHom (n₀ → 𝔸f E) g) ≤
-      zeroTermLattice D) :
-    zeroTermLattice D = (stdLattice E n₀).map (DistribSMul.toAddMonoidHom (n₀ → 𝔸f E) g) :=
-  le_antisymm (fun _ hw ↦ (mem_map_stdLattice_iff_selfDualAddChar g).2 fun x hx ↦
-    (mem_zeroTermLattice_iff_selfDualAddChar D).1 hw x (h_le hx)) h_le
-
-/-- For `g` unitary and `Λ` the standard lattice, `g Λ ∩ Λ` has finite index in `g Λ`. -/
-lemma relIndex_map_stdLattice_ne_zero (g : Gf E n) :
-    (stdLattice E n).relIndex
-      ((stdLattice E n).map (DistribSMul.toAddMonoidHom (n → 𝔸f E) g)) ≠ 0 := by
-  -- The index is the squared norm of the nonzero number `finMultiplier g`.
-  intro h_zero
-  have h_norm : ‖finMultiplier g‖ ^ 2 = (stdLattice E n).relIndex
-      ((stdLattice E n).map (DistribSMul.toAddMonoidHom (n → 𝔸f E) g)) := by
-    rw [norm_finMultiplier_sq, AddSubgroup.relIndex_comap]
-    rfl
-  simp [h_zero, finMultiplier_ne_zero] at h_norm
-
-/-- Let `D` be a splitting of `V` over `V₀`, with embedding `i = D.iFin` and isotropic frame
-`k = D.isotropicBasisFin`. Let `L' = zeroTermLattice D` be the lattice of the `w` with
-`i w + k b ∈ Ô ^ n` for some `b`, and let the `r a` be representatives of `L'` modulo `L' ∩ Ô ^ n₀`.
-Then `zeroTermFin D` sends the vacuum of `V` to a nonzero multiple of the sum of the finite
-Heisenberg translates of the vacuum of `V₀` by the `r a`. -/
-lemma exists_zeroTermFin_vacElem_eq_sum (D : V.Splitting V₀ p) {R : Type*} [Fintype R]
-    {r : R → n₀ → 𝔸f E} (hr_mem : ∀ a : R, r a ∈ zeroTermLattice D)
-    (hr_rep : ∀ z ∈ zeroTermLattice D, ∃! a : R, z - r a ∈ stdLattice E n₀) :
-    ∃ c ≠ (0 : ℂ), zeroTermFin D V.vacElem = c • ∑ a : R, V₀.finHeisenbergOp (r a) V₀.vacElem := by
-  obtain ⟨g, hg⟩ := exists_zeroTermLattice_eq_map D
-  -- A vector fixed by the translations by `L' = g L°` is a multiple of `ω g` of the vacuum.
-  obtain ⟨C, hC⟩ : ∃ C : ℂ, zeroTermFin D V.vacElem = C • V₀.ω (1, g) V₀.vacElem :=
-    exists_eq_smul_omega_vacElem (zeroTermFin_mem_finitePart D vacElem_mem_finitePart) fun x hx ↦
-      finHeisenbergOp_zeroTermFin_vacElem D (hg.ge ⟨x, hx, rfl⟩)
-  have hC_ne : C ≠ 0 := fun hC_zero ↦ zeroTermFin_vacElem_ne_zero D (by rw [hC, hC_zero, zero_smul])
-  rw [hg] at hr_mem hr_rep
-  obtain ⟨c, hc_ne, hc⟩ := exists_omega_vacElem_eq_sum V₀ hr_mem hr_rep
-  exact ⟨C * c, mul_ne_zero hC_ne hc_ne, by rw [hC, hc, mul_smul]⟩
-
-/-- Let `D : V.Splitting V₀ p` be a splitting: `i = D.iFin` embeds `V₀` in `V` and the columns of
-`k = D.isotropicBasisFin`, indexed by `p`, are an isotropic frame orthogonal to it. Let
-`B = i g + k c` be integral with `g` unitary. Then `zeroTermFin D` sends the vacuum translated by
-`y` to `0` or to a root of unity times the translate by `y₀ = g Bᴴ y` of its value at the vacuum. -/
-lemma exists_zeroTermFin_finHeisenbergOp_eq_smul {D : V.Splitting V₀ p} {g : Gf E n₀}
-    {c : Matrix p n₀ (𝔸f E)} {B : Matrix n n₀ (𝔸f E)}
-    (hB_def : B = D.iFin * (g : Matrix n₀ n₀ (𝔸f E)) + D.isotropicBasisFin * c)
-    (hB : IsIntMatrix (Ô E) B) (y : n → 𝔸f E) :
-    ∃ ζ : ℂ, (ζ = 0 ∨ IsOfFinOrder ζ) ∧
+    (hB : IsIntMatrix (Ô E) B) :
+    ∃ C : ℂ, ∀ y : n → 𝔸f E, ∃ ζ : ℂ, (ζ = 0 ∨ IsOfFinOrder ζ) ∧
       zeroTermFin D (V.finHeisenbergOp y V.vacElem) =
-        ζ • V₀.finHeisenbergOp ((g : Matrix n₀ n₀ (𝔸f E)) *ᵥ Bᴴ *ᵥ y)
-          (zeroTermFin D V.vacElem) := by
+        (ζ * C) • V₀.ω (1, g) (V₀.finHeisenbergOp (Bᴴ *ᵥ y) V₀.vacElem) := by
+  -- For `x ∈ Ô ^ n₀`, `B x = i (g x) + k (c x)` lies in `Ô ^ n` and fixes `V.vacElem`, so `g x`
+  -- fixes `zeroTermFin D V.vacElem`, which is therefore `C • V₀.ω (1, g) V₀.vacElem`.
+  obtain ⟨C, hC⟩ : ∃ C : ℂ, zeroTermFin D V.vacElem = C • V₀.ω (1, g) V₀.vacElem := by
+    refine exists_eq_smul_omega_vacElem (zeroTermFin_mem_finitePart D vacElem_mem_finitePart)
+      fun x hx ↦ ?_
+    have hBx : D.iFin *ᵥ ((g : Matrix n₀ n₀ (𝔸f E)) *ᵥ x) +
+        D.isotropicBasisFin *ᵥ (c *ᵥ x) ∈ stdLattice E n := fun i ↦ by
+      simpa only [hB_def, add_mulVec, ← mulVec_mulVec] using hB.mulVec hx i
+    rw [← zeroTermFin_finHeisenbergOp_finFrameVector D (c *ᵥ x)
+      (finFrameVector_zero D _ _).symm, finHeisenbergOp_vacElem hBx]
+  refine ⟨C, fun y ↦ ?_⟩
   by_cases h_zero : zeroTermFin D (V.finHeisenbergOp y V.vacElem) = 0
-  · exact ⟨0, Or.inl rfl, by rw [h_zero, zero_smul]⟩
+  · exact ⟨0, Or.inl rfl, by simp [-zeroTermFin, h_zero]⟩
   obtain ⟨l, hl, w, b, rfl⟩ := exists_eq_add_of_zeroTermFin_ne_zero D h_zero
-  obtain ⟨ζ, hζ, h_class⟩ : ∃ ζ : ℂ, IsOfFinOrder ζ ∧
-      zeroTermFin D (V.finHeisenbergOp (D.iFin *ᵥ w + D.isotropicBasisFin *ᵥ b + l) V.vacElem) =
-        ζ • V₀.finHeisenbergOp w (zeroTermFin D V.vacElem) :=
-    exists_zeroTermFin_finHeisenbergOp_add D w b hl
-  -- The class `w` differs from `g Bᴴ y` by `x = g Bᴴ l`, an element of `zeroTermLattice D`.
-  let x : n₀ → 𝔸f E := g.val.val *ᵥ Bᴴ *ᵥ l
-  have hx : x ∈ zeroTermLattice D := by
-    have h_int : Bᴴ *ᵥ l ∈ stdLattice E n₀ := hB.conjTranspose.mulVec hl
-    simpa [x, mem_zeroTermLattice_iff hB_def hB] using h_int
-  have h_sum : g.val.val *ᵥ Bᴴ *ᵥ (D.iFin *ᵥ w + D.isotropicBasisFin *ᵥ b + l) = w + x := by
-    rw [mulVec_add, conjTranspose_mulVec_iFin_add_isotropicBasisFin hB_def, mulVec_add]
-    simp [x]
-  refine ⟨ζ * selfDualAddChar E (star traceOneAdele * star x ⬝ᵥ w),
-    Or.inr (hζ.mul (isOfFinOrder_ψf _)), ?_⟩
-  rw [h_class, h_sum, mul_smul, ← V₀.finHeisenbergOp_finHeisenbergOp,
-    finHeisenbergOp_zeroTermFin_vacElem D hx]
+  obtain ⟨ζ₁, hζ₁, h_add⟩ := exists_zeroTermFin_finHeisenbergOp_add D w b hl
+  -- Since `Bᴴ (i w + k b) = g⁻¹ w`, we have `g (Bᴴ (y - l)) = w`, and `Bᴴ l ∈ Ô ^ n₀`.
+  set y₀ : n₀ → 𝔸f E := Bᴴ *ᵥ (D.iFin *ᵥ w + D.isotropicBasisFin *ᵥ b + l)
+  have hw : (g : Matrix n₀ n₀ (𝔸f E)) *ᵥ (y₀ - Bᴴ *ᵥ l) = w := by
+    simp [y₀, mulVec_add, add_sub_cancel_right,
+      conjTranspose_mulVec_iFin_add_isotropicBasisFin hB_def]
+  obtain ⟨ζ₂, hζ₂, h_lat⟩ :=
+    exists_finHeisenbergOp_add_vacElem V₀ (y₀ - Bᴴ *ᵥ l) (hB.conjTranspose.mulVec hl)
+  have h_comm : V₀.finHeisenbergOp ((g : Matrix n₀ n₀ (𝔸f E)) *ᵥ (y₀ - Bᴴ *ᵥ l))
+      (V₀.ω (1, g) V₀.vacElem) =
+      V₀.ω (1, g) (V₀.finHeisenbergOp (y₀ - Bᴴ *ᵥ l) V₀.vacElem) :=
+    (V₀.omega_finHeisenbergOp (1, g) (y₀ - Bᴴ *ᵥ l) V₀.vacElem).symm
+  refine ⟨ζ₁ * ζ₂, Or.inr (hζ₁.mul hζ₂), ?_⟩
+  rw [h_add, hC, map_smul, ← hw, h_comm, h_lat, sub_add_cancel, map_smul, smul_smul, smul_smul,
+    mul_right_comm ζ₁ C ζ₂]
 
 end FiniteZeroTerm
 

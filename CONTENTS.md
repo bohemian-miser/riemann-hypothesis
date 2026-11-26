@@ -107,12 +107,10 @@ The heads of these files give an overview of a theory: `Lib/ClassField/Global/Ar
 - `New/UpperBound/Seesaw/StandardLines` (370): The standard lattice of a graded space, line by line
 - `New/UpperBound/Seesaw/GluedLevel` (88): Congruence levels inside the stabilizer of a glued lattice
 - `New/UpperBound/Seesaw/Sandwich` (163): Bounds for the lattices of points on graded spaces
-- `New/UpperBound/Seesaw/EdgePairEvaluation` (743): Finite zero terms and the evaluation of pairs of edges in the tower of spaces `Y_k`
+- `New/UpperBound/Seesaw/EdgePairEvaluation` (592): Finite zero terms and the evaluation of pairs of edges in the tower of spaces `Y_k`
 - `New/UpperBound/Seesaw/Frequency` (211): The shift at a nonzero constant term maps lattices into lattices
 - `New/UpperBound/Seesaw/LevelIdeles` (76): Valuations of the chosen ideles, and lattices and levels at the chosen places
-- `New/UpperBound/Seesaw/NeighbourLattice` (665): The neighbour lattice of a pair of edges
-- `New/UpperBound/Seesaw/NeighbourVacuum` (227): The vacuum of the neighbour lattice
-- `New/UpperBound/Seesaw/AdmissibleEvaluation` (479): Finite evaluation of edge pairs takes translates of the vacuum to admissible combinations
+- `New/UpperBound/Seesaw/AdmissibleEvaluation` (1126): Placewise local-to-adelic seesaw gluing and admissible evaluation of edge pairs
 - `New/UpperBound/Seesaw/GoodDatum` (373): Evaluated data as admissible combinations of glued translates of the vacuum
 - `New/UpperBound/Seesaw/UnfoldingStages` (781): Unfolding the chain of lifts: double lifts and the functions of the unfolding
 - `New/UpperBound/Seesaw/Cut` (226): The outer variables: finitely many classes, with weights
