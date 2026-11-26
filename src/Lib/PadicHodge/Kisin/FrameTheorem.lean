@@ -20,9 +20,9 @@ element `E = z ^ e * unit + p`, and `k.frobE m` is `φ ^ m E`; `phiInvToBdR 0` i
 A chart (`New.Lift.Chart`) is a `Λ`-algebra map `Λ⟦X⟧ → A_inf`, with `Λ = W(𝔽_{p^f})`. It sends `X`
 to a non-unit Teichmüller lift `z = [ϖ^♭]`. It sends some `X^e V + p`, with `V` a unit, to a
 generator `E` of `ker θ`. `S` is its image. `B⁺` (`New.Period.BPlus`) receives `A_inf` and maps to
-`B_max` (`New.Period.Bmax`) and `B_dR`. Its `S`-subalgebra `S_B` (`New.Lift.Chart.bicommutant`) is
-the `p`-adic closure of `S[E/p]` with `p` inverted
-(`New.Lift.Chart.adjoinEDivPClosure_eq_bicommutant`). Put `μ = [ε] - 1`, with `ε` a compatible
+`B_max` (`New.Period.Bmax`) and `B_dR`. Its `S`-subalgebra `S_B` (`New.Lift.Chart.bicommutant`)
+consists of the elements whose multiplication commutes with every `S`-linear endomorphism of `B⁺`
+preserving the image of `A_max`. Put `μ = [ε] - 1`, with `ε` a compatible
 system of `p`-power roots of unity, and `τ = φ⁻¹ μ`.
 
 * Let `K` be the field fixed by an open subgroup `G_K` of `Gal(ℚ̄_p/ℚ_p)`. There is a Kummer chart
@@ -895,8 +895,7 @@ some power of `tau` = [ε^{1/p}] − 1 multiplies `x` into `ainfLattice`, the A_
 with y in L. Second, for some `n` and every `μ` in `crysForms` (the invariant A_inf-linear
 functionals to B_dR whose restriction to 1 ⊗ L comes from a Z_p-linear map L → B_max), `E ^ n • μ x`
 is the image in `BdR` of an element of `bicommutant`, the elements of B^+ = A_max[1/p] whose
-multiplication commutes with every S-linear endomorphism of B^+ preserving the image of A_max, which
-equals `adjoinEDivPClosure` by `Chart.adjoinEDivPClosure_eq_bicommutant`. -/
+multiplication commutes with every S-linear endomorphism of B^+ preserving the image of A_max. -/
 theorem mem_kisinModule_iff_crysForms {x : L.Ambient} :
     x ∈ L.kisinModule ↔ x ∈ saturateBy (Submonoid.powers tau) L.ainfLattice ∧
       ∃ n : ℕ, ∀ μ ∈ L.crysForms, ∃ s ∈ k.bicommutant,

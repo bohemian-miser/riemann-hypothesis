@@ -4,6 +4,12 @@ public import Lib.PadicHodge.PeriodRings.AxTheorem
 public import TauCeti.RingTheory.Perfectoid.Cyclotomic
 public import TauCeti.RingTheory.Perfectoid.Padic
 
+import TauCeti.NumberTheory.Padics.Cardinality
+import TauCeti.RingTheory.AdicCompletion.Perfection
+import TauCeti.RingTheory.WittVector.Complete
+import TauCeti.RingTheory.WittVector.PadicConstants
+import TauCeti.RingTheory.WittVector.Units
+
 /-!
 # The ring A_inf, the elements ε, μ, τ, ξ, the kernel of θ and adic completeness
 
@@ -60,13 +66,8 @@ open MulSemiringAction Variety Polynomial PreTilt IsOfFinOrder nonZeroDivisors W
   NeZero Ideal.Quotient Fact ZMod ValuationRing Cardinal Complex IsPrimitiveRoot
 
 /-- The complex numbers and the algebraic closure of ℚ_p have the same cardinality. -/
-lemma _root_.New.mk_complex_eq_mk_padicAlgCl {p : ℕ} [Fact p.Prime] : #ℂ = #(PadicAlgCl p) := by
-  -- `PadicAlgCl p` is algebraic over `ℚ_[p]`, a quotient of a set of rational sequences, so it has
-  -- at most continuum many elements
-  have h_padic : #ℚ_[p] ≤ continuum := mk_quotient_le.trans ((mk_subtype_le _).trans (by simp))
-  refine mk_complex.trans ((continuum_le_cardinal_of_module ℚ_[p] _).antisymm ?_)
-  exact (Algebra.IsAlgebraic.cardinalMk_le_max ℚ_[p] (PadicAlgCl p)).trans
-    (max_le h_padic aleph0_le_continuum)
+lemma _root_.New.mk_complex_eq_mk_padicAlgCl {p : ℕ} [Fact p.Prime] : #ℂ = #(PadicAlgCl p) :=
+  mk_complex.trans (TauCeti.Padic.cardinalMk_eq_continuum_of_isAlgebraic p (PadicAlgCl p)).symm
 
 variable {p : ℕ} [ThePrime p]
 
@@ -367,17 +368,19 @@ lemma OFlat.mk_untiltRoot : ↑(untiltRoot n x) = x.coeff n := by simp [untiltRo
 
 open algebraMap
 
+/-- The `ℤ_p`-algebra map into `W(R)` is Tau Ceti's `padicConstants`. -/
+private lemma algebraMap_padicInt_eq_padicConstants {R : Type*} [CommRing R] [CharP R p]
+    (a : ℤ_[p]) :
+    algebraMap ℤ_[p] (WittVector p R) a = TauCeti.WittVector.padicConstants p R a :=
+  (TauCeti.WittVector.padicConstants_apply a).symm
+
 /-- For a ring homomorphism f : R → S of rings of characteristic p, the induced map W(f) of Witt
 vectors commutes with the maps from ℤ_p. -/
 lemma wittVector_map_algebraMap [CharP S p] (f : R →+* S) (a : ℤ_[p]) :
     WittVector.map (p := p) f a = algebraMap ℤ_[p] (WittVector p S) a := by
-  -- Both sides are `W` of a ring map `𝔽_p → S` applied to `a` in `W(𝔽_p) = ℤ_p`, and any two ring
-  -- maps out of `𝔽_p` agree.
-  have h_comp : f.comp (castHom dvd_rfl R) = castHom dvd_rfl S := (f.comp _).ext_zmod _
-  change WittVector.map f (WittVector.map (castHom dvd_rfl R) ((equiv p).symm a)) =
-    WittVector.map (castHom dvd_rfl S) ((equiv p).symm a)
-  ext i
-  simp [← h_comp]
+  change WittVector.map f (algebraMap ℤ_[p] (WittVector p R) a) = _
+  rw [algebraMap_padicInt_eq_padicConstants, algebraMap_padicInt_eq_padicConstants]
+  exact TauCeti.WittVector.map_padicConstants f a
 
 instance [MulSemiringAction M R] : SMulCommClass M ℤ_[p] (WittVector p R) :=
   ⟨fun _ ↦ map_smul (AlgHom.mk _ (wittVector_map_algebraMap _))⟩
@@ -449,7 +452,7 @@ omit [PerfectRing k p] in
 /-- A Witt vector `a` in W(k), for `k` of characteristic `p`, is a unit if and only if its zeroth
 coordinate is a unit in k. -/
 lemma Ainf.isUnit_iff_isUnit_constantCoeff : IsUnit a ↔ IsUnit (constantCoeff a) :=
-  ⟨fun h ↦ h.map constantCoeff, fun h ↦ ⟨mkUnit h.unit_spec.symm, rfl⟩⟩
+  WittVector.isUnit_iff_isUnit_coeff_zero
 
 /-- Let `F`, `G` be ring endomorphisms of a perfect ring `k` of characteristic `p` and `s₀` the
 reduction of `s ∈ W(k)` modulo `p`. If `x ↦ F x - s₀ * G x` is onto `k`, then
@@ -621,18 +624,8 @@ a `p`-adic integer. -/
 lemma exists_algebraMap_eq_of_frobenius_eq {k : Type*} [CommRing k] [IsDomain k] [CharP k p]
     (a : WittVector p k) (h_frobenius : WittVector.frobenius a = a) :
     ∃ c : ℤ_[p], algebraMap ℤ_[p] (WittVector p k) c = a := by
-  -- Every coordinate is a root of `X ^ p - X`, which splits over `ZMod p`; as `k` is a domain, the
-  -- coordinate comes from `ZMod p`.
-  have h_coeff_mem (n : ℕ) : ∃ z : ZMod p, castHom dvd_rfl k z = a.coeff n := by
-    have h_root : a.coeff n ^ p = a.coeff n := by rw [← coeff_frobenius_charP, h_frobenius]
-    exact (Polynomial.splits_X_pow_char_sub_X (ZMod p) p).mem_range_of_isRoot
-      (Polynomial.X_pow_sub_X_ne_zero (Fact.out : p.Prime).one_lt)
-      (by simpa [sub_eq_zero] using h_root)
-  choose z hz using h_coeff_mem
-  -- The Witt vector over `ZMod p` with coordinates `z` is a `p`-adic integer.
-  refine ⟨equiv p (WittVector.mk p z), ?_⟩
-  ext n
-  simp [algebraMap_toAlgebra, hz]
+  simpa only [algebraMap_padicInt_eq_padicConstants, ← Set.mem_range] using
+    TauCeti.WittVector.frobenius_eq_self_iff.mp h_frobenius
 
 /-- The Frobenius `φ` is bijective on `A_inf`, because `O^♭` is a perfect ring. -/
 lemma frobEnd_bijective : Bijective (frobEnd : Ainf → Ainf) := by
@@ -775,62 +768,22 @@ lemma OFlat.exists_dvd_pow {u : OFlat} (hu : ¬IsUnit u) (ht : t ≠ 0) : ∃ n 
 
 /-! ### Adic separation of `O^♭` and divisibility by `μ` and `τ` -/
 
-/-- If `r` is nilpotent, then `shiftDiff R r` is bijective on sequences in `R`: it is `1` minus the
-nilpotent operator `r • shift`. -/
-lemma existsUnique_shiftDiff_eq_of_pow_eq_zero {R : Type} [CommRing R] {r : R} {N : ℕ}
-    (hr : r ^ N = 0) (b : ℕ → R) :
-    ∃! a : ℕ → R, shiftDiff R r a = b := by
-  have h_nil : IsNilpotent (r • LinearMap.funLeft R R Nat.succ : Module.End R (ℕ → R)) :=
-    ⟨N, by simp [smul_pow, hr]⟩
-  -- `shiftDiff R r` is the unit `1 - r • shift` of `Module.End R (ℕ → R)`
-  exact ((Module.End.isUnit_iff _).mp h_nil.isUnit_one_sub).existsUnique b
-
-/-- If `t ∈ O^♭` is not a unit, then each coordinate `PreTilt.coeff k t` of `t` in `O_C / p` is
-nilpotent. -/
-lemma OFlat.exists_pow_coeff_eq_zero (h : ¬IsUnit t) (k : ℕ) :
-    ∃ N : ℕ, PreTilt.coeff k t ^ N = 0 := by
-  -- With `μ₀` the constant coefficient of `μ = ξ * τ`, some `t ^ N` is divisible by `μ₀ ^ p ^ k`,
-  -- whose `k`-th coordinate is the zeroth one of `μ₀`, that is `θ μ` modulo `p`; and `θ ξ = 0`.
-  obtain ⟨N, hN⟩ : ∃ N : ℕ, constantCoeff mu ^ p ^ k ∣ t ^ N :=
-    exists_dvd_pow h (pow_ne_zero _ constantCoeff_mu_ne_zero)
-  rw [← xi_mul_tau] at hN
-  -- `theta_xi` in the unfolded form that the simplifier meets
-  have h_xi : fontaineTheta OC p xi = 0 := theta_xi
-  refine ⟨N, ?_⟩
-  simpa [OFlat, ← iterate_frobenius, PreTilt.coeff_iterate_frobenius', h_xi,
-    ← mk_fontaineTheta] using map_dvd (PreTilt.coeff k) hN
+/-- `O^♭` is adically complete for the zeroth Witt coordinate `ξ₀` of `ξ`, whose zeroth coordinate
+in `O_C / p` is `θ(ξ) mod p = 0`. -/
+private lemma OFlat.isAdicComplete_span_xi_coeff_zero :
+    IsAdicComplete (span {xi.coeff 0}) OFlat :=
+  Perfection.isAdicComplete_span_singleton_of_coeff_zero_eq_zero <| by
+    change PreTilt.coeff 0 (xi.coeff 0) = 0
+    rw [← mk_fontaineTheta, show fontaineTheta OC p xi = 0 from theta_xi, map_zero]
 
 /-- If `t ∈ O^♭` is not a unit, then `O^♭` is `t`-adically separated. -/
 lemma OFlat.isHausdorff_span_singleton_of_not_isUnit (h : ¬IsUnit t) :
     IsHausdorff (span {t}) OFlat := by
-  -- An element `x` divisible by all powers of `t` has all coordinates zero, since each coordinate
-  -- of `t` is nilpotent.
-  choose N hN using exists_pow_coeff_eq_zero h
-  refine ⟨fun x hx ↦ Perfection.ext fun k ↦ ?_⟩
-  have h_coeff_dvd : PreTilt.coeff k (t ^ N k) ∣ PreTilt.coeff k (x - 0) :=
-    map_dvd (PreTilt.coeff k) ((TauCeti.sModEq_span_singleton_pow_iff ..).mp (hx (N k)))
-  rw [map_pow, hN k, zero_dvd_iff, sub_zero] at h_coeff_dvd
-  exact h_coeff_dvd.trans (map_zero (PreTilt.coeff k)).symm
-
-/-- If `t ∈ O^♭` is not a unit, then the map `(x_j) ↦ (x_j - t x_{j+1})` on sequences in `O^♭` is
-surjective. -/
-lemma OFlat.shiftDiff_surjective_of_not_isUnit (h : ¬IsUnit t) :
-    Surjective (shiftDiff OFlat t) := by
-  -- Solve the equation in each coordinate, where `t` is nilpotent; by uniqueness the solutions
-  -- are compatible under Frobenius, so they form a sequence in `O^♭`.
-  intro b
-  choose N hN using exists_pow_coeff_eq_zero h
-  have h_exists (k : ℕ) : ∃! u : ℕ → ModP OC p,
-      shiftDiff (ModP OC p) (PreTilt.coeff k t) u = fun n ↦ PreTilt.coeff k (b n) :=
-    existsUnique_shiftDiff_eq_of_pow_eq_zero (hN k) _
-  choose u hu h_unique using h_exists
-  have h_frob (k : ℕ) : u (k + 1) ^ p = u k := by
-    apply h_unique k
-    -- raise the equation for `k + 1` to the power `p`
-    simpa [funext_iff, shiftDiff, sub_pow_char, mul_pow] using congrArg (· ^ p) (hu (k + 1))
-  -- for each `n`, the coordinates `u k n` form an element of the tilt
-  let y : ℕ → OFlat := fun n ↦ ⟨fun k ↦ u k n, fun k ↦ congrFun (h_frob k) n⟩
-  exact ⟨y, funext fun n ↦ Perfection.ext fun k ↦ congrFun (hu k) n⟩
+  -- Some power of `t` is divisible by the nonzero element `ξ₀`, for which `O^♭` is complete.
+  have := OFlat.isAdicComplete_span_xi_coeff_zero (p := p)
+  obtain ⟨N, hN⟩ := OFlat.exists_dvd_pow h (mt p_dvd_iff.mpr not_p_dvd_xi)
+  exact IsHausdorff.of_pow_le (I := span {xi.coeff 0})
+    (by rwa [span_singleton_pow, span_singleton_le_span_singleton])
 
 /-- Let `a ∈ A_inf` be killed by `θ ∘ φ ^ j` for every `j`, write `x₀` for the constant coefficient
 in `O^♭` of `x ∈ A_inf`, and let `μ₀ = a₀ * c` with `c ∈ O^♭`. Then `c ^ p ^ n` divides `μ₀` for
@@ -953,26 +906,6 @@ lemma dvd_of_forall_exists_sub_mem_span_pow (ha : ¬IsUnit a) (hc : ¬IsUnit c) 
     have h_δx : δ * x ∈ span {↑(p ^ m), δ} := mul_mem_right x _ (subset_span (by simp))
     exact (Submodule.sub_mem_iff_left _ h_δx).mp (hN hx)
 
-/-- For a non-unit `a`, the map `(x j) ↦ (x j - a * x (j + 1))` on sequences in `A_inf` is onto. -/
-lemma Ainf.shiftDiff_surjective (h : ¬IsUnit a) : Surjective (shiftDiff Ainf a) := by
-  -- View sequences in `Ainf` as Witt vectors over `ℕ → OFlat` and apply
-  -- `Witt.exists_map_sub_mul_map_eq` with the identity and the shift: modulo `p` the equation is
-  -- the one solved in `OFlat.shiftDiff_surjective_of_not_isUnit`.
-  intro b
-  have h_perfect : PerfectRing (ℕ → OFlat) p := ⟨(bijective_frobenius _ p).comp_left⟩
-  let shift : (ℕ → OFlat) →+* (ℕ → OFlat) := .pi fun n ↦ evalRingHom _ (n + 1)
-  have h_mod_p : Surjective (shiftDiff OFlat (constantCoeff a)) :=
-    OFlat.shiftDiff_surjective_of_not_isUnit (mt isUnit_iff_isUnit_constantCoeff.mpr h)
-  -- the Witt vector over `ℕ → O^♭` whose `i`-th coordinate is `n ↦ (b n).coeff i`
-  let B : WittVector p (ℕ → OFlat) := WittVector.mk p fun i n ↦ (b n).coeff i
-  obtain ⟨y, hy⟩ := exists_map_sub_mul_map_eq (a := B) 1 shift
-    (algebraMap Ainf (WittVector p (ℕ → OFlat)) a) h_mod_p
-  -- the components of the solution `y` form the required sequence
-  refine ⟨fun n ↦ y.map (evalRingHom _ n), funext fun n ↦ ?_⟩
-  -- the `n`-th component of `hy` is the `n`-th equation `y n - a * y (n + 1) = b n`; the two sides
-  -- agree only after unfolding `WittVector.map` coordinatewise, hence `using!`
-  simpa [B] using! congrArg (WittVector.map (evalRingHom _ n)) hy
-
 /-- `ξ` is a prime element of `A_inf`: it generates the kernel of `θ`, whose target `O_C` is a
 domain. -/
 lemma Ainf.prime_xi : Prime xi :=
@@ -996,30 +929,43 @@ lemma smul_xi_mem_span : m • xi ∈ span {↑p, xi} := by
   rw [mem_span_pair_iff, h_act, constantCoeff_iterate_frobEnd]
   exact dvd_pow (map_dvd constantCoeff h_xi_dvd) (pow_ne_zero _ (Fact.out : p.Prime).ne_zero)
 
+/-- `A_inf = W(O^♭)` is `(p, [ξ₀])`-adically complete, because `O^♭` is `ξ₀`-adically complete. -/
+private lemma Ainf.isAdicComplete_span_p_teichmuller_xi :
+    IsAdicComplete (span {(p : Ainf), teichmuller p (xi.coeff 0)}) Ainf := by
+  have := OFlat.isAdicComplete_span_xi_coeff_zero (p := p)
+  exact WittVector.isAdicComplete_span_p_teichmuller (xi.coeff 0)
+
+/-- If `a` is a non-unit of `A_inf`, then `A_inf` is `a`-adically complete and separated. -/
+lemma Ainf.isAdicComplete_span_singleton (h : ¬IsUnit a) : IsAdicComplete (span {a}) Ainf := by
+  -- A positive power `a ^ (n + 1)` lies in `(p, [ξ₀])`, so `A_inf` is complete for `(a ^ (n + 1))`
+  -- by Tau Ceti's principal-subideal completeness, and `(a)` is cofinal with `(a ^ (n + 1))`.
+  have := Ainf.isAdicComplete_span_p_teichmuller_xi (p := p)
+  have hδ : ¬(p : Ainf) ∣ teichmuller p (xi.coeff 0) := by
+    simpa [p_dvd_iff] using mt p_dvd_iff.mpr not_p_dvd_xi
+  obtain ⟨n, hn⟩ := mem_radical_of_not_isUnit h hδ
+  have hn' : a ^ (n + 1) ∈ span {(p : Ainf), teichmuller p (xi.coeff 0)} := by
+    rw [pow_succ]
+    exact mul_mem_right a _ hn
+  have : IsAdicComplete (span {a ^ (n + 1)}) Ainf := IsAdicComplete.span_singleton_of_mem hn'
+  exact IsAdicComplete.of_pow_le_of_pow_le (I := span {a ^ (n + 1)}) (k := n + 1) (l := 1)
+    (by rw [span_singleton_pow])
+    (by rw [pow_one, span_singleton_le_span_singleton]; exact dvd_pow_self a n.succ_ne_zero)
+
 /-- If a and c are non-units of A_inf, then A_inf is complete and separated for the adic
 topology of the ideal (a, c). -/
 lemma Ainf.isAdicComplete_span_pair (ha : ¬IsUnit a) (hc : ¬IsUnit c) :
     IsAdicComplete (span {a, c}) Ainf := by
-  -- Limits exist because `shiftDiff` is onto for both generators.
-  refine { isPrecomplete_of_shiftDiff_surjective
-    (shiftDiff_surjective ha) (shiftDiff_surjective hc) with haus' := fun x hx ↦ ?_ }
-  -- Separation: write a nonzero `x` in all powers of `(a, c)` as `p ^ n * y` with `p ∤ y`.
-  by_contra hx₀
-  obtain ⟨n, y, hy, rfl⟩ : ∃ (n : ℕ) (y : Ainf), y.coeff 0 ≠ 0 ∧ x = ↑p ^ n * y :=
-    exists_eq_pow_p_mul x hx₀
-  have hy_p : ¬↑p ∣ y := by rwa [p_dvd_iff]
-  have hδ : ¬↑p ∣ xi * y := prime_p.not_dvd_mul not_p_dvd_xi hy_p
-  -- `0` approximates `x` to every order, so any `δ` with `p ∤ δ` divides `x`; take `δ = ξ * y`
-  have h_mem (m : ℕ) : ↑p ^ n * y - xi * y * 0 ∈ span {a, c} ^ m := by simpa [zero] using hx m
-  have h_dvd : xi * y ∣ ↑p ^ n * y := dvd_of_forall_exists_sub_mem_span_pow ha hc hδ fun m ↦
-    ⟨0, h_mem m⟩
-  -- cancelling `y` gives `ξ ∣ p ^ n`, that is `θ (p ^ n) = 0`, which is false
-  have h_xi : xi ∣ ↑p ^ n := (mul_dvd_mul_iff_right (right_ne_zero_of_mul hx₀)).mp h_dvd
-  have h_theta : theta (↑p ^ n) = 0 := theta_eq_zero_iff_xi_dvd.mpr h_xi
-  exact pow_ne_zero n (NeZero.ne (p : OC)) (by simpa using h_theta)
-
-lemma Ainf.isAdicComplete_span_singleton (h : ¬IsUnit a) : IsAdicComplete (span {a}) Ainf := by
-  simpa using isAdicComplete_span_pair h h
+  -- Separation follows from `(a, c) ^ N ≤ (p, [ξ₀])`, and precompleteness from `a`- and `c`-adic
+  -- completeness via `isPrecomplete_of_shiftDiff_surjective`.
+  have := Ainf.isAdicComplete_span_p_teichmuller_xi (p := p)
+  have := Ainf.isAdicComplete_span_singleton ha
+  have := Ainf.isAdicComplete_span_singleton hc
+  have hδ : ¬(p : Ainf) ∣ teichmuller p (xi.coeff 0) := by
+    simpa [p_dvd_iff] using mt p_dvd_iff.mpr not_p_dvd_xi
+  have h_rad : span {a, c} ≤ radical (span {(p : Ainf), teichmuller p (xi.coeff 0)}) :=
+    span_le.mpr (pair_subset (mem_radical_of_not_isUnit ha hδ) (mem_radical_of_not_isUnit hc hδ))
+  obtain ⟨N, hN⟩ := exists_pow_le_of_le_radical_of_fg h_rad (Submodule.fg_span (by simp))
+  exact { IsHausdorff.of_pow_le hN, isPrecomplete_of_shiftDiff_surjective Fact.out Fact.out with }
 
 /-- `A_inf` is complete and separated for the `(p, ξ)`-adic topology. -/
 instance : IsAdicComplete (span {↑p, xi}) Ainf :=

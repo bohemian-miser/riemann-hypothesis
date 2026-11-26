@@ -2,6 +2,8 @@ module
 
 public import Lib.PadicHodge.PeriodRings.DeRhamPeriods
 
+import TauCeti.RingTheory.PowerSeries.AdicComplete
+
 /-!
 # Power series charts Λ⟦z⟧ in A_inf: Weierstrass division and fixed elements
 
@@ -354,40 +356,31 @@ lemma exists_eq_const_add_z_mul (s : c.S) :
   conv_lhs => rw [F.eq_X_mul_shift_add_const]
   rw [map_add, map_mul, seriesEquiv_X, C_eq_algebraMap, AlgEquiv.commutes, add_comm]
 
-/-- The ideal `(p, z)` of the ring `S` of a chart is maximal. -/
-instance : c.maxIdeal.IsMaximal := by
-  -- The maximal ideal of the power series ring is `(p, X)`; transport it along `c.seriesEquiv`.
+/-- The chart isomorphism `Λ⟦X⟧ ≃ₐ[Λ] S` carries the maximal ideal `(p, X)` of `Λ⟦X⟧` onto
+`c.maxIdeal = (p, z)`. -/
+private lemma map_maximalIdeal_seriesEquiv :
+    (maximalIdeal (WittFq c.f)⟦X⟧).map c.seriesEquiv = c.maxIdeal := by
   have h_const :
       span {(p : WittFq c.f)} = (maximalIdeal (WittFq c.f)⟦X⟧).map PowerSeries.constantCoeff := by
     rw [map_maximalIdeal_of_surjective _ constantCoeff_surj, (irreducible p).maximalIdeal_eq]
   have h_max : maximalIdeal (WittFq c.f)⟦X⟧ = span {X, C (p : WittFq c.f)} := by
     simpa using eq_span_insert_X_of_X_mem_of_span_eq prime_X.not_isUnit h_const
-  have h_map : (maximalIdeal (WittFq c.f)⟦X⟧).map c.seriesEquiv = c.maxIdeal := by
-    simp [h_max, pair_comm X, map_span, seriesEquiv_X]
-  rw [← h_map]
-  exact map_isMaximal_of_equiv c.seriesEquiv
+  simp [h_max, pair_comm X, map_span, seriesEquiv_X]
+
+/-- The ideal `(p, z)` of the ring `S` of a chart is maximal. -/
+instance : c.maxIdeal.IsMaximal :=
+  c.map_maximalIdeal_seriesEquiv ▸ map_isMaximal_of_equiv c.seriesEquiv
 
 /-- The ring `S` of a chart is complete and separated for its maximal ideal `(p, z)`. -/
 instance : IsAdicComplete c.maxIdeal c.S := by
-  -- `S` is a Noetherian domain, so it is separated by Krull's intersection theorem.
-  have haus : IsHausdorff c.maxIdeal c.S := by
-    have h_noetherian : IsNoetherianRing c.S := isNoetherianRing_range c.seriesMap.toRingHom
-    exact .of_isDomain c.maxIdeal IsPrime.ne_top'
-  -- Limits exist in power series, as `shiftDiff` is surjective both for `p` and for `X`.
-  have precomplete : IsPrecomplete (span {(p : (WittFq c.f)⟦X⟧), X}) (WittFq c.f)⟦X⟧ := by
-    refine isPrecomplete_of_shiftDiff_surjective (fun b ↦ ?_) out
-    -- For `p`, solve the equations coefficient by coefficient.
-    have h_solve (n : ℕ) : ∃ a : ℕ → WittFq c.f,
-        shiftDiff (WittFq c.f) (p : WittFq c.f) a = fun j ↦ PowerSeries.coeff n (b j) :=
-      (out : (shiftDiff (WittFq c.f) (p : WittFq c.f)).Surjective) _
-    choose a ha using h_solve
-    refine ⟨fun j ↦ .mk fun n ↦ a n j, funext fun j ↦ PowerSeries.ext fun n ↦ ?_⟩
-    simpa [shiftDiff, ← nsmul_eq_mul] using congrFun (ha n) j
-  have h_map : (span {(p : (WittFq c.f)⟦X⟧), X}).map c.seriesEquiv.toRingEquiv = c.maxIdeal := by
-    simp [map_span, seriesEquiv_X]
-  refine (isAdicComplete_iff c.maxIdeal c.S).mpr ⟨haus, ?_⟩
-  rw [← h_map]
-  exact (IsPrecomplete.congr_ringEquiv _ c.seriesEquiv.toRingEquiv).mpr precomplete
+  -- `WittFq c.f` is complete for its maximal ideal `(p)`, hence `(WittFq c.f)⟦X⟧` is complete for
+  -- its maximal ideal `(p, X)` (`PowerSeries.isAdicComplete_maximalIdeal`), and `c.seriesEquiv`
+  -- transports this to `c.maxIdeal`.
+  have : IsAdicComplete (maximalIdeal (WittFq c.f)) (WittFq c.f) := by
+    rw [(irreducible p).maximalIdeal_eq]
+    infer_instance
+  exact c.map_maximalIdeal_seriesEquiv ▸
+    (IsAdicComplete.congr_ringEquiv _ c.seriesEquiv.toRingEquiv).mpr inferInstance
 
 /-- The `m`-th power of the maximal ideal `(p, z)` of `S`, acting on `Ainf`, is the `m`-th power of
 the ideal `(p, z)` of `Ainf`, seen as an `S`-submodule. -/
