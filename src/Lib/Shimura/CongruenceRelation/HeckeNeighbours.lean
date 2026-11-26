@@ -359,12 +359,14 @@ variable {d₀ : ℕ} [HasQuadSubfield d₀ E] {V : Type} [CommRing V]
   {y y' : ThetaObject X (Spec (CommRingCat.of V))} {e : y.FullLevelStructure}
   {e' : y'.FullLevelStructure} {ψ : y.groupScheme ⟶ y'.groupScheme} {w : SplitFinPlace E}
   {C : Submodule (ResField w.val) (D.Index → ResField w.val)}
+  (hψ : ∀ v : D.Index → 𝔸f E, e.torsionPoint (torsionClass v) ≫ ψ =
+    e'.torsionPoint (torsionClass ((invHeckeIsogeny w C)⁻¹.val *ᵥ v)))
+
+include hψ
 
 /-- If `ψ` acts on torsion sections by `(invHeckeIsogeny w C)⁻¹` and `w` is safe for the level,
 then `ψ` respects the level points. -/
 lemma torsionPoint_comp_eq_of_mem_levelTorsion
-    (hψ : ∀ v : D.Index → 𝔸f E, e.torsionPoint (torsionClass v) ≫ ψ =
-      e'.torsionPoint (torsionClass ((invHeckeIsogeny w C)⁻¹.val *ᵥ v)))
     (h_safe : IsSafe D.level w.val) {s : AdelicTorsion E D.Index} (hs : s ∈ D.levelTorsion) :
     e.torsionPoint s ≫ ψ = e'.torsionPoint s := by
   induction s using torsionClass_induction with | _ v => ?_
@@ -373,8 +375,6 @@ lemma torsionPoint_comp_eq_of_mem_levelTorsion
 /-- If `ψ` acts on torsion sections by `(invHeckeIsogeny w C)⁻¹`, then `q ^ dim C` kills each
 torsion class whose section `ψ` kills, where `q` is the norm of `w`. -/
 lemma nsmul_eq_zero_of_torsionPoint_comp_eq_zero
-    (hψ : ∀ v : D.Index → 𝔸f E, e.torsionPoint (torsionClass v) ≫ ψ =
-      e'.torsionPoint (torsionClass ((invHeckeIsogeny w C)⁻¹.val *ᵥ v)))
     {s : AdelicTorsion E D.Index} (hs : e.torsionPoint s ≫ ψ = 0) :
     w.val.q ^ finrank (ResField w.val) C • s = 0 := by
   induction s using torsionClass_induction with | _ v => ?_
@@ -386,8 +386,6 @@ lemma nsmul_eq_zero_of_torsionPoint_comp_eq_zero
 `D.β - b ∈ w` coprime to its conjugate. A torsion class killed by a power of `D.β - b` whose
 section `ψ` kills is `w`-torsion. -/
 lemma mem_torsionBySet_of_pow_smul_eq_zero_of_torsionPoint_comp_eq_zero
-    (hψ : ∀ v : D.Index → 𝔸f E, e.torsionPoint (torsionClass v) ≫ ψ =
-      e'.torsionPoint (torsionClass ((invHeckeIsogeny w C)⁻¹.val *ᵥ v)))
     (hβ : D.β = algebraMap (𝓞 (QuadField d₀)) (𝓞 E) (betaK d₀)) (h_safe : IsSafe D.level w.val)
     {b : ℤ} (h_cop : IsCoprime (D.β - b) (star D.β - b)) (hb : D.β - b ∈ w.val.asIdeal)
     {s : AdelicTorsion E D.Index} {N : ℕ} (hN : (D.β - b) ^ N • s = 0)
@@ -403,12 +401,7 @@ lemma mem_torsionBySet_of_pow_smul_eq_zero_of_torsionPoint_comp_eq_zero
 `D.β - b ∈ w` coprime to its conjugate. Then `ψ` respects the level points, `q ^ dim C` kills the
 torsion of its kernel, and the part of that torsion killed by a power of `D.β - b` is
 `w`-torsion. -/
-lemma torsionPoint_comp_of_heckeIsogeny {d₀ : ℕ} [HasQuadSubfield d₀ E] {V : Type} [CommRing V]
-    {y y' : ThetaObject X (Spec (CommRingCat.of V))} {e : y.FullLevelStructure}
-    {e' : y'.FullLevelStructure} {ψ : y.groupScheme ⟶ y'.groupScheme} {w : SplitFinPlace E}
-    {C : Submodule (ResField w.val) (D.Index → ResField w.val)}
-    (hψ : ∀ v : D.Index → 𝔸f E, e.torsionPoint (torsionClass v) ≫ ψ =
-      e'.torsionPoint (torsionClass ((invHeckeIsogeny w C)⁻¹.val *ᵥ v)))
+lemma torsionPoint_comp_of_heckeIsogeny
     (hβ : D.β = algebraMap (𝓞 (QuadField d₀)) (𝓞 E) (betaK d₀)) (h_safe : IsSafe D.level w.val)
     {b : ℤ} (h_cop : IsCoprime (D.β - b) (star D.β - b)) (hb : D.β - b ∈ w.val.asIdeal)
     (s : AdelicTorsion E D.Index) :
@@ -425,12 +418,7 @@ lemma torsionPoint_comp_of_heckeIsogeny {d₀ : ℕ} [HasQuadSubfield d₀ E] {V
 `rep v`, such that an integral matrix kills `σ v` exactly when its reduction at `w` kills `v`. If
 `ψ` acts on torsion sections by `(invHeckeIsogeny w C)⁻¹` and `w` is safe, then `ψ` kills the
 torsion section of `σ v` exactly when `v ∈ C`. -/
-lemma torsionPoint_comp_eq_zero_iff_mem {d₀ : ℕ} [HasQuadSubfield d₀ E] {V : Type} [CommRing V]
-    {y y' : ThetaObject X (Spec (CommRingCat.of V))} {e : y.FullLevelStructure}
-    {e' : y'.FullLevelStructure} {ψ : y.groupScheme ⟶ y'.groupScheme} {w : SplitFinPlace E}
-    {C : Submodule (ResField w.val) (D.Index → ResField w.val)}
-    (hψ : ∀ v : D.Index → 𝔸f E, e.torsionPoint (torsionClass v) ≫ ψ =
-      e'.torsionPoint (torsionClass ((invHeckeIsogeny w C)⁻¹.val *ᵥ v)))
+lemma torsionPoint_comp_eq_zero_iff_mem
     (h_safe : IsSafe D.level w.val) {σ : (D.Index → ResField w.val) →ₗ[𝓞 E] AdelicTorsion E D.Index}
     {rep : (D.Index → ResField w.val) → D.Index → 𝔸f E}
     (hσ_rep : ∀ v : D.Index → ResField w.val, σ v = torsionClass (rep v))
@@ -541,7 +529,11 @@ end Multiplier
 
 section TwistedReduction
 
-variable {V : Type} [CommRing V]
+variable {V : Type} [CommRing V] {π : V →+* k} {l f : ℕ} [Fact l.Prime] [CharP k l]
+  {y y' : ThetaObject X (Spec (CommRingCat.of V))} {x₀ x : ThetaObject X (Spec (CommRingCat.of k))}
+  {hx₀ : x₀.IsPullbackAlong (specMap π) y}
+  {hx : x.IsPullbackAlong (specMap ((iterateFrobenius k l f).comp π)) y'}
+  {ψ : y.groupScheme ⟶ y'.groupScheme} {g : x₀.groupScheme ⟶ x.groupScheme}
 
 /-- The absolute Frobenius `t ↦ t ^ l ^ f` of a `k`-scheme, as a map over `V` between its two
 structures given by `π` followed by the Frobenius of `k` and by `π`. -/
@@ -553,9 +545,6 @@ noncomputable def frobeniusTwist (π : V →+* k) (l : ℕ) [Fact l.Prime] [Char
         (T.hom ≫= by simpa using! comp_absFrobenius f (.mk (𝟙 _)) (𝟙 _))
     simpa [specMap] using! h_frob =≫ specMap π)
   naturality := by simp [absFrobenius_comm, OverMorphism.ext_iff]
-
-variable {π : V →+* k} {l f : ℕ} [Fact l.Prime] [CharP k l]
-  {y y' : ThetaObject X (Spec (CommRingCat.of V))} {x₀ x : ThetaObject X (Spec (CommRingCat.of k))}
 
 open scoped MonoidalCategory in
 /-- Let `x₀` be the reduction of `y` along `π`, and `x` that of `y'` along `π` followed by the
@@ -573,10 +562,6 @@ structure IsTwistedReduction (hx₀ : x₀.IsPullbackAlong (specMap π) y)
   /-- The map `g` sends the reduction of a section `a` to the reduction of `ψ a`. -/
   pullSection_comp (a : 𝟙_ (Over (Spec (CommRingCat.of V))) ⟶ y.groupScheme) :
     hx₀.isGroupBaseChange.pullSection a ≫ g = hx.isGroupBaseChange.pullSection (a ≫ ψ)
-
-variable {hx₀ : x₀.IsPullbackAlong (specMap π) y}
-  {hx : x.IsPullbackAlong (specMap ((iterateFrobenius k l f).comp π)) y'}
-  {ψ : y.groupScheme ⟶ y'.groupScheme} {g : x₀.groupScheme ⟶ x.groupScheme}
 
 variable (hx₀ hx ψ) in
 /-- A linear map `ψ : y ⟶ y'` over `V` has a twisted reduction: a map `g : x₀ ⟶ x` between the
@@ -818,17 +803,20 @@ lemma _root_.New.PEL.IsGoodAt.exists_coprime {w : Ideal (𝓞 E)} (h_good : D.Is
   obtain ⟨-, p, b, -, -, hb, h_cop, -⟩ := h_good
   exact ⟨b, hb, h_cop⟩
 
+section
+
+variable {V : ValuationSubring ℂ} {π : V →+* k} {l : ℕ}
+  {y : ThetaObject X (Spec (CommRingCat.of V))} {w : SplitFinPlace E}
+  {m : Submodule (ResField w.val) (D.Index → ResField w.val) → ℕ}
+
 /-- Let the torsion section of `σ t` reduce to zero at the closed point, and let
 `l ^ m B * q ^ dim B` be the same for all subspaces `B` of `k_wⁿ`. If `A' ⊔ span t = A ⊔ span t`,
 then the number of `v ∈ A` whose section `σ v` reduces to a given `k`-point `a`, weighted by
 `l ^ m A`, equals the same number for `A'`, weighted by `l ^ m A'`. -/
-private lemma pow_mul_sectionCount_eq_of_sup_span_eq {V : ValuationSubring ℂ} {π : V →+* k}
-    {y : ThetaObject X (Spec (CommRingCat.of V))} (e : y.FullLevelStructure) {w : SplitFinPlace E}
+private lemma pow_mul_sectionCount_eq_of_sup_span_eq (e : y.FullLevelStructure)
     (σ : (D.Index → ResField w.val) →ₗ[𝓞 E] AdelicTorsion E D.Index) {t : D.Index → ResField w.val}
     (ht_red : toUnit ((Over.map (specMap π)).obj (specOver k k)) ≫ e.torsionPoint (σ t) = 0)
-    {l : ℕ} {m : Submodule (ResField w.val) (D.Index → ResField w.val) → ℕ}
-    (h_split : ∀ B : Submodule (ResField w.val) (D.Index → ResField w.val),
-      l ^ m B * w.val.q ^ finrank (ResField w.val) B = l ^ m ⊥)
+    (h_split : ∀ B, l ^ m B * w.val.q ^ finrank (ResField w.val) B = l ^ m ⊥)
     {A A' : Submodule (ResField w.val) (D.Index → ResField w.val)}
     (h_sup : A' ⊔ (ResField w.val ∙ t) = A ⊔ (ResField w.val ∙ t))
     (a : (Over.map (specMap π)).obj (specOver k k) ⟶ y.groupScheme) :
@@ -851,6 +839,20 @@ private lemma pow_mul_sectionCount_eq_of_sup_span_eq {V : ValuationSubring ℂ} 
       congrArg (fun B : Submodule (ResField w.val) (D.Index → ResField w.val) ↦ (Φ B).range) h_sup
   rw [h_fibre A, h_fibre A', h_range]
 
+variable [IsAlgClosed k] {d₀ : ℕ} [HasQuadSubfield d₀ E] [Fact l.Prime] [CharP k l]
+  {x₀ : ThetaObject X (Spec (CommRingCat.of k))} {hx₀ : x₀.IsPullbackAlong (specMap π) y}
+  {y' : Submodule (ResField w.val) (D.Index → ResField w.val) →
+    ThetaObject X (Spec (CommRingCat.of V))}
+  {ψ : ∀ B, y.groupScheme ⟶ (y' B).groupScheme} [∀ B, IsIsogeny (ψ B)] [∀ B, IsLinear (ψ B)]
+  {x : Submodule (ResField w.val) (D.Index → ResField w.val) →
+    ThetaObject X (Spec (CommRingCat.of k))}
+  {hx : ∀ B, (x B).IsPullbackAlong (specMap ((iterateFrobenius k l (m B)).comp π)) (y' B)}
+  {g : ∀ B, x₀.groupScheme ⟶ (x B).groupScheme} [∀ B, IsIsogeny (g B)]
+  (hβ : D.β = algebraMap (𝓞 (QuadField d₀)) (𝓞 E) (betaK d₀)) (e : y.FullLevelStructure)
+  (h_rigid₀ : x₀.HasSpanningCoords)
+
+include hβ h_rigid₀
+
 /-- The kernel and rigidity steps of `New.Variety.UniversalFamily.exists_ne_bot_factorsThrough_sup`.
 Here `X` is a theta family of the PEL datum `D` of the CM field `E`, `k` is a field,
 `ψ B : y ⟶ y' B` are linear isogenies respecting the level points, `g B` their twisted reductions,
@@ -860,50 +862,20 @@ of `σ v` exactly when `v ∈ B`, `l ^ M` kills the torsion classes whose sectio
 among them killed by a power of `D.β - b` lie in the range of `σ`, `x₀` is rigid, and each `x B` has
 the map `𝓞 E → k` of `x₀`. If `A`, `A'` have equal weighted section counts, then `x A' = x A`, and
 some `j` with `g A' ≫ j = g A` respects the maps to the family. -/
-private lemma exists_comp_eq_and_eq_of_sectionCount_eq [IsAlgClosed k] {d₀ : ℕ}
-    [HasQuadSubfield d₀ E] (hβ : D.β = algebraMap (𝓞 (QuadField d₀)) (𝓞 E) (betaK d₀))
-    {w : SplitFinPlace E} {V : ValuationSubring ℂ} {π : V →+* k} {l : ℕ} [Fact l.Prime] [CharP k l]
-    {y : ThetaObject X (Spec (CommRingCat.of V))} (e : y.FullLevelStructure)
-    {x₀ : ThetaObject X (Spec (CommRingCat.of k))} {hx₀ : x₀.IsPullbackAlong (specMap π) y}
-    (h_rigid₀ : x₀.HasSpanningCoords) {b : ℤ} (hb : D.β - b ∈ RingHom.ker x₀.baseHom)
-    (h_cop : IsCoprime (D.β - b) (star D.β - b))
+private lemma exists_comp_eq_and_eq_of_sectionCount_eq [∀ B, IsLinear (g B)] {b : ℤ}
+    (hb : D.β - b ∈ RingHom.ker x₀.baseHom) (h_cop : IsCoprime (D.β - b) (star D.β - b))
     {σ : (D.Index → ResField w.val) →ₗ[𝓞 E] AdelicTorsion E D.Index}
     (hσ_inj : Function.Injective σ)
     (hσ_range : σ.range =
-      Submodule.torsionBySet (𝓞 E) (AdelicTorsion E D.Index) (RingHom.ker x₀.baseHom))
-    {m : Submodule (ResField w.val) (D.Index → ResField w.val) → ℕ} {M : ℕ}
-    {y' : Submodule (ResField w.val) (D.Index → ResField w.val) →
-      ThetaObject X (Spec (CommRingCat.of V))}
-    (e' : ∀ B : Submodule (ResField w.val) (D.Index → ResField w.val), (y' B).FullLevelStructure)
-    {ψ : ∀ B : Submodule (ResField w.val) (D.Index → ResField w.val),
-      y.groupScheme ⟶ (y' B).groupScheme}
-    [∀ B : Submodule (ResField w.val) (D.Index → ResField w.val), IsIsogeny (ψ B)]
-    [∀ B : Submodule (ResField w.val) (D.Index → ResField w.val), IsLinear (ψ B)]
-    (h_level : ∀ B : Submodule (ResField w.val) (D.Index → ResField w.val), ∀ s ∈ D.levelTorsion,
-      e.torsionPoint s ≫ ψ B = (e' B).torsionPoint s)
-    (h_tor_killed : ∀ (B : Submodule (ResField w.val) (D.Index → ResField w.val))
-      (s : AdelicTorsion E D.Index), e.torsionPoint s ≫ ψ B = 0 → l ^ M • s = 0)
-    (h_place : ∀ (B : Submodule (ResField w.val) (D.Index → ResField w.val))
-      (s : AdelicTorsion E D.Index) (N : ℕ),
-      (D.β - b) ^ N • s = 0 → e.torsionPoint s ≫ ψ B = 0 → s ∈ σ.range)
-    (h_ker_res : ∀ (B : Submodule (ResField w.val) (D.Index → ResField w.val))
-      (v : D.Index → ResField w.val),
-      e.torsionPoint (σ v) ≫ ψ B = 0 ↔ v ∈ B)
-    {x : Submodule (ResField w.val) (D.Index → ResField w.val) →
-      ThetaObject X (Spec (CommRingCat.of k))}
-    {hx : ∀ B : Submodule (ResField w.val) (D.Index → ResField w.val),
-      (x B).IsPullbackAlong (specMap ((iterateFrobenius k l (m B)).comp π)) (y' B)}
-    {g : ∀ B : Submodule (ResField w.val) (D.Index → ResField w.val),
-      x₀.groupScheme ⟶ (x B).groupScheme}
-    [∀ B : Submodule (ResField w.val) (D.Index → ResField w.val), IsIsogeny (g B)]
-    [∀ B : Submodule (ResField w.val) (D.Index → ResField w.val), IsLinear (g B)]
-    (hg : ∀ B : Submodule (ResField w.val) (D.Index → ResField w.val),
-      IsTwistedReduction hx₀ (hx B) (ψ B) (g B))
-    (hg_cls : ∀ B : Submodule (ResField w.val) (D.Index → ResField w.val),
-      pull (g B).left (x B).lineBundle.picClass = l ^ M • x₀.lineBundle.picClass)
-    (h_rigid : ∀ B : Submodule (ResField w.val) (D.Index → ResField w.val), (x B).HasSpanningCoords)
-    (h_baseHom : ∀ B : Submodule (ResField w.val) (D.Index → ResField w.val),
-      (x B).baseHom = x₀.baseHom)
+      Submodule.torsionBySet (𝓞 E) (AdelicTorsion E D.Index) (RingHom.ker x₀.baseHom)) {M : ℕ}
+    (e' : ∀ B, (y' B).FullLevelStructure)
+    (h_level : ∀ B, ∀ s ∈ D.levelTorsion, e.torsionPoint s ≫ ψ B = (e' B).torsionPoint s)
+    (h_tor_killed : ∀ B s, e.torsionPoint s ≫ ψ B = 0 → l ^ M • s = 0)
+    (h_place : ∀ B s (N : ℕ), (D.β - b) ^ N • s = 0 → e.torsionPoint s ≫ ψ B = 0 → s ∈ σ.range)
+    (h_ker_res : ∀ B v, e.torsionPoint (σ v) ≫ ψ B = 0 ↔ v ∈ B)
+    (hg : ∀ B, IsTwistedReduction hx₀ (hx B) (ψ B) (g B))
+    (hg_cls : ∀ B, pull (g B).left (x B).lineBundle.picClass = l ^ M • x₀.lineBundle.picClass)
+    (h_rigid : ∀ B, (x B).HasSpanningCoords) (h_baseHom : ∀ B, (x B).baseHom = x₀.baseHom)
     {A A' : Submodule (ResField w.val) (D.Index → ResField w.val)}
     (h_count : ∀ a : (Over.map (specMap π)).obj (specOver k k) ⟶ y.groupScheme,
       l ^ m A * sectionCount e (fun v : A ↦ σ v) a =
@@ -943,6 +915,71 @@ private lemma exists_comp_eq_and_eq_of_sectionCount_eq [IsAlgClosed k] {d₀ : �
   exact (hg A).eq_of_conj_pow_smul_factors (hg A') e (e' A) (e' A') (h_level A) (h_level A')
     (h_rigid A) (h_rigid A') (hg_cls A) (hg_cls A') (h_killed A')
     ((h_baseHom A').trans (h_baseHom A).symm) h_cop hν hν'
+
+/-- Given a family of linear Hecke isogenies `ψ B : y ⟶ y' B` with twisted reductions `g B` of
+common multiplier `l ^ m ⊥` onto rigid objects `x B`, at a good and safe split place `w` below
+`x₀.baseHom` with Frobenius exponents `l ^ m B = q ^ (n - dim B)`, there is a nonzero subspace
+`W ≤ k_wⁿ` such that whenever `A' ⊔ W = A ⊔ W`, the targets `x A'` and `x A` coincide and some
+`j` with `g A' ≫ j = g A` respects the maps to the family. -/
+private lemma exists_ne_bot_comp_eq_and_eq_of_heckeIsogeny
+    (h_ker : w.val.asIdeal = RingHom.ker x₀.baseHom) (h_good : D.IsGoodAt w.val.asIdeal)
+    (h_safe : IsSafe D.level w.val)
+    (h_exp : ∀ B, l ^ m B = w.val.q ^ (D.rank - finrank (ResField w.val) B))
+    (h_split : ∀ B, l ^ m B * w.val.q ^ finrank (ResField w.val) B = l ^ m ⊥)
+    (e' : ∀ B, (y' B).FullLevelStructure) (hψ_ρ : ∀ B, (y' B).baseHom = y.baseHom)
+    (hψ_ev : ∀ B (v : D.Index → 𝔸f E), e.torsionPoint (torsionClass v) ≫ ψ B =
+      (e' B).torsionPoint (torsionClass ((invHeckeIsogeny w B)⁻¹.val *ᵥ v)))
+    (hg : ∀ B, IsTwistedReduction hx₀ (hx B) (ψ B) (g B))
+    (hg_cls : ∀ B, pull (g B).left (x B).lineBundle.picClass = l ^ m ⊥ • x₀.lineBundle.picClass)
+    (h_rigid : ∀ B, (x B).HasSpanningCoords) :
+    ∃ W : Submodule (ResField w.val) (D.Index → ResField w.val), W ≠ ⊥ ∧
+      ∀ ⦃A' A : Submodule (ResField w.val) (D.Index → ResField w.val)⦄, A' ⊔ W = A ⊔ W →
+        ∃ j : (x A').groupScheme ⟶ (x A).groupScheme,
+          g A' ≫ j = g A ∧ x A' = x A ∧ j.left ≫ (x A).toFamily.left = (x A').toFamily.left := by
+  -- Goodness gives an integer `b` with `D.β - b ∈ w` coprime to its conjugate.
+  obtain ⟨b, hb, h_cop⟩ := h_good.exists_coprime
+  -- `σ` identifies `k_wⁿ` with the `w`-torsion of `(𝔸_f / Ô)ⁿ`; an integral matrix kills `σ v`
+  -- exactly when its reduction modulo `w` kills `v` (`hσ_ker`).
+  choose σ hσ_inj hσ_range rep hσ_rep hσ_ker using exists_residue_torsion_emb (n := D.Index) w.val
+  -- `ψ C` respects level points, `q ^ dim C` kills the torsion of its kernel, and the part of that
+  -- torsion killed by a power of `D.β - b` is `w`-torsion.
+  choose h_level h_q_kills h_place using fun C ↦
+    torsionPoint_comp_of_heckeIsogeny (hψ_ev C) hβ h_safe h_cop hb
+  rw [← hσ_range] at h_place
+  simp_rw [h_ker] at h_good hb hσ_range
+  -- A nonzero `w`-torsion section `σ t` reduces to zero.
+  obtain ⟨_, ⟨t, rfl⟩, ht_ne, ht_red⟩ : ∃ s ∈ σ.range, s ≠ 0 ∧
+      toUnit (map (specMap π) (specOver k k)) ≫ e.torsionPoint s = 0 := by
+    rw [hσ_range]
+    obtain ⟨-, h_exists_zero, -⟩ := exists_param_pow_card_eq_zero h_good e hx₀
+    exact h_exists_zero
+  have hg_lin (B : Submodule (ResField w.val) (D.Index → ResField w.val)) : IsLinear (g B) :=
+    (hg B).isLinear
+  -- The torsion sections in the kernel of `ψ C`: the `w`-part is `C`, and `l ^ m ⊥` kills them all.
+  have h_ker_res (C : Submodule (ResField w.val) (D.Index → ResField w.val))
+      (v : D.Index → ResField w.val) : e.torsionPoint (σ v) ≫ ψ C = 0 ↔ v ∈ C :=
+    torsionPoint_comp_eq_zero_iff_mem (hψ_ev C) h_safe hσ_rep hσ_ker v
+  have h_tor_killed (C : Submodule (ResField w.val) (D.Index → ResField w.val))
+      (s : AdelicTorsion E D.Index)
+      (hs : e.torsionPoint s ≫ ψ C = 0) : l ^ m ⊥ • s = 0 := by
+    rw [← h_split C, mul_smul, h_q_kills C s hs, smul_zero]
+  -- The twist by `l ^ m B`, a power of `q`, does not change the map `𝓞 E → k`.
+  have h_baseHom (B : Submodule (ResField w.val) (D.Index → ResField w.val)) :
+      (x B).baseHom = x₀.baseHom := by
+    rw [(hx B).baseHom_eq_comp, hψ_ρ, RingHom.comp_assoc, ← hx₀.baseHom_eq_comp,
+      iterateFrobenius_comp_eq_of_ker_eq h_ker (h_exp B)]
+  -- The line `W` is spanned by `t`; adding it does not change the weighted counts of sections.
+  refine ⟨ResField w.val ∙ t, by simpa using ne_zero_of_map ht_ne, fun A' A h_sup ↦ ?_⟩
+  have h_count (a : (Over.map (specMap π)).obj (specOver k k) ⟶ y.groupScheme) :
+      l ^ m A * sectionCount e (fun v : A ↦ σ v) a =
+        l ^ m A' * sectionCount e (fun v : A' ↦ σ v) a :=
+    pow_mul_sectionCount_eq_of_sup_span_eq e σ ht_red h_split h_sup a
+  -- By rigidity the objects `x A'` and `x A` are equal, and some `j` with `g A' ≫ j = g A`
+  -- respects the maps to the family.
+  exact exists_comp_eq_and_eq_of_sectionCount_eq hβ e h_rigid₀ hb h_cop hσ_inj hσ_range e' h_level
+    h_tor_killed h_place h_ker_res hg hg_cls h_rigid h_baseHom h_count
+
+end
 
 end New.Variety
 
@@ -996,23 +1033,7 @@ lemma New.Variety.UniversalFamily.exists_ne_bot_factorsThrough_sup {E k : Type} 
   choose hψ_ρ ψ hψ_isog hψ_lin hψ_cls hψ_ev hψ_π using fun A ↦
     e.exists_isogeny 1 (by simp [ratConj, ModuliPoint.act]) (e' A) (by simp [ModuliPoint.act])
       (invHeckeIsogeny_mem_GUPlus w A).2 isScalarFrame_invHeckeIsogeny
-  -- Goodness gives an integer `b` with `D.β - b ∈ w` coprime to its conjugate.
-  obtain ⟨b, hb, h_cop⟩ := h_good.exists_coprime
-  -- `σ` identifies `k_wⁿ` with the `w`-torsion of `(𝔸_f / Ô)ⁿ`; an integral matrix kills `σ v`
-  -- exactly when its reduction modulo `w` kills `v` (`hσ_ker`).
-  choose σ hσ_inj hσ_range rep hσ_rep hσ_ker using exists_residue_torsion_emb (n := D.Index) w.val
-  -- `ψ C` respects level points, `q ^ dim C` kills the torsion of its kernel, and the part of that
-  -- torsion killed by a power of `D.β - b` is `w`-torsion.
-  choose h_level h_q_kills h_place using fun C ↦
-    torsionPoint_comp_of_heckeIsogeny (hψ_ev C) hβ h_safe h_cop hb
-  rw [← hσ_range] at h_place
-  simp_rw [h_ker, pointOf_hom] at h_good hb hσ_range hx₀
-  -- A nonzero `w`-torsion section `σ t` reduces to zero.
-  obtain ⟨_, ⟨t, rfl⟩, ht_ne, ht_red⟩ : ∃ s ∈ σ.range, s ≠ 0 ∧
-      toUnit (map (specMap π) (specOver k k)) ≫ e.fullStructure.torsionPoint s = 0 := by
-    rw [hσ_range]
-    obtain ⟨-, h_exists_zero, -⟩ := exists_param_pow_card_eq_zero h_good e.fullStructure hx₀
-    exact h_exists_zero
+  rw [pointOf_hom] at hx₀
   -- The reduced isogenies `g B` all have multiplier `l ^ m ⊥ = q ^ n`: a factor `q ^ dim B` from
   -- `ψ B` and `l ^ m B = q ^ (n - dim B)` from Frobenius.
   have h_split (B : Submodule (ResField w.val) (D.Index → ResField w.val)) :
@@ -1020,34 +1041,23 @@ lemma New.Variety.UniversalFamily.exists_ne_bot_factorsThrough_sup {E k : Type} 
     simpa [h_exp] using pow_sub_mul_pow _ B.finrank_le
   choose x hx g hg hg_cls hg_isog using fun B ↦
     exists_isTwistedReduction_isIsogeny hπ hx₀ (ψ B) (hψ_cls B) (h_split B)
-  have hg_lin (B : Submodule (ResField w.val) (D.Index → ResField w.val)) : IsLinear (g B) :=
-    (hg B).isLinear
-  -- The torsion sections in the kernel of `ψ C`: the `w`-part is `C`, and `l ^ m ⊥` kills them all.
-  have h_ker_res (C : Submodule (ResField w.val) (D.Index → ResField w.val))
-      (v : D.Index → ResField w.val) : e.fullStructure.torsionPoint (σ v) ≫ ψ C = 0 ↔ v ∈ C :=
-    torsionPoint_comp_eq_zero_iff_mem (hψ_ev C) h_safe hσ_rep hσ_ker v
-  have h_tor_killed (C : Submodule (ResField w.val) (D.Index → ResField w.val))
-      (s : AdelicTorsion E D.Index)
-      (hs : e.fullStructure.torsionPoint s ≫ ψ C = 0) : l ^ m ⊥ • s = 0 := by
-    rw [← h_split C, mul_smul, h_q_kills C s hs, smul_zero]
-  -- The line `W` is spanned by `t`; adding it does not change the weighted counts of sections.
-  refine ⟨ResField w.val ∙ t, by simpa using ne_zero_of_map ht_ne, fun A' A h_sup ↦ ?_⟩
-  have h_count (a : (Over.map (specMap π)).obj (specOver k k) ⟶ y.groupScheme) :
-      l ^ m A * sectionCount e.fullStructure (fun v : A ↦ σ v) a =
-        l ^ m A' * sectionCount e.fullStructure (fun v : A' ↦ σ v) a :=
-    pow_mul_sectionCount_eq_of_sup_span_eq e.fullStructure σ ht_red h_split h_sup a
-  -- The twist by `l ^ m B`, a power of `q`, does not change the map `𝓞 E → k`.
-  have h_baseHom (B : Submodule (ResField w.val) (D.Index → ResField w.val)) :
-      (x B).baseHom = x₀.baseHom := by
-    rw [(hx B).baseHom_eq_comp, hψ_ρ, RingHom.comp_assoc, ← hx₀.baseHom_eq_comp,
-      iterateFrobenius_comp_eq_of_ker_eq h_ker (h_exp B)]
+  -- By `exists_ne_bot_comp_eq_and_eq_of_heckeIsogeny`, goodness gives `b` with `D.β - b ∈ w`
+  -- coprime to its conjugate, and `w`-torsion identifies with `k_wⁿ` compatibly with integral
+  -- matrices. Each `ψ B` respects level points, `l ^ m ⊥` kills the torsion of its kernel, the
+  -- part killed by a power of `D.β - b` is `w`-torsion, and `ψ B` kills the section of `v ∈ k_wⁿ`
+  -- exactly when `v ∈ B`. A nonzero `w`-torsion section reduces to zero, spanning a line `W ≠ ⊥`
+  -- that leaves the weighted counts of sections through any `k`-point unchanged. Since `l ^ m B`
+  -- is a power of `q`, twisting preserves the map `𝓞 E → k`, so whenever `A' ⊔ W = A ⊔ W`, the
+  -- kernel and rigidity comparison applies to the twisted reductions `g A'` and `g A` on the
+  -- special fibre.
+  obtain ⟨W, hW, h_rig⟩ := exists_ne_bot_comp_eq_and_eq_of_heckeIsogeny hβ e.fullStructure
+    (e.hasSpanningCoords_of_specMap_comp_eq π hx₀) h_ker h_good h_safe h_exp h_split
+    (fun B ↦ (e' B).fullStructure) hψ_ρ hψ_ev hg hg_cls
+    (fun B ↦ (e' B).hasSpanningCoords_of_specMap_comp_eq _ (hx B))
   -- By rigidity the objects `x A'` and `x A` are equal, and some `j` with `g A' ≫ j = g A`
   -- respects the maps to the family.
-  obtain ⟨j, hj, h_base, h_proj⟩ :=
-    exists_comp_eq_and_eq_of_sectionCount_eq hβ e.fullStructure
-      (e.hasSpanningCoords_of_specMap_comp_eq π hx₀)
-      hb h_cop hσ_inj hσ_range (fun B ↦ (e' B).fullStructure) h_level h_tor_killed h_place h_ker_res
-      hg hg_cls (fun B ↦ (e' B).hasSpanningCoords_of_specMap_comp_eq _ (hx B)) h_baseHom h_count
+  refine ⟨W, hW, fun A' A h_sup ↦ ?_⟩
+  obtain ⟨j, hj, h_base, h_proj⟩ := h_rig h_sup
   -- The two points agree on the base by `h_base`, and on each section by `h_proj` and `hj`.
   have hψ_π_one : ∀ (B : Submodule (ResField w.val) (D.Index → ResField w.val))
       (r : RealVectors E D.Index), e.π r ≫ ψ B = (e' B).π r := by simpa using hψ_π
