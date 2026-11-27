@@ -12,6 +12,7 @@ import Lib.DiscreteSeries.FlenstedJensen.PsiKTypes
 import Lib.DiscreteSeries.FlenstedJensen.SquareIntegrability
 import Lib.DiscreteSeries.Haar.TotalMass
 import Lib.Shimura.Uniformisation.HolomorphicFamilies
+import New.Appendix.DiscreteSeries.Periods
 import New.Appendix.DiscreteSeries.StationaryPosition
 
 /-!
@@ -234,23 +235,6 @@ lemma exists_sub_one_mul_definiteCols_eq (s : 𝔰.besselGraph) :
     embedH_mul_definiteCols, ← Matrix.mul_assoc, hh_cols, Matrix.mul_sub, Matrix.mul_one]
   abel
 
-/-- Let `g` in `G₁` lower the flag of the frame `e₁, …, e_ϱ, z`. That is, `g - 1` maps the frame
-into the span of `e₁, …, e_ϱ` by a strictly triangular matrix `N`. Then `g` is the first component
-`s.val.fst` of some `s` in `besselGraph` (the group `R`). -/
-lemma exists_besselGraph_fst_eq {g : 𝔰.G₁} {N : Matrix (Fin 𝔰.ϱ) (Fin (𝔰.ϱ + 1)) ℂ}
-    (hN_tri : ∀ (a : Fin 𝔰.ϱ) (b : Fin (𝔰.ϱ + 1)), b.val ≤ a.val → N a b = 0)
-    (hN : ((g : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1) * 𝔰.frameCols = 𝔰.isotropicCols * N) :
-    ∃ s : 𝔰.besselGraph, s.val.fst = g := by
-  have h_mem : g ∈ besselS := by
-    refine mem_besselS_iff_frameImage.2 fun i b hb ↦ sub_eq_zero.1 ?_
-    have h_entry : (𝔰.isotropicCols * N) i b = 0 := by
-      rcases i with a | i
-      · simpa [inclMatrix, Matrix.mul_apply, Matrix.one_apply] using hN_tri a b hb
-      · simp [inclMatrix, Matrix.mul_apply]
-    rwa [← hN, mul_inclMatrix] at h_entry
-  obtain ⟨u, hu, h, rfl⟩ := exists_besselU_mul_toBesselH h_mem isUnit_one
-  exact ⟨⟨(u * embedH h, h), by simpa [Shape.mem_besselGraph_iff_mul_inv_mem] using hu⟩, rfl⟩
-
 variable [p : UnitarySignFrame 𝔰 ε]
 
 /-- The map `s ↦ (x⁻¹ s x, h)`, where `h` is the image of `s` in `H` and `x⁻¹ s x` is written in the
@@ -286,6 +270,13 @@ lemma subOnePair_besselPairHom_fst (s : 𝔰.besselGraph) (x : 𝔰.G₁) :
 /-- The second component of `besselPairHom x s` has the matrix of the image of `s` in `H`. -/
 lemma besselPairHom_snd_val (s : 𝔰.besselGraph) (x : 𝔰.G₁) :
     ((besselPairHom (ε := ε) x s).snd : Matrix 𝔰.κ 𝔰.κ ℂ) = (s.val.snd : Matrix 𝔰.κ 𝔰.κ ℂ) := rfl
+
+/-- The second component of `besselPairHom x` is continuous. -/
+@[fun_prop]
+lemma continuous_besselPairHom_snd (x : 𝔰.G₁) :
+    Continuous fun s : 𝔰.besselGraph ↦ (besselPairHom (ε := ε) x s).snd := by
+  simp only [continuous_U_iff_matrix, besselPairHom_snd_val]
+  fun_prop
 
 /-- The second entry of `subOnePair (besselPairHom x) s` is the image of `s` in `H`, minus one. -/
 lemma subOnePair_besselPairHom_snd (s : 𝔰.besselGraph) (x : 𝔰.G₁) :
@@ -451,45 +442,64 @@ lemma inducesOn_besselPairHom (s : 𝔰.besselGraph)
     Matrix.mul_assoc, hC, initCols_eq_of_frame h_frame, Matrix.mul_add, ← Matrix.mul_assoc, h_inv,
     Matrix.mul_assoc]
 
-/-- Let `x` be in `G₁` and `p.matrix` the unitary matrix of `UnitarySignFrame`, with
-`p.matrixᴴ J₁ p.matrix = diag(ε)`. Suppose `x * p.matrix` takes the columns of `v` to `frameCols`,
-the frame `e₁, …, e_ϱ, z`. Let `g` be in `positionGroup ε v`: the `g` in `USign ε` such that `g - 1`
-maps the span of the first `j` columns of `v` into the span of the first `j - 1`, for the `j` up to
-a fixed bound. Then `g` is the first component `x⁻¹ s x` of `besselPairHom x s` for some `s` in
-`besselGraph` (the group `R`). -/
-lemma exists_besselPairHom_fst_eq (h_frame : (x.val * p.matrix).val * v = 𝔰.frameCols)
-    {g : USign ε} (hg : g ∈ positionGroup ε v) :
-    ∃ s : 𝔰.besselGraph, (besselPairHom x s).fst = g := by
-  -- Write `g` as `x⁻¹ g₁ x` in the frame of signs; then `g₁` lowers the flag of the frame.
-  obtain ⟨g₁, hg₁⟩ : ∃ g₁ : 𝔰.G₁, frameEquiv (x⁻¹ * g₁ * x) = g :=
-    ⟨x * frameEquiv.symm g * x⁻¹, by
-      rw [← mul_assoc, ← mul_assoc, inv_mul_cancel, one_mul, inv_mul_cancel_right,
-        frameEquiv.apply_symm_apply]⟩
-  have h_conj : (g₁ : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1 =
-      (x.val * p.matrix).val * ((g : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1) *
-        (x.val * p.matrix)⁻¹.val := by
-    rw [← hg₁]
-    change _ = (x.val * p.matrix).val *
-        (p.matrix⁻¹.val * (x⁻¹.val.val * g₁.val.val * x.val.val) * p.matrix.val - 1) *
-        (x.val * p.matrix)⁻¹.val
-    rw [Matrix.mul_sub, Matrix.sub_mul, Matrix.mul_one, Units.mul_inv]
-    have h_u : (x.val * p.matrix) * (p.matrix⁻¹ * (x⁻¹.val * g₁.val * x.val) * p.matrix) *
-        (x.val * p.matrix)⁻¹ = g₁.val := by
-      rw [_root_.mul_inv_rev, Subgroup.coe_inv]
-      simp only [mul_assoc, mul_inv_cancel_left, mul_inv_cancel, mul_one]
-    have h_l : (x.val * p.matrix).val *
-        (p.matrix⁻¹.val * (x⁻¹.val.val * g₁.val.val * x.val.val) * p.matrix.val) *
-        (x.val * p.matrix)⁻¹.val = g₁.val.val := by
-      simpa only [Units.val_mul] using congrArg Units.val h_u
-    rw [h_l]
-  obtain ⟨σ, N, hN_tri, hN, -⟩ := hg
-  have h_lowers : ((g₁ : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1) * 𝔰.frameCols =
-      𝔰.isotropicCols * N := by
-    rw [h_conj, ← h_frame, ← Matrix.mul_assoc, Units.inv_mul_cancel_right, Matrix.mul_assoc, hN,
-      initCols_eq_of_frame h_frame, Matrix.mul_assoc, ← Matrix.mul_assoc, Units.mul_inv,
-      Matrix.one_mul]
-  obtain ⟨s, hs⟩ : ∃ s : 𝔰.besselGraph, s.val.fst = g₁ := exists_besselGraph_fst_eq hN_tri h_lowers
-  exact ⟨s, by change frameEquiv (x⁻¹ * s.val.fst * x) = g; rw [hs, hg₁]⟩
+/-- Take a point `x` in `G₁` such that `x * p.matrix` carries `i₀` to `definiteCols`, where
+`p.matrix` is the unitary frame taking `J₁` to `diag(ε)`. Then every `y` in `U(1)` on `κ` is lifted
+by an element `s` of `besselGraph` (the group `R`) with `(besselPairHom x s).2 = y` and
+`(subOnePair (besselPairHom x) s).1 = i₀ * (y - 1) * i₀†`, where `i₀† = formAdjoint ε 1 i₀`. -/
+lemma exists_besselPairHom_snd_eq_and_subOnePair_fst_eq
+    (h_isometry : (x.val * p.matrix).val * i₀ = 𝔰.definiteCols) (y : USign (1 : 𝔰.κ → ℤˣ)) :
+    ∃ s : 𝔰.besselGraph, (besselPairHom (ε := ε) x s).2 = y ∧
+      (subOnePair (besselPairHom (ε := ε) x) s).1 =
+        i₀ * ((y : Matrix 𝔰.κ 𝔰.κ ℂ) - 1) * formAdjoint ε 1 i₀ := by
+  -- Lift `y` to `k ∈ H` and take `s = (embedH k, k)` in `besselGraph`.
+  let k : U (1 : Matrix 𝔰.κ 𝔰.κ ℂ) := inclusion (by simp [USign]) y
+  let s : 𝔰.besselGraph := 𝔰.besselGraphChart (1, k)
+  have hs_fst : s.val.fst = embedH k := by
+    simp [s, Shape.besselGraphChart_apply_coe]
+  have hs_snd : (besselPairHom (ε := ε) x s).2 = y := by
+    refine Subtype.ext (Units.ext ?_)
+    rw [besselPairHom_snd_val]
+    rfl
+  have hs_sub : (s.val.fst : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) - 1 =
+      𝔰.definiteCols * ((y : Matrix 𝔰.κ 𝔰.κ ℂ) - 1) * 𝔰.definiteColsᴴ := by
+    rw [hs_fst, coe_embedH, actOnCols, Matrix.mul_sub, Matrix.sub_mul, Matrix.mul_one]
+    abel
+  -- The isometry `q = x * p.matrix` sends `i₀` to `definiteCols`, so `q⁻¹ * definiteCols = i₀`
+  -- and `definiteColsᴴ * q = i₀†`.
+  set q : GL 𝔰.BesselIndex ℂ := x.val * p.matrix with hq
+  have hq_inv : q⁻¹.val * 𝔰.definiteCols = i₀ := by
+    rw [← h_isometry, ← Matrix.mul_assoc, Units.inv_mul, Matrix.one_mul]
+  have hq_gram : q.valᴴ * 𝔰.J₁ * q.val = signMatrix ε := by
+    have hx : (x : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ)ᴴ * 𝔰.J₁ *
+        (x : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ) = 𝔰.J₁ := mem_unitaryGroupOf_iff.1 x.property
+    rw [hq, Units.val_mul, gram_mul, hx, p.gram_eq]
+  have hJ_def : 𝔰.definiteColsᴴ * 𝔰.J₁ = 𝔰.definiteColsᴴ := by
+    ext i j
+    rcases j with a | (l | ⟨⟩) | a
+    · simp [Shape.definiteCols, Shape.J₁, inclMatrix, splitGram, middleGram, Matrix.mul_apply,
+        Matrix.one_apply]
+    · simp [Shape.definiteCols, Shape.J₁, inclMatrix, splitGram, middleGram, Matrix.mul_apply,
+        Matrix.one_apply, eq_comm]
+    · simp [Shape.definiteCols, Shape.J₁, inclMatrix, splitGram, middleGram, Matrix.mul_apply,
+        Matrix.one_apply]
+    · simp [Shape.definiteCols, Shape.J₁, inclMatrix, splitGram, middleGram, Matrix.mul_apply,
+        Matrix.one_apply]
+  have hq_adj : 𝔰.definiteColsᴴ * q.val = formAdjoint ε 1 i₀ :=
+    calc 𝔰.definiteColsᴴ * q.val
+        = 𝔰.definiteColsᴴ * 𝔰.J₁ * q.val := by rw [hJ_def]
+      _ = (q.val * i₀)ᴴ * 𝔰.J₁ * q.val := by rw [h_isometry]
+      _ = i₀ᴴ * (q.valᴴ * 𝔰.J₁ * q.val) := by
+          rw [conjTranspose_mul, Matrix.mul_assoc i₀ᴴ, Matrix.mul_assoc i₀ᴴ]
+      _ = i₀ᴴ * signMatrix ε := by rw [hq_gram]
+      _ = formAdjoint ε 1 i₀ := by simp [formAdjoint, signMatrix_one]
+  refine ⟨s, hs_snd, ?_⟩
+  calc (subOnePair (besselPairHom (ε := ε) x) s).1
+      = q⁻¹.val * (𝔰.definiteCols * ((y : Matrix 𝔰.κ 𝔰.κ ℂ) - 1) * 𝔰.definiteColsᴴ) * q.val := by
+        rw [subOnePair_besselPairHom_fst, hs_sub]
+    _ = (q⁻¹.val * 𝔰.definiteCols) * ((y : Matrix 𝔰.κ 𝔰.κ ℂ) - 1) *
+          (𝔰.definiteColsᴴ * q.val) := by
+        simp only [Matrix.mul_assoc]
+    _ = i₀ * ((y : Matrix 𝔰.κ 𝔰.κ ℂ) - 1) * formAdjoint ε 1 i₀ := by rw [hq_inv, hq_adj]
 
 end Point
 
@@ -580,8 +590,15 @@ theorem IsSteep.exists_stationary_point {X : Type} [Fintype X] {l : HCParam ε}
     hP.exists_mul_eq_frameCols_and_besselLength_le h_norm (one_le_pow₀ h_one_le)
       hP.pow_mulVec_col_zero h_pow_le fun c c' hc ↦ by rw [hP.gram_pow_mulVec hc, h_norm]
   refine ⟨x, h_len.trans (mul_sqrt_mul_pow_le_pow hB hb hb_rank), ?_⟩
-  -- The group of the position is `x⁻¹ R x`. The period over it bounds the volume of the set where
-  -- both components have norm at most `β + 1`.
+  -- Conjugation by `x` gives a Laplace datum for the stationary position, and Laplace's method
+  -- bounds the volume of the set where both components have norm at most `β + 1`.
+  have h_datum : IsLaplaceDatum l u (besselPairHom (ε := ε) x) (e' ∘ Sum.inl) B e
+      (fun s' : 𝔰.besselGraph ↦ simpleRootSum s'.val.fst - conj (simpleRootSum s'.val.fst)) :=
+    hP.isLaplaceDatum h_steep hX_sign hX_zero
+      (fun i ↦ by simp [ha, apply_ite]) (fun _ _ h ↦ (h rfl).elim)
+      (lowersFlag_besselPairHom · h_frame) (inducesOn_besselPairHom · h_isometry h_frame)
+      (hP.exists_diagonal_of_exists_ext h_steep.sign_inl hX_sign
+        (exists_besselPairHom_snd_eq_and_subOnePair_fst_eq h_isometry))
   let Large : Set 𝔰.besselGraph := {s : 𝔰.besselGraph |
     ‖((besselPairHom (ε := ε) x s).fst : Matrix 𝔰.BesselIndex 𝔰.BesselIndex ℂ)‖ ≤ β + 1 ∧
       ‖((besselPairHom (ε := ε) x s).snd : Matrix 𝔰.κ 𝔰.κ ℂ)‖ ≤ β + 1}
@@ -589,11 +606,8 @@ theorem IsSteep.exists_stationary_point {X : Type} [Fintype X] {l : HCParam ε}
       ‖∫ s : 𝔰.besselGraph, l.laplaceIntegrand u (besselPairHom x)
         (fun s' : 𝔰.besselGraph ↦ simpleRootSum s'.val.fst - conj (simpleRootSum s'.val.fst)) s
         ∂𝔰.besselGraphMeasure‖) :=
-    hP.period_lower_bound_of_surjective h_steep hB hX_sign hX_zero
-      (fun i ↦ by rw [ha]; split_ifs; exacts [Int.natCast_nonneg a, le_rfl])
-      (fun _ _ h ↦ (h rfl).elim) hl hu hL hK hβ h_rank h_excess 𝔰.besselGraphMeasure
-      (isProperMap_besselPairHom_fst x) (fun _ ↦ exists_besselPairHom_fst_eq h_frame)
-      (lowersFlag_besselPairHom · h_frame) (inducesOn_besselPairHom · h_isometry h_frame)
+    (h_datum.laplace_method 𝔰.besselGraphMeasure (isProperMap_besselPairHom_fst x)
+      (continuous_besselPairHom_snd x) hl hu hB hL hK hβ h_rank h_excess).2
   -- This set contains the unit ball, as `H` is compact.
   have hβ_one : 1 ≤ β := le_trans (by norm_num) hβ
   have h_ball : {s : 𝔰.besselGraph | ‖(subOnePair (besselPairHom (ε := ε) x) s).fst‖ ≤ 1} ⊆

@@ -23,8 +23,8 @@ the dimensions and the entries of the parameters.
 * The values of `θ` lie in a cone about the positive real axis, up to an exponentially small error
   (`IsLaplaceDatum.norm_laplaceIntegrand_le_mul_re_add`). With the decay of the coefficients, `θ` is
   integrable and the volume of a large ball is at most a power of `β` times `‖∫ θ‖`
-  (`IsLaplaceDatum.laplace_method`). The file `PositionGroup` applies this to the group of a
-  stationary position.
+  (`IsLaplaceDatum.laplace_method`). The file `PositionGroup` builds a Laplace datum from a
+  stationary position and applies this to restriction.
 
 Notions from other files:
 * `USign ε` is the unitary group `U(ε)` of the diagonal form with signs `ε`, and

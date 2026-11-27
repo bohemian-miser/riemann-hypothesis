@@ -440,7 +440,7 @@ The heads of these files give an overview of a theory: `Lib/ClassField/Global/Ar
 - `New/Appendix/DiscreteSeries/OneMinor` (429): One minor near the identity
 - `New/Appendix/DiscreteSeries/GaussianShape` (271): The Gaussian shape of the coefficient
 - `New/Appendix/DiscreteSeries/Periods` (366): Lower bounds for periods by Laplace's method
-- `New/Appendix/DiscreteSeries/PositionGroup` (499): The group of a position
+- `New/Appendix/DiscreteSeries/PositionGroup` (271): Laplace data from a stationary position
 
 ### The last file
 
