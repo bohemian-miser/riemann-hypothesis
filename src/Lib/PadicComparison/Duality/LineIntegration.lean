@@ -277,6 +277,7 @@ lemma exists_move_kernel_of_eq_imp_eq (K : TorsionCoeff g)
   -- Restrict the defining equations of δ' and ξ along φ. (`↓`: `map_restrictAlong_etaClass`
   -- must rewrite η before `map_of` unfolds it.)
   replace hδ' := congrArg (mapThenComp (restrictAlong φ) T) hδ'
+  rw [mapThenComp_comp map_homClass] at hδ'
   replace hξ := congrArg (TotalH.map (restrictAlong φ)) hξ
   simp only [map_pullbackAlong, map_of, mapThenComp_comp map_homClass,
     ↓map_restrictAlong_etaClass, K.mulClass_naturality] at hδ' hξ ⊢
@@ -284,7 +285,9 @@ lemma exists_move_kernel_of_eq_imp_eq (K : TorsionCoeff g)
   -- (`mulClass_congr_of_eq_on_zeros`), and the product with ξ, its support forgotten, is the
   -- operator of η(x) + η(x') (`mulClass_eq_comp_etaAt`).
   -- (erw: the restricted functors agree with the rewritten ones only up to definitional equality)
-  erw [hδ', hv, pullbackAlong_pullbackAlong,
+  dsimp only [pullbackAlong]
+  change (comp (homClass (relFreeAb.map _ _))) ((mapThenComp (restrictAlong φ) T) δ') = _
+  rw [hδ', hv, pullbackAlong_pullbackAlong,
     Θ.mulClass_congr_of_eq_on_zeros (J.whisker φ) _
       (a' := φ.whiskerLeft (relFreeAb.map (𝟙 _) inf_le_right ≫ I.atSection _)),
     ← Θ.mulClass_eq_comp_etaAt _ (relFreeAb.π _), pullbackAlong_pullbackAlong,
@@ -905,12 +908,14 @@ lemma isFiniteLerayHirsch_of_integrate_params (β : ι → TotalH (relFreeAb I.t
     simp only [map_comp_assoc, map_restrictAlong_restrictAlong, map_homClass,
       TorsionCoeff.map_etaAt_onElements, foldr_succ, foldr_eq_finRange_foldr] at h_sum_eq_foldr ⊢
     -- Restriction to the line passes through the fold factor by factor.
-    conv_rhs => erw [← map_add, ← map_add, map_foldr_etaAt, map_pullbackAlong]
+    conv_rhs => rw [map_foldr_etaAt, map_pullbackAlong]
     -- The integrands agree by `h_sum_eq_foldr` over the points of the line, with the tautological
     -- point as first parameter.
     -- (`apply`: compares the statement with the goal once; `exact congrArg _ (…)` does it twice)
-    refine congrArg _ ?_
-    apply h_sum_eq_foldr t.consTautologicalPoint ((elementsProj _).sectionsPrecomp q')
+    have h := h_sum_eq_foldr t.consTautologicalPoint ((elementsProj _).sectionsPrecomp q')
+      (map (restrictAlong (elementsProj (projLineAlong t.toTestOver))) w)
+    rw [map_add, Abelian.Ext.toTotalH, map_add] at h
+    exact congrArg _ h
 
 seal Abelian.Ext Abelian.Ext.instAddCommGroup in
 /-- Let I be a compatible family of ideals on points of (P¹)^m, U the locus where I is the unit
