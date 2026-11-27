@@ -790,10 +790,11 @@ private lemma projSpace.exists_map_eq_map_of_isTodaCancellation
           j ≫ genericOver.whiskerLeft (s ≫ r) := by
     refine h_toda.exists_lift F _ _ (pointOrTorus_hom_ext ?_ ?_) (tiltPointsSum_hom_ext ?_)
       (tiltPointsSum_hom_ext ?_)
-    · -- The two charts are glued along `u ↦ u⁻¹`.
+    · -- The extra point: both sides vanish.
       intro c t
       simp [hF]
-    · intro c t
+    · -- The two charts are glued along `u ↦ u⁻¹`.
+      intro c t
       let t' : monoidAlg ℚ ⟶ tilt.obj c := t
       have h_eq : φ c (mkSum ⟨false⟩ (discToTorus (-coeHom) ≫ t')) =
           φ c (mkSum ⟨true⟩ (discToTorus coeHom ≫ t')) := by
@@ -990,7 +991,8 @@ lemma projSpace.exists_hodgeTateMap_pointClass_line :
   have h_one (c : PadicTest) (t : monoidAlg ℚ≥0 ⟶ tilt.obj c) :
       one.app c (ofFree (Y := tilt ⋙ reprBy (monoidAlg ℚ≥0)) ⟨t⟩) = ⟨(1 : genericAlg c)⟩ :=
     freeAb.desc_of ..
-  let f : freeAb twoDiscs ⟶ genericOver ⋙ freeAb.obj (affineSpace k 1) := projFirst ≫ freeAb.map a
+  let f : freeAb twoDiscs ⟶ genericOver ⋙ freeAb.obj (affineSpace k 1) :=
+    projFirst ≫ freeAb.map a
   have hf_false (c : PadicTest) (t : monoidAlg ℚ≥0 ⟶ tilt.obj c) :
       f.app c (ofDisc ⟨false⟩ t) = 0 := by
     change (freeAb.map a).app c (projFirst.app c (ofDisc ⟨false⟩ t)) = 0
@@ -1013,10 +1015,11 @@ lemma projSpace.exists_hodgeTateMap_pointClass_line :
       (f := f) (α := (-W) ≫ whiskerLeft _ Gm.ofCoord)
       (κ := projFirst ≫ one) (n := whiskerLeft _ Gm.ofCoord) (α₁ := (-W) ≫ whiskerRight proj _)
       (pointOrTorus_hom_ext ?_ ?_) (tiltPointsSum_hom_ext ?_) (pointOrTorus_hom_ext ?_ ?_) ?_
-    · -- Both sides send a point `u` of the torus to `-[a u]`.
+    · -- The extra point: both sides vanish.
       intro c t
       simp [W, hf_false]
-    · intro c t
+    · -- Both sides send a point `u` of the torus to `-[a u]`.
+      intro c t
       have ha_app (u : monoidAlg ℚ≥0 ⟶ tilt.obj c) :
           a c ⟨u⟩ = (affineSpace k 1).map (proj.app c) (A c ⟨u⟩) := rfl
       simp [W, hW₀, hf_false, hf_true, ha_app, torusPoint]
@@ -1024,11 +1027,12 @@ lemma projSpace.exists_hodgeTateMap_pointClass_line :
       rintro c ⟨_ | _⟩ t
       · simp [hf_false]
       · simp [hf_true, ha_twist c ⟨true⟩ ⟨t⟩]
+    · -- The extra point: both sides vanish.
+      intro c t
+      simp [W, pointOrTorusTwist]
     · -- With `μ = mulMu c 1`, which has square zero:
       -- `(1 - μ) * [ε * u] = (1 - μ) * (1 + μ) * [u] = [u]`.
       intro c t
-      simp [W, pointOrTorusTwist]
-    · intro c t
       let t' : monoidAlg ℚ ⟶ tilt.obj c := t
       let t'' : monoidAlg ℚ ⟶ tilt.obj c := charTwist epsPow (.id ℚ) ≫ t'
       simp only [NatTrans.comp_app, ConcreteCategory.comp_apply, oneSub_ofSum, _root_.map_sub,
@@ -1214,9 +1218,9 @@ lemma New.Variety.projSpace.exists_map_pointClass_eq_nsmul_map_cup {k : Type} [F
   -- The class pulls back to the sum of the classes of the points of the reduced fibre.
   rw [map_pointClass_eq_sum_of_isCoincidenceSet _ _ coin]
   -- The class of a point `(v, w)` is the product of the classes, which do not depend on the points.
-  refine sum_eq_card_nsmul fun u _ ↦ ?_
-  rw [← IsPointSum.cup_pointClass (X := projSpace k d) (Y := projSpace k 1) u,
-    pointClass_eq_pointClass_affinePoint u.1, pointClass_eq_pointClass_affinePoint u.2,
+  refine sum_eq_card_nsmul fun ⟨v, w⟩ _ ↦ ?_
+  rw [← IsPointSum.cup_pointClass (X := projSpace k d) (Y := projSpace k 1) (v, w),
+    pointClass_eq_pointClass_affinePoint v, pointClass_eq_pointClass_affinePoint w,
     pointClass_eq_pointClass_affinePoint z]
 
 -- Keeps definitional checks from unfolding the Ext groups.
