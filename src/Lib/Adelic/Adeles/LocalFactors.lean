@@ -8,7 +8,7 @@ public import Lib.Weil.Construction.WeilData
 import Lib.Adelic.Adeles.IdeleModulus
 import Lib.Adelic.Adeles.StrongApproximation
 import Lib.Adelic.Unitary.ComponentsAndBlockSums
-import Lib.Adelic.Unitary.CongruenceLevels
+import TauCeti.RingTheory.DedekindDomain.FiniteAdeleRing.FiniteIndexIdeal
 
 /-!
 # Idelic generators of ideals, semilocal fields and tame local characters
@@ -84,20 +84,17 @@ lemma exists_idele_v_eq_exp_neg_multiplicity {I : Ideal (𝓞 E)} (hI : I ≠ �
     Nat.eq_zero_of_not_pos fun h ↦ hw (dvd_iff_le.1 (dvd_of_multiplicity_pos h))
   simp [ht, h_zero]
 
-/-- Let `I` be a nonzero ideal of `𝓞 E` and `t` an integral finite adele whose order at every finite
-place `w` is the multiplicity of `w` in `I`. Then the ideal `t Ô` of the ring `Ô` of integral finite
-adeles contracts to `I`. -/
-lemma under_span_singleton_of_v_eq {I : Ideal (𝓞 E)} (hI : I ≠ ⊥) {t : Ô E}
+/-- Let `I` be a nonzero ideal of `𝓞 E` and `t` a finite idele whose order at every finite place
+`w` is the multiplicity of `w` in `I`. Then the fractional ideal of `t` is `I`. -/
+private lemma toFractionalIdeal_eq_mk0_of_v_eq {I : Ideal (𝓞 E)} (hI : I ≠ ⊥) {t : (𝔸f E)ˣ}
     (ht : ∀ w : HeightOneSpectrum (𝓞 E), v (t.val w) = .exp (-multiplicity w.asIdeal I)) :
-    (span {t}).under (𝓞 E) = I := by
-  -- An integer lies in `t Ô` iff it lies in `w ^ multiplicity w I` for all `w`, that is, in `I`.
-  refine .trans (ext fun c ↦ ?_) (iInf_maxPowDividing_eq hI)
-  calc c ∈ (span {t}).under (𝓞 E)
-    _ ↔ ∀ w : HeightOneSpectrum (𝓞 E), w.intValuation c ≤ .exp (-multiplicity w.asIdeal I) := by
-      simp [ht, Subtype.ext_iff, exists_eq_mul_iff_v_le, valuation_of_algebraMap,
-        mem_span_singleton, dvd_def]
-    _ ↔ c ∈ ⨅ w : HeightOneSpectrum (𝓞 E), w.maxPowDividing I := by
-      simp [hI, maxPowDividing_eq_pow_multiplicity, ← intValuation_le_pow_iff_mem]
+    FiniteAdeleRing.toFractionalIdeal t =
+      FractionalIdeal.mk0 E ⟨I, mem_nonZeroDivisors_of_ne_zero hI⟩ :=
+  -- Both sides have multiplicity `multiplicity w.asIdeal I` at every finite place `w`.
+  FractionalIdeal.units_ext_count fun w ↦ by
+    simp [FiniteAdeleRing.adicOrd_def, ht, FractionalIdeal.count_coeIdeal _ _ hI,
+      count_associates_factors_eq hI w.isPrime w.ne_bot,
+      w.count_normalizedFactors_eq_multiplicity hI]
 
 /-- Let `Ô` be the ring of integral finite adeles and `y` a finite adele. If the ideal `I` of `𝓞 E`
 generates the principal ideal `t Ô` of `Ô`, then `I y ⊆ Ô` if and only if `t y ∈ Ô`. -/
@@ -132,24 +129,24 @@ lemma exists_reduction_and_idele_generator {I : Ideal (𝓞 E)} (hI : I ≠ ⊥)
          ∀ x : Ô E, ρ x = 0 ↔ t⁻¹.val * x ∈ Ô E) ∧
         (∀ w : HeightOneSpectrum (𝓞 E), v (t.val w) = .exp (-multiplicity w.asIdeal I)) ∧
         ∀ y : 𝔸f E, (∀ c ∈ I, c • y ∈ Ô E) ↔ t.val * y ∈ Ô E := by
-  -- The ideal `T = t Ô` contracts to `I`, so `I Ô = T` and `𝓞 / I → Ô / T` is bijective; `ρ` is
-  -- the reduction modulo `T` followed by the inverse.
+  -- Tau Ceti gives `𝓞 / I ≃ Ô / I Ô` (`quotientEquivQuotientCompletedIdeal`) and `I Ô = t Ô`
+  -- (`completedIdeal_eq_span_singleton`) once `t` has fractional ideal `I`.
   obtain ⟨t, h_val, h_one⟩ := exists_idele_v_eq_exp_neg_multiplicity hI
-  obtain ⟨a, ha_mem, ha_ne⟩ := I.ne_bot_iff.1 hI
   have h_int : t.val ∈ Ô E := by simp [mem_Ô, h_val, ← log_le_log]
-  let T : Ideal (Ô E) := span {⟨t, h_int⟩}
-  have h_under : T.under (𝓞 E) = I := under_span_singleton_of_v_eq (t := ⟨t, h_int⟩) hI h_val
-  have h_map : I.map (algebraMap (𝓞 E) (Ô E)) = T := by
-    rw [← map_under_Ô (I := T) ha_ne (h_under.ge ha_mem), h_under]
-  let e : (𝓞 E ⧸ I) ≃+* Ô E ⧸ T := ofBijective _ (bijective_quot_Ô ha_ne h_under ha_mem)
-  have h_extends (c : 𝓞 E) : e.symm (mk T (algebraMap (𝓞 E) (Ô E) c)) = mk I c := by
-    simp [e, symm_apply_eq]
+  let T : Ideal (Ô E) := FiniteAdeleRing.completedIdeal E I
+  have h_span : T = span {⟨t, h_int⟩} :=
+    FiniteAdeleRing.completedIdeal_eq_span_singleton hI (toFractionalIdeal_eq_mk0_of_v_eq hI h_val)
+  have h_map : I.map (algebraMap (𝓞 E) (Ô E)) = T :=
+    (FiniteAdeleRing.completedIdeal_def E I).symm
+  let e : (𝓞 E ⧸ I) ≃+* Ô E ⧸ T := FiniteAdeleRing.quotientEquivQuotientCompletedIdeal E hI
+  have h_extends (c : 𝓞 E) : e.symm (mk T (algebraMap (𝓞 E) (Ô E) c)) = mk I c :=
+    (symm_apply_eq e).2 (FiniteAdeleRing.quotientEquivQuotientCompletedIdeal_mk hI c).symm
   have h_ker {x : Ô E} : e.symm (mk T x) = 0 ↔ x ∈ T := by simp [eq_zero_iff_mem]
   have h_mem_T (x : Ô E) : x ∈ T ↔ t⁻¹.val * x ∈ Ô E := by
-    simp [T, Subtype.ext_iff, ← t.inv_mul_eq_iff_eq_mul, mem_span_singleton, dvd_def]
+    simp [h_span, Subtype.ext_iff, ← t.inv_mul_eq_iff_eq_mul, mem_span_singleton, dvd_def]
   exact ⟨e.symm.toRingHom.comp (mk T), h_extends, h_ker.trans (by rw [h_map]), t,
     ⟨h_int, h_one, fun x ↦ h_ker.trans (h_mem_T x)⟩, h_val,
-    forall_smul_mem_Ô_iff_of_map_eq_span h_int h_map⟩
+    forall_smul_mem_Ô_iff_of_map_eq_span h_int (h_map.trans h_span)⟩
 
 end
 
