@@ -1085,6 +1085,15 @@ private lemma New.Variety.HodgeH.map_id {k : Type} [Field k] {N : AbFunctor (Com
     (x : HodgeH (k := k) N q) : HodgeH.map (𝟙 N) x = x :=
   H.map_id ..
 
+/-- Evaluating `hodgeTateMap` after `HodgeH.map` on a tensor product of functors when the class is
+given on the tensor product of their square-zero extensions (such as a `cup` product). -/
+private lemma New.Variety.hodgeTateMap_map_tensor {p : ℕ} {k : Type} [Field k]
+    [EmbeddedInQpBar p k] {L M M' : AbFunctor (CommAlg k)} {q h : ℕ}
+    (α : L ⟶ abTensor M M')
+    (x : H (abTensor (HodgeTest.sqZeroExt ⋙ M) (HodgeTest.sqZeroExt ⋙ M')) hodgeCoeff q) :
+    hodgeTateMap h (HodgeH.map α x) = PairH.map α (hodgeTateMap (N := abTensor M M') h x) :=
+  hodgeTateMap_map α x
+
 /-- All `k`-points of projective space have the same class: a global function takes the same value
 at all of them. -/
 lemma New.Variety.projSpace.pointClass_eq_pointClass_affinePoint {k : Type} [Field k] [CharZero k]
@@ -1246,15 +1255,7 @@ lemma New.Variety.projSpace.hodgeTateMap_pointClass_ne_zero {p : ℕ} {k : Type}
     -- Only the term `h = d` of the product formula survives; its coefficient is `± n * (d + 1)`.
     trans PairH.map (freeAb.prod (projSpace k d) (projSpace k 1))
       (HodgeTatePair.cross (restrictToPairs η) (restrictToPairs ξ)) = 0
-    · rw [hn, map_nsmul]
-      let c : HodgeH (abTensor (freeAb.obj (projSpace k d)) (freeAb.obj (projSpace k 1))) (d + 1) :=
-        cup (exteriorAlg (k := k)).mulPairing (pointClass d z) (pointClass 1 (affinePoint 0 0))
-          (add_comm 1 d)
-      change n • hodgeTateMap (d + 1) (HodgeH.map (freeAb.prod (projSpace k d) (projSpace k 1)) c) =
-        0 ↔ _
-      rw [hodgeTateMap_map]
-      dsimp only [c]
-      rw [hodgeTateMap_cup, sum_eq_single d _ (by simp)]
+    · rw [hn, map_nsmul, hodgeTateMap_map_tensor, hodgeTateMap_cup, sum_eq_single d _ (by simp)]
       · simp [n_ne, hξ, hη, ← Nat.cast_smul_eq_nsmul k]
         let y : PairH (abTensor (freeAb.obj (projSpace k d)) (freeAb.obj (projSpace k 1))) :=
           HodgeTatePair.cross (restrictToPairs η) (restrictToPairs ξ)
