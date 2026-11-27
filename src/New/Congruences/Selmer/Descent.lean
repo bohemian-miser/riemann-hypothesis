@@ -467,13 +467,14 @@ lemma length_tiedSelmer_le_of_isUnit (hJ : IsTiedPrimes ℓ S₀ V W N P₀ J x)
       T.tiedSelmer J J x i a ≤ T.frobInTameImage J x i a P l) :
     length O (T.tiedSelmer J J x i a) ≤ T.globalTerm + T.placesTerm := by
   obtain ⟨z, hz, hz_unit⟩ := h_unit
+  let C : TiedSelmerContext T ι := { V, W, M, N, a, P₀, J, x, i, hp := hJ, hV, hN, ha }
   -- Counting compares `Sel(J)` with its dual, and reciprocity bounds the dual.
-  obtain ⟨A, R, h_count⟩ := T.exists_length_tiedSelmer_le hJ hV hN ha
+  obtain ⟨A, R, h_count⟩ := C.exists_length_tiedSelmer_le
+  let D : DualSelmerContext T ι := { C with A, R }
   calc length O (T.tiedSelmer J J x i a)
-    _ ≤ length O (T.dualSelmer hJ hV hN ha A R) + T.placesTerm := h_count
+    _ ≤ length O D.dualSelmer + T.placesTerm := h_count
     _ ≤ T.globalTerm + T.placesTerm := add_le_add_left
-      (T.length_dualSelmer_le hJ hV hN ha A R hz hz_unit
-        fun P l hl ↦ h_le_frobInTameImage P l hl hz) _
+      (D.length_dualSelmer_le hz hz_unit fun P l hl ↦ h_le_frobInTameImage P l hl hz) _
 
 /-- Let `IsTiedPrimes ℓ S₀ V W N P₀ J x` hold: primes outside `S₀` with data and slopes to level
 `ℓ ^ N`, the first one `P₀` with slope `0` and Frobenius element in `W`, and `V i` at Frobenius

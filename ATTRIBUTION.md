@@ -112,7 +112,7 @@ Each declaration below adapts or closely follows, in whole or in part and with c
 | `src/New/Congruences/FirstOrder/RibetMethod.lean` | `New.blockFlattenAlgEquiv` | `Matrix.compAlgEquiv` | `Mathlib/Data/Matrix/Composition.lean` |
 | `src/New/Congruences/Lifting/CupOrthogonalityBounds.lean` | `New.Lift.length_quotient_mul_length_residueField` | `Ideal.sum_ramification_inertia_eq_finrank_fiber` | `Mathlib/RingTheory/RamificationInertia/Basic.lean` |
 | `src/New/Congruences/Selmer/AuxiliaryPrimes.lean` | `pointChar` | `AddChar.zmodChar` | `Mathlib/NumberTheory/LegendreSymbol/AddCharacter.lean` |
-| `src/New/Congruences/Selmer/Mirror.lean` | `New.Selmer.SelmerDatum.exists_linearMap_apply_eq_dualSelmer_conj` | `Module.FinitePresentation.exists_lift_of_isLocalizedModule` | `Mathlib/Algebra/Module/FinitePresentation.lean` |
+| `src/New/Congruences/Selmer/Mirror.lean` | `New.Selmer.MirrorPair.exists_linearMap_apply_eq_dualSelmer_conj` | `Module.FinitePresentation.exists_lift_of_isLocalizedModule` | `Mathlib/Algebra/Module/FinitePresentation.lean` |
 | `src/New/Derivatives/Field/WeilData.lean` | `New.Parameters.norm_zeta_sub_one_eq_one` | `IsPrimitiveRoot.norm_toInteger_sub_one_eq_one` | `Mathlib/NumberTheory/NumberField/Cyclotomic/Basic.lean` |
 | `src/New/Reduction/Zeros/PrimeError.lean` | `New.LSeries_lambdaKResidueClass` | `LSeries_eq_mul_integral_aux` | `Mathlib/NumberTheory/LSeries/SumCoeff.lean` |
 | `src/New/Spanning/Bessel/GramSection.lean` | `IsBoundedInCell.isUnit_det_and_norm_inv_le` | `Units.add` | `Mathlib/Analysis/Normed/Ring/Units.lean` |
